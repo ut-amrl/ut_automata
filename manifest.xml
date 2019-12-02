@@ -1,0 +1,14 @@
+<package>
+  <description brief="f1tenth_course">F1/10 Course Infrastructure</description>
+  <author>Maintained by Joydeep Biswas</author>
+  <license>LGPLv3.0</license>
+  <review status="unreviewed" notes=""/>
+  <url>https://github.com/ut-amrl/f1tenth_course</url>
+  <depend package="roscpp"/>
+  <depend package="std_msgs"/>
+  <depend package="geometry_msgs"/>
+  <depend package="nav_msgs"/>
+  <depend package="sensor_msgs"/>
+  <depend package="tf"/>
+
+</package>
