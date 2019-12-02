@@ -40,3 +40,13 @@ ROSBUILD_GENMSG()
 SET(libs roslib roscpp popt glog
     ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1)
 
+
+rosbuild_add_executable(motion_profiler
+  src/motion_profiler/motion_profiler.cpp
+)
+target_link_libraries(motion_profiler config popt boost_system)
+
+rosbuild_add_executable(logger src/logger/logger.cpp)
+target_link_libraries(logger "-lpopt")
+
+
