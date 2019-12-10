@@ -5,8 +5,8 @@ PATH_TO_VESC="/home/$USER/vesc"
 # Source environment variables
 source /opt/ros/melodic/setup.bash
 # Adding the paths to required packages to ROS_PACKAGE_PATH
-export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:/home/$USER/f1tenth_course/
-export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:/home/$USER/vesc/
+export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:/home/$USER/f1tenth_course
+export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:/home/$USER/vesc
 export DISPLAY=:0 
   
   
