@@ -34,7 +34,7 @@ bool kDriveEnabled = true;
 // 2- Deadman button should be engaged, i.e. have been held for more than 
 //    kDeadManButtonHoldTime seconds.
 const bool kUseDeadManButton = true;
-const float kDeadManButtonHoldTime = 2.0; // sec
+const float kDeadManButtonHoldTime = 1.0; // sec
 bool kDeadManButtonEngaged = false;
 
 
@@ -124,7 +124,7 @@ void newPathCallBack(const nav_msgs::Path::ConstPtr& p){
 
   //initulizing ros path marker
   visualization_msgs::Marker line_strip;
-  line_strip.header.frame_id = "jackal";
+  line_strip.header.frame_id = "base_link";
   line_strip.header.stamp = ros::Time::now();
   line_strip.ns = "ros_path";
   line_strip.action = visualization_msgs::Marker::ADD;
@@ -170,7 +170,7 @@ void odometry_call_back(const nav_msgs::Odometry& odom)
 
   //initulizing ros path marker
   visualization_msgs::Marker line_strip;
-  line_strip.header.frame_id = "jackal";
+  line_strip.header.frame_id = "base_link";
   line_strip.header.stamp = ros::Time::now();
   line_strip.ns = "ros_path";
   line_strip.action = visualization_msgs::Marker::ADD;
@@ -373,7 +373,7 @@ void SendCommand() {
     geometry_msgs::Twist vel_msg;
     vel_msg.linear.x = forward_vel;
     vel_msg.angular.z = rot_vel;
-    vel_pub.publish(vel_msg);
+    // vel_pub.publish(vel_msg);
     
     ackermann_msgs::AckermannDriveStamped vel_msg_ackermann;
     vel_msg_ackermann.header.stamp = ros::Time::now();
@@ -420,8 +420,8 @@ int main(int argc, char** argv) {
   latest_desired_vel.second = 0.0;
 
   path_pub = nh.advertise<visualization_msgs::Marker>("path_marker", 10);
-  vel_pub =  nh.advertise<geometry_msgs::Twist>(
-                                "/jackal_velocity_controller/cmd_vel", 1);
+  // vel_pub =  nh.advertise<geometry_msgs::Twist>(
+  //                               "/jackal_velocity_controller/cmd_vel", 1);
   vel_pub_ackermann = nh.advertise<ackermann_msgs::AckermannDriveStamped>(
                                 "/commands/ackermann", 1);
 
