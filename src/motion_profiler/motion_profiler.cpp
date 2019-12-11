@@ -9,7 +9,6 @@
 #include <nav_msgs/Path.h>
 #include <std_msgs/Bool.h>
 #include <tf/transform_broadcaster.h>//there is a more specific lib
-#include <libconfig.h>
 #include "popt_pp.h"
 #include "f1tenth_course/AckermannCurvatureDriveMsg.h"
 

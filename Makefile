@@ -24,4 +24,5 @@ cleanup_cache:
 	rm -rf build
 
 purge: clean cleanup_cache
+	rm -rf src/f1tenth_course
 

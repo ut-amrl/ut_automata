@@ -9,6 +9,7 @@
   <depend package="geometry_msgs"/>
   <depend package="nav_msgs"/>
   <depend package="sensor_msgs"/>
+  <depend package="serial"/>
   <depend package="tf"/>
 
 </package>
