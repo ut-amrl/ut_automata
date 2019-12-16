@@ -22,6 +22,9 @@ ROSBUILD_INIT()
 SET(ROS_BUILD_STATIC_LIBS true)
 SET(ROS_BUILD_SHARED_LIBS false)
 
+FIND_PACKAGE(Qt4 REQUIRED)
+INCLUDE(${QT_USE_FILE})
+
 MESSAGE(STATUS "ROS-Overrride Build Type: ${CMAKE_BUILD_TYPE}")
 MESSAGE(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS}")
 MESSAGE(STATUS "Build-Specific Libraries: ${BUILD_SPECIFIC_LIBRARIES}")
@@ -58,3 +61,13 @@ rosbuild_add_executable(vesc_driver_node
                         src/vesc_driver/vesc_packet.cpp
                         src/vesc_driver/vesc_packet_factory.cpp)
 target_link_libraries(vesc_driver_node ${libs})
+
+qt4_wrap_cpp(GUI_MOC_SRCS
+    src/gui/gui_mainwindow.h
+)
+
+ROSBUILD_ADD_EXECUTABLE(gui
+    src/gui/gui_main.cc
+    src/gui/gui_mainwindow.cc
+    ${GUI_MOC_SRCS})
+TARGET_LINK_LIBRARIES(gui ${QT_LIBRARIES} ${libs})
