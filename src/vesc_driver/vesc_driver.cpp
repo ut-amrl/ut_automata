@@ -1,6 +1,6 @@
 // -*- mode:c++; fill-column: 100; -*-
 
-#include "vesc_driver/vesc_driver.h"
+#include "vesc_driver.h"
 
 #include <atomic>
 #include <cassert>
@@ -9,6 +9,7 @@
 
 #include <boost/bind.hpp>
 #include <f1tenth_course/VescStateStamped.h>
+#include <f1tenth_course/AckermannCurvatureDriveMsg.h>
 #include <ackermann_msgs/AckermannDriveStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <tf2/LinearMath/Quaternion.h>
