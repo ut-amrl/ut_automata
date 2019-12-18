@@ -41,9 +41,11 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/submodules/config_reader/include)
 
 ROSBUILD_GENMSG()
 
-SET(libs roslib roscpp popt glog gflags
-    ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1)
+ADD_SUBDIRECTORY(src/shared)
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/shared)
 
+SET(libs roslib roscpp popt glog gflags amrl-shared-lib
+    ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1)
 
 rosbuild_add_executable(motion_profiler
   src/motion_profiler/motion_profiler.cpp
@@ -71,3 +73,8 @@ ROSBUILD_ADD_EXECUTABLE(gui
     src/gui/gui_mainwindow.cc
     ${GUI_MOC_SRCS})
 TARGET_LINK_LIBRARIES(gui ${QT_LIBRARIES} ${libs})
+
+ROSBUILD_ADD_EXECUTABLE(joystick
+    src/joystick/joystick.cc
+    src/joystick/joystick_driver.cc)
+TARGET_LINK_LIBRARIES(joystick ${libs})

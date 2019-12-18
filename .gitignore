@@ -1,5 +1,6 @@
 build/
 bin/
+lib/
 msg_gen/
 src/f1tenth_course/
 *.kdev*
