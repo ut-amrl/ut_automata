@@ -20,6 +20,7 @@
 //========================================================================
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -37,8 +38,9 @@
 #include <QTime>
 #include <QTimer>
 #include <QWidget>
+#include <QGroupBox>
+#include <QTabWidget>
 
-#include "ros/ros.h"
 #include "std_msgs/String.h"
 
 using std::string;
@@ -80,9 +82,9 @@ vector<string> GetIPAddresses() {
 
 namespace f1tenth_gui {
 
-MainWindow::MainWindow(ros::NodeHandle* node_handle, QWidget* parent) :
+MainWindow::MainWindow(QWidget* parent) :
     time_label_(nullptr),
-    vector_display_(nullptr),
+    tab_widget_(nullptr),
     robot_label_(nullptr),
     main_layout_(nullptr) {
   this->setWindowTitle("F1/10 GUI");
@@ -104,26 +106,61 @@ MainWindow::MainWindow(ros::NodeHandle* node_handle, QWidget* parent) :
   top_bar->addStretch();
   top_bar->addWidget(close_button);
 
-  vector_display_ = new QWidget();
+  tab_widget_ = new QTabWidget();
+  {
+    QWidget* ros_group = new QWidget();
+    QPushButton* start_ros = new QPushButton("Start roscore");
+    QPushButton* stop_ros = new QPushButton("Stop roscore");
+    QPushButton* start_car = new QPushButton("Start Car");
+    QPushButton* stop_all = new QPushButton("Stop all nodes");
+    connect(start_car, SIGNAL(clicked()), this, SLOT(StartCar()));
+    connect(start_ros, SIGNAL(clicked()), this, SLOT(StartRos()));
+    connect(stop_ros, SIGNAL(clicked()), this, SLOT(StopRos()));
+    connect(stop_all, SIGNAL(clicked()), this, SLOT(StopAll()));
+    QVBoxLayout* vbox = new QVBoxLayout();
+    vbox->addWidget(start_ros);
+    vbox->addWidget(stop_ros);
+    vbox->addWidget(start_car);
+    vbox->addWidget(stop_all);
+    ros_group->setLayout(vbox);
+    tab_widget_->addTab(ros_group, tr("Startup / Shutdown"));
+  }
 
   main_layout_ = new QVBoxLayout(this);
   setLayout(main_layout_);
   main_layout_->addLayout(top_bar, Qt::AlignTop);
-  main_layout_->addWidget(vector_display_);
+  main_layout_->addWidget(tab_widget_);
   main_layout_->addWidget(robot_label_, Qt::AlignCenter);
-  // robot_label_->hide();
-  vector_display_->hide();
 
   connect(close_button, SIGNAL(clicked()), this, SLOT(closeWindow()));
-  connect(this,
-          SIGNAL(UpdateSignal()),
-          this,
-          SLOT(UpdateDisplay()));
 
   QTimer* time_update_timer = new QTimer(this);
   connect(time_update_timer, SIGNAL(timeout()), this, SLOT(UpdateTime()));
   time_update_timer->start(1000);
   UpdateTime();
+}
+
+void Execute(const string& cmd) {
+  if (system(cmd.c_str()) != 0) {
+    printf("Error running '%s'\n", cmd.c_str());
+  } else {
+    printf("Ran '%s'\n", cmd.c_str());
+  }
+}
+
+void MainWindow::StartCar() {
+}
+
+void MainWindow::StartRos() {
+  Execute("screen -mdS roscore roscore");
+}
+
+void MainWindow::StopRos() {
+  Execute("killall roscore");
+}
+
+void MainWindow::StopAll() {
+  Execute("rosnode kill -a");
 }
 
 void MainWindow::closeWindow() {

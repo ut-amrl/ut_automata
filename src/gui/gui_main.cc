@@ -44,8 +44,8 @@ int main(int argc, char *argv[]) {
 
   ros::init(argc, argv, "f1tenth_gui", ros::init_options::NoSigintHandler);
   QApplication app(argc, argv);
-  ros::NodeHandle node_handle;
-  f1tenth_gui::MainWindow main_window(&node_handle);
+  // ros::NodeHandle node_handle;
+  f1tenth_gui::MainWindow main_window;
   main_window.showFullScreen();
   return app.exec();
 }

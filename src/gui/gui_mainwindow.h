@@ -26,12 +26,9 @@
 #include <vector>
 #include <QWidget>
 
-#ifndef Q_MOC_RUN
-#include "ros/ros.h"
-#endif
-
 class QLabel;
 class QVBoxLayout;
+class QTabWidget;
 
 namespace f1tenth_gui {
 
@@ -43,10 +40,14 @@ class MainWindow : public QWidget {
   Q_OBJECT
 
 public:
-  MainWindow(ros::NodeHandle* node_handle, QWidget *parent = 0);
+  MainWindow(QWidget *parent = 0);
 public slots:
   void closeWindow();
   void UpdateTime();
+  void StartRos();
+  void StartCar();
+  void StopRos();
+  void StopAll();
 
 signals:
   void UpdateQuestion(std::string question,
@@ -59,7 +60,7 @@ private:
   QLabel* time_label_;
 
   // Vector display.
-  QWidget* vector_display_;
+  QTabWidget* tab_widget_;
 
   // Robot name display.
   QLabel* robot_label_;
