@@ -6,10 +6,13 @@
 #include <atomic>
 #include <string>
 
-#include <ros/ros.h>
-#include <std_msgs/Float64.h>
-#include <boost/optional.hpp>
-#include <ackermann_msgs/AckermannDriveStamped.h>
+#include "ros/ros.h"
+#include "std_msgs/Float64.h"
+#include "boost/optional.hpp"
+#include "ackermann_msgs/AckermannDriveStamped.h"
+#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
+#include "nav_msgs/Odometry.h"
+#include "sensor_msgs/Joy.h"
 
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
@@ -29,6 +32,7 @@ private:
   VescInterface vesc_;
   void vescPacketCallback(const boost::shared_ptr<VescPacket const>& packet);
   void vescErrorCallback(const std::string& error);
+  void timerCallback(const ros::SteadyTimerEvent& event);
 
   // limits on VESC commands
   struct CommandLimit {
@@ -52,14 +56,9 @@ private:
   // ROS services
   ros::Publisher state_pub_;
   ros::Publisher odom_pub_;
-  ros::Publisher servo_sensor_pub_;
-  ros::Subscriber duty_cycle_sub_;
-  ros::Subscriber current_sub_;
-  ros::Subscriber brake_sub_;
-  ros::Subscriber speed_sub_;
   ros::Subscriber ackermann_sub_;
-  ros::Subscriber position_sub_;
-  ros::Subscriber servo_sub_;
+  ros::Subscriber ackermann_curvature_sub_;
+  ros::Subscriber joystick_sub_;
   ros::SteadyTimer timer_;
 
   // driver modes (possible states)
@@ -68,8 +67,18 @@ private:
     MODE_OPERATING
   } driver_mode_t;
 
+  // Drive mode
+  enum DriveMode {
+    kStoppedDrive = 0,
+    kJoystickDrive = 1,
+    kAutonomousDrive = 2
+  };
+
+
   // driver state machine mode (state)
   driver_mode_t driver_mode_;
+  // Drive mode.
+  DriveMode drive_mode_;
   // firmware major version reported by vesc
   int fw_version_major_;
   // firmware minor version reported by vesc
@@ -82,30 +91,33 @@ private:
   double steering_to_servo_offset_;
   double wheel_base_;
 
-  // Whether to allow commands other than speed and steering.
-  bool allow_low_level_commands_;
 
   // Time of last command, for safety motion profiling
   std::atomic<double> t_last_command_;
-  // Last speed command, for motion profiling.
-  std::atomic<double> last_speed_command_;
+  // Time of last joystick message, for safety.
+  std::atomic<double> t_last_joystick_;
   // Last servo angle command
   double last_steering_angle_;
+
+  // Create an odometry message
+  nav_msgs::Odometry odom_msg_;
+
+  // Convert curvature commands to steering angle.
+  float CalculateSteeringAngle(float lin_vel, float rot_vel);
 
   // Safety profiling.
   void checkCommandTimeout();
 
+  // Send commands to the VESC.
+  void sendDriveCommands();
+
   // ROS callbacks
   void ackermannCmdCallback(
       const ackermann_msgs::AckermannDriveStamped::ConstPtr& cmd);
-  void timerCallback(const ros::SteadyTimerEvent& event);
-  void dutyCycleCallback(const std_msgs::Float64::ConstPtr& duty_cycle);
-  void currentCallback(const std_msgs::Float64::ConstPtr& current);
-  void brakeCallback(const std_msgs::Float64::ConstPtr& brake);
-  void speedCallback(const std_msgs::Float64::ConstPtr& speed);
-  void positionCallback(const std_msgs::Float64::ConstPtr& position);
-  void servoCallback(const std_msgs::Float64::ConstPtr& servo);
-  
+  void ackermannCurvatureCallback(
+      const f1tenth_course::AckermannCurvatureDriveMsg& cmd);
+  void joystickCallback(const sensor_msgs::Joy& msg);
+
   void updateOdometry(double rpm, double steering_angle);
 };
 

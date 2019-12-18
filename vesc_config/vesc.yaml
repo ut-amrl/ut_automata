@@ -18,7 +18,6 @@ vesc_to_odom/publish_tf: false
 vesc:
   #port: /dev/ttyS0
   port: /dev/ttyACM0
-  allow_low_level_commands_: false
   # erpm (electrical rpm) = speed_to_erpm_gain * speed (meters / second) +
   #   speed_to_erpm_offset
   # for offset=0. speed_to_erpm_gain =
@@ -45,4 +44,4 @@ vesc:
   servo_max: 0.85
   
   # car wheelbase is about 25cm
-  wheelbase: .25
+  wheelbase: 0.20

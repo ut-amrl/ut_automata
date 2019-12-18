@@ -7,19 +7,26 @@
 #include <cmath>
 #include <sstream>
 
-#include <boost/bind.hpp>
-#include <f1tenth_course/VescStateStamped.h>
-#include <f1tenth_course/AckermannCurvatureDriveMsg.h>
-#include <ackermann_msgs/AckermannDriveStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include "boost/bind.hpp"
+#include "f1tenth_course/VescStateStamped.h"
+#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
+#include "ackermann_msgs/AckermannDriveStamped.h"
+#include "nav_msgs/Odometry.h"
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+
+#include "shared/math/math_util.h"
 
 static const bool kDebug = false;
+static const float kCommandRate = 50;
+static const float kCommandInterval = 1.0 / kCommandRate;
 
 using f1tenth_course::VescStateStamped;
 
 namespace {
+
+float mux_drive_speed_ = 0;
+float mux_steering_angle_ = 0;
 
 template <typename T>
 inline bool getRequiredParam(const ros::NodeHandle& nh,
@@ -47,23 +54,51 @@ VescDriver::VescDriver(ros::NodeHandle nh,
     position_limit_(private_nh, "position"),
     servo_limit_(private_nh, "servo", 0.0, 1.0),
     driver_mode_(MODE_INITIALIZING),
+    drive_mode_(kStoppedDrive),
     fw_version_major_(-1),
     fw_version_minor_(-1),
-    allow_low_level_commands_(false),
     t_last_command_(0),
+    t_last_joystick_(0),
     last_speed_command_(0) {
+  odom_msg_.header.stamp = ros::Time::now();
+  odom_msg_.header.frame_id = "odom";
+  odom_msg_.child_frame_id = "base_link";
+
+  odom_msg_.twist.twist.linear.x = 0;
+  odom_msg_.twist.twist.linear.y = 0;
+  odom_msg_.twist.twist.linear.z = 0;
+  odom_msg_.twist.twist.angular.x = 0;
+  odom_msg_.twist.twist.angular.y = 0;
+  odom_msg_.twist.twist.angular.z = 0;
+  odom_msg_.twist.covariance =
+                {0.001, 0.0, 0.0, 0.0, 0.0, 0.0,
+                  0.0, 0.001, 0.0, 0.0, 0.0, 0.0,
+                  0.0, 0.0, 0.001, 0.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 0.0, 1000000.0, 0.0,
+                  0.0, 0.0, 0.0, 0.0, 0.0, 0.03};
+
+  odom_msg_.pose.pose.position.x = 0;
+  odom_msg_.pose.pose.position.y = 0;
+  odom_msg_.pose.pose.position.z = 0;
+  odom_msg_.pose.covariance =
+                {0.001, 0.0, 0.0, 0.0, 0.0, 0.0,
+                  0.0, 0.001, 0.0, 0.0, 0.0, 0.0,
+                  0.0, 0.0, 1000000.0 , 0.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 0.0, 1000000.0, 0.0,
+                  0.0, 0.0, 0.0, 0.0, 0.0, 0.03};
+  odom_msg_.pose.pose.orientation.w = 1;
+  odom_msg_.pose.pose.orientation.x = 0;
+  odom_msg_.pose.pose.orientation.y = 0;
+  odom_msg_.pose.pose.orientation.z = 0;
+
   // get vesc serial port address
   std::string port;
   if (!private_nh.getParam("port", port)) {
     ROS_FATAL("VESC communication port parameter required.");
     ros::shutdown();
     return;
-  }
-
-  // This is an optional parameter.
-  if (!private_nh.getParam("allow_low_level_commands_",
-                           allow_low_level_commands_)) {
-    allow_low_level_commands_ = false;
   }
 
   // Load conversion parameters.
@@ -78,7 +113,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
                         steering_to_servo_gain_) ||
       !getRequiredParam(private_nh,
                         "steering_angle_to_servo_offset",
-                        steering_to_servo_offset_) || 
+                        steering_to_servo_offset_) ||
       !getRequiredParam(private_nh,
                         "wheelbase",
                         wheel_base_)) {
@@ -98,9 +133,9 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   if (kDebug) printf("CONNECTED\n");
   // create vesc state (telemetry) publisher
   state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 10);
-  
+
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 10);
-  
+
   // since vesc state does not include the servo position, publish the commanded
   // servo position as a "sensor"
   servo_sensor_pub_ =
@@ -109,26 +144,17 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   // create ackermann subscriber.
   ackermann_sub_ = nh.subscribe(
       "commands/ackermann", 10, &VescDriver::ackermannCmdCallback, this);
-
-  if (allow_low_level_commands_) {
-    ROS_INFO("Low-level commands enabled.");
-    duty_cycle_sub_ = nh.subscribe(
-        "commands/motor/duty_cycle", 10,&VescDriver::dutyCycleCallback, this);
-    current_sub_ = nh.subscribe(
-        "commands/motor/current", 10, &VescDriver::currentCallback, this);
-    brake_sub_ = nh.subscribe(
-        "commands/motor/brake", 10, &VescDriver::brakeCallback, this);
-    position_sub_ = nh.subscribe(
-        "commands/motor/position", 10, &VescDriver::positionCallback, this);
-    speed_sub_ = nh.subscribe(
-        "commands/motor/speed", 10, &VescDriver::speedCallback, this);
-    servo_sub_ = nh.subscribe(
-        "commands/servo/position", 10, &VescDriver::servoCallback, this);
-  }
+  ackermann_curvature_sub_ = nh.subscribe(
+      "/ackermann_curvature_drive",
+      10,
+      &VescDriver::ackermannCurvatureCallback,
+      this);
+  joystick_sub_ = nh.subscribe(
+      "joystick", 10, &VescDriver::joystickCallback, this);
 
   if (kDebug) printf("TIMER START\n");
   // create a 50Hz timer, used for state machine & polling VESC telemetry
-  timer_ = nh.createSteadyTimer(ros::WallDuration(0.02),
+  timer_ = nh.createSteadyTimer(ros::WallDuration(kCommandInterval),
                                 &VescDriver::timerCallback,
                                 this);
   if (kDebug) printf("DONE INIT\n");
@@ -136,25 +162,39 @@ VescDriver::VescDriver(ros::NodeHandle nh,
 
 void VescDriver::checkCommandTimeout() {
   static const double kTimeout = 0.5;
-  static const double kDecelRate = 1000;
   const double t_now = ros::WallTime::now().toSec();
-  if (t_now > t_last_command_ + kTimeout) {
-    double speed = last_speed_command_;
-    if (speed != 0) {
-      printf("Safety engaged.\n");
-      if (fabs(speed > kDecelRate)) {
-        if (speed > 0.0) {
-          speed = speed - kDecelRate;
-        } else {
-          speed = speed + kDecelRate;
-        }
-      } else {
-        speed = 0;
-      }
-      vesc_.setSpeed(speed);
-      last_speed_command_ = speed;
-    }
+  if (t_now > t_last_command_ + kTimeout ||
+      t_now > t_last_joystick_ + kTimeout) {
+    mux_drive_speed_ = 0;
+    mux_steering_angle_ = 0;
   }
+}
+
+void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
+  static const float kMaxTurnRate = 0.25;
+  static const float kTurboSpeed = 2.0;
+  static const float kNormalSpeed = 1.0;
+  static const size_t kManualDriveButton = 4;
+  static const size_t kAutonomousDriveButton = 5;
+
+  if (msg.buttons.size() < 6) return;
+  if (msg.buttons[kManualDriveButton] == 1) {
+    drive_mode_ = kJoystickDrive;
+  } else if (msg.buttons[kAutonomousDriveButton] == 1) {
+    drive_mode_ = kAutonomousDrive;
+  } else {
+    drive_mode_ = kStoppedDrive;
+  }
+  t_last_joystick_ = ros::WallTime::now().toSec();
+  if (msg.axes.size() < 5) return;
+  const float steer_joystick = -msg.axes[0];
+  const float drive_joystick = -msg.axes[4];
+  const bool turbo_mode = (msg.axes[2] >= 0.9);
+  const float max_speed = (turbo_mode ? kTurboSpeed : kNormalSpeed);
+  float speed = drive_joystick * max_speed;
+  float steering_angle = steer_joystick * kMaxTurnRate;
+
+  printf("%.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
 }
 
   /* TODO or TO-THINKABOUT LIST
@@ -167,8 +207,47 @@ void VescDriver::checkCommandTimeout() {
     - what to do if no servo command received recently?
     - what is the motor safe off state (0 current?)
     - what to do if a command parameter is out of range, ignore?
-    - try to predict vesc bounds (from vesc config) and command detect bounds errors
+    - try to predict vesc bounds (from vesc config) and command detect bounds
+errors
   */
+
+void VescDriver::sendDriveCommands() {
+  static const bool kDebug = true;
+  static const float kMaxAcceleration = 4.0; // m/s^2
+  static const float kMaxDeceleration = 6.0; // m/s^2
+  static float last_speed_ = 0;
+
+  using math_util::Bound;
+  const float max_accel =
+    ((last_speed_ > 0.0) ? kMaxAcceleration : kMaxDeceleration);
+  const float max_decel =
+    ((last_speed_ > 0.0) ? kMaxDeceleration : kMaxAcceleration);
+  const float smooth_speed = Bound<float>(
+      last_speed_ - kCommandInterval * max_decel,
+      last_speed_ + kCommandInterval * max_accel,
+      mux_drive_speed_);
+  last_speed_ = smooth_speed;
+  if (kDebug) {
+    printf("%.2f %.1f\u00b0\n", smooth_speed, mux_steering_angle_);
+  }
+  const double erpm =
+      speed_to_erpm_gain_ * smooth_speed + speed_to_erpm_offset_;
+
+  // calc steering angle (servo)
+  const double servo = steering_to_servo_gain_ * mux_steering_angle_ +
+      steering_to_servo_offset_;
+
+  // Set speed command.
+  if (false) {
+    vesc_.setSpeed(speed_limit_.clip(erpm));
+  } else {
+    vesc_.setSpeed(0);
+  }
+
+  // Set servo position command.
+  vesc_.setServo(servo_limit_.clip(servo));
+  last_steering_angle_ = mux_steering_angle_;
+}
 
 void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
   static const double kMaxInitPeriod = 2.0;
@@ -196,32 +275,32 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
       return;
     }
     if (kDebug) printf("INITIALIZING\n");
-    // request version number, return packet will update the internal version numbers
+    // request version number, return packet will update the internal version
+numbers
     vesc_.requestFWVersion();
     if (fw_version_major_ >= 0 && fw_version_minor_ >= 0) {
       ROS_INFO("Connected to VESC with firmware version %d.%d",
                fw_version_major_, fw_version_minor_);
       driver_mode_ = MODE_OPERATING;
     }
-  }
-  else if (driver_mode_ == MODE_OPERATING) {
+  } else if (driver_mode_ == MODE_OPERATING) {
+    sendDriveCommands();
     if (kDebug) printf("OPERATING\n");
     // poll for vesc state (telemetry)
     vesc_.requestState();
-  }
-  else {
+  } else {
     if (kDebug) printf("FAIL: UNKNOWN STATE!\n");
     // unknown mode, how did that happen?
-    assert(false && "unknown driver mode");
+    assert("unknown driver mode");
   }
 }
 
 void VescDriver::updateOdometry(double rpm, double steering_angle) {
   // TODO: calculate speed based on tachometer as opposed to rpm
-  
+
   // Calcuate linear velocity
   double lin_vel = (rpm - speed_to_erpm_offset_) / speed_to_erpm_gain_;
-  
+
   // Calculate angular velocity
   double turn_radius = 0;
   double rot_vel = 0;
@@ -236,77 +315,36 @@ void VescDriver::updateOdometry(double rpm, double steering_angle) {
   static double last_frame_time = ros::Time::now().toSec();
   ros::Time current_frame_time_ros = ros::Time::now();
   double current_frame_time = current_frame_time_ros.toSec();
- 
-  
+
   // Update the estimated pose
   double del_t = current_frame_time - last_frame_time;
-  
+
   // Enforce monotonically increasing time stamps
   if (del_t >= 0) {
     float del_x = lin_vel * del_t * cos(orientation);
     float del_y = lin_vel * del_t * sin(orientation);
     float del_theta = rot_vel * del_t;
-    
+
     position_x = position_x + del_x;
     position_y = position_y + del_y;
-    orientation = orientation + del_theta;
-    // Wraps theta to [-pi, pi]
-    while (orientation > M_PI) {
-      orientation -= 2 * M_PI;
-    }
-    while (orientation < -M_PI) {
-      orientation += 2 * M_PI;
-    }
-   
+    orientation = math_util::AngleMod(orientation + del_theta);
+
     // Create an odometry message
-    nav_msgs::Odometry odom_msg;
-    odom_msg.header.stamp = current_frame_time_ros;
-    odom_msg.header.frame_id = "odom";
-    odom_msg.child_frame_id = "base_link";
-    
-    odom_msg.twist.twist.linear.x = lin_vel; 
-    odom_msg.twist.twist.linear.y = 0;
-    odom_msg.twist.twist.linear.z = 0;
-    odom_msg.twist.twist.angular.x = 0; 
-    odom_msg.twist.twist.angular.y = 0;
-    odom_msg.twist.twist.angular.z = rot_vel;
-    odom_msg.twist.covariance = 
-                  {0.001, 0.0, 0.0, 0.0, 0.0, 0.0, 
-                    0.0, 0.001, 0.0, 0.0, 0.0, 0.0, 
-                    0.0, 0.0, 0.001, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0, 
-                    0.0, 0.0, 0.0, 0.0, 1000000.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.03};
-    
-    odom_msg.pose.pose.position.x = position_x;
-    odom_msg.pose.pose.position.y = position_y;
-    odom_msg.pose.pose.position.z = 0;
-    odom_msg.pose.covariance = 
-                  {0.001, 0.0, 0.0, 0.0, 0.0, 0.0, 
-                    0.0, 0.001, 0.0, 0.0, 0.0, 0.0, 
-                    0.0, 0.0, 1000000.0 , 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0, 
-                    0.0, 0.0, 0.0, 0.0, 1000000.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.03};
-    
-    tf2::Quaternion quat_tf;
-    quat_tf.setRPY( 0, 0,  orientation);
-    geometry_msgs::Quaternion quat_msg;
-    quat_msg = tf2::toMsg(quat_tf);
-    odom_msg.pose.pose.orientation = quat_msg;
-    
-    odom_pub_.publish(odom_msg);
-    
+    odom_msg_.twist.twist.linear.x = lin_vel;
+    odom_msg_.twist.twist.angular.z = rot_vel;
+    odom_msg_.pose.pose.position.x = position_x;
+    odom_msg_.pose.pose.position.y = position_y;
+    odom_msg_.pose.pose.orientation.w = cos(0.5 * orientation);
+    odom_msg_.pose.pose.orientation.z = sin(0.5 * orientation);
+    odom_pub_.publish(odom_msg_);
   } else {
     ROS_INFO("Odometry messages received out of order.") ;
   }
-  
   last_frame_time = current_frame_time;
-  
-  
 }
 
-void VescDriver::vescPacketCallback(const boost::shared_ptr<VescPacket const>& packet)
+void VescDriver::vescPacketCallback(const boost::shared_ptr<VescPacket const>&
+packet)
 {
   if (packet->name() == "Values") {
     boost::shared_ptr<VescPacketValues const> values =
@@ -330,7 +368,7 @@ void VescDriver::vescPacketCallback(const boost::shared_ptr<VescPacket const>& p
 
     state_pub_.publish(state_msg);
     updateOdometry(values->rpm(), last_steering_angle_);
-    
+
   }
   else if (packet->name() == "FWVersion") {
     boost::shared_ptr<VescPacketFWVersion const> fw_version =
@@ -341,119 +379,27 @@ void VescDriver::vescPacketCallback(const boost::shared_ptr<VescPacket const>& p
   }
 }
 
-void VescDriver::vescErrorCallback(const std::string& error)
-{
+void VescDriver::vescErrorCallback(const std::string& error) {
   ROS_ERROR("%s", error.c_str());
 }
 
-/**
- * @param duty_cycle Commanded VESC duty cycle. Valid range for this driver is -1 to +1. However,
- *                   note that the VESC may impose a more restrictive bounds on the range depending
- *                   on its configuration, e.g. absolute value is between 0.05 and 0.95.
- */
-void VescDriver::dutyCycleCallback(const std_msgs::Float64::ConstPtr& duty_cycle)
-{
-  if (driver_mode_ == MODE_OPERATING) {
-    vesc_.setDutyCycle(duty_cycle_limit_.clip(duty_cycle->data));
+float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
+  float steering_angle = 0.0;
+  if (rot_vel == 0) {
+    return steering_angle;
   }
+
+  float turn_radius = lin_vel / rot_vel;
+  steering_angle = std::atan(wheel_base_ / turn_radius);
+  return steering_angle;
 }
 
-/**
- * @param current Commanded VESC current in Amps. Any value is accepted by this driver. However,
- *                note that the VESC may impose a more restrictive bounds on the range depending on
- *                its configuration.
- */
-void VescDriver::currentCallback(const std_msgs::Float64::ConstPtr& current)
-{
-  if (driver_mode_ == MODE_OPERATING) {
-    vesc_.setCurrent(current_limit_.clip(current->data));
-  }
-}
-
-/**
- * @param brake Commanded VESC braking current in Amps. Any value is accepted by this driver.
- *              However, note that the VESC may impose a more restrictive bounds on the range
- *              depending on its configuration.
- */
-void VescDriver::brakeCallback(const std_msgs::Float64::ConstPtr& brake)
-{
-  if (driver_mode_ == MODE_OPERATING) {
-    vesc_.setBrake(brake_limit_.clip(brake->data));
-  }
-}
-
-/**
- * @param speed Commanded VESC speed in electrical RPM. Electrical RPM is the mechanical RPM
- *              multiplied by the number of motor poles. Any value is accepted by this
- *              driver. However, note that the VESC may impose a more restrictive bounds on the
- *              range depending on its configuration.
- */
-void VescDriver::speedCallback(const std_msgs::Float64::ConstPtr& speed)
-{
-  if (kDebug) printf("Desired speed: %f\n", speed->data);
-  if (driver_mode_ == MODE_OPERATING) {
-    vesc_.setSpeed(speed_limit_.clip(speed->data));
-    t_last_command_ = ros::WallTime::now().toSec();
-    last_speed_command_ = speed->data;
-  }
-}
-
-/**
- * @param position Commanded VESC motor position in radians. Any value is accepted by this driver.
- *                 Note that the VESC must be in encoder mode for this command to have an effect.
- */
-void VescDriver::positionCallback(const std_msgs::Float64::ConstPtr& position)
-{
-  if (driver_mode_ == MODE_OPERATING) {
-    // ROS uses radians but VESC seems to use degrees. Convert to degrees.
-    double position_deg = position_limit_.clip(position->data) * 180.0 / M_PI;
-    vesc_.setPosition(position_deg);
-  }
-}
-
-/**
- * @param servo Commanded VESC servo output position. Valid range is 0 to 1.
- */
-void VescDriver::servoCallback(const std_msgs::Float64::ConstPtr& servo)
-{
-  if (driver_mode_ == MODE_OPERATING) {
-    double servo_clipped(servo_limit_.clip(servo->data));
-    vesc_.setServo(servo_clipped);
-    // publish clipped servo value as a "sensor"
-    std_msgs::Float64::Ptr servo_sensor_msg(new std_msgs::Float64);
-    servo_sensor_msg->data = servo_clipped;
-    servo_sensor_pub_.publish(servo_sensor_msg);
-  }
-}
-
-/**
- * @param cmd Ackermann steering command.
- */
-void VescDriver::ackermannCmdCallback(
-  const ackermann_msgs::AckermannDriveStamped::ConstPtr& cmd) {
-  // calc vesc electric RPM (speed)
-  const double erpm =
-      speed_to_erpm_gain_ * cmd->drive.speed + speed_to_erpm_offset_;
-
-  // calc steering angle (servo)
-  const double servo = steering_to_servo_gain_ * cmd->drive.steering_angle +
-    steering_to_servo_offset_;
-
-  if (driver_mode_ == MODE_OPERATING) {
-    // Set speed command.
-    vesc_.setSpeed(speed_limit_.clip(erpm));
-    t_last_command_ = ros::WallTime::now().toSec();
-    last_speed_command_ = erpm;
-
-    // Set servo position command.
-    const double servo_clipped(servo_limit_.clip(servo));
-    vesc_.setServo(servo_clipped);
-    // publish clipped servo value as a "sensor"
-    std_msgs::Float64::Ptr servo_sensor_msg(new std_msgs::Float64);
-    servo_sensor_msg->data = servo_clipped;
-    servo_sensor_pub_.publish(servo_sensor_msg);
-  }
-    last_steering_angle_ = cmd->drive.steering_angle;
+void VescDriver::ackermannCurvatureCallback(
+    const f1tenth_course::AckermannCurvatureDriveMsg& cmd) {
+  t_last_command_ = ros::WallTime::now().toSec();
+  mux_drive_speed_ = cmd.velocity;
+  const float rot_vel = cmd.velocity * cmd.curvature;
+  mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
 }
 
 VescDriver::CommandLimit::CommandLimit(const ros::NodeHandle& nh, const std::string& str,
