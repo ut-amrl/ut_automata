@@ -42,20 +42,11 @@ class HumanInteraction;
 class MainWindow : public QWidget {
   Q_OBJECT
 
-  enum class DisplayState {
-    kDefault = 0,
-    kAdminPassword = 1,
-    kAdmin = 2,
-    kHumanInteraction = 3
-  };
-
 public:
   MainWindow(ros::NodeHandle* node_handle, QWidget *parent = 0);
 public slots:
   void closeWindow();
   void UpdateTime();
-  void passwordEntered(QString pw);
-  void UpdateDisplay();
 
 signals:
   void UpdateQuestion(std::string question,
@@ -63,9 +54,6 @@ signals:
   void UpdateSignal();
 
 private:
-
-  // Current display state.
-  DisplayState state_;
 
   // Used to show the time.
   QLabel* time_label_;
