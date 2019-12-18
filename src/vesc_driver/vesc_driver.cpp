@@ -58,8 +58,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
     fw_version_major_(-1),
     fw_version_minor_(-1),
     t_last_command_(0),
-    t_last_joystick_(0),
-    last_speed_command_(0) {
+    t_last_joystick_(0) {
   odom_msg_.header.stamp = ros::Time::now();
   odom_msg_.header.frame_id = "odom";
   odom_msg_.child_frame_id = "base_link";
@@ -136,14 +135,6 @@ VescDriver::VescDriver(ros::NodeHandle nh,
 
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 10);
 
-  // since vesc state does not include the servo position, publish the commanded
-  // servo position as a "sensor"
-  servo_sensor_pub_ =
-      nh.advertise<std_msgs::Float64>("sensors/servo_position_command", 10);
-
-  // create ackermann subscriber.
-  ackermann_sub_ = nh.subscribe(
-      "commands/ackermann", 10, &VescDriver::ackermannCmdCallback, this);
   ackermann_curvature_sub_ = nh.subscribe(
       "/ackermann_curvature_drive",
       10,
@@ -276,7 +267,7 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
     }
     if (kDebug) printf("INITIALIZING\n");
     // request version number, return packet will update the internal version
-numbers
+    // numbers
     vesc_.requestFWVersion();
     if (fw_version_major_ >= 0 && fw_version_minor_ >= 0) {
       ROS_INFO("Connected to VESC with firmware version %d.%d",

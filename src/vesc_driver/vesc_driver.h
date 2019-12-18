@@ -56,7 +56,6 @@ private:
   // ROS services
   ros::Publisher state_pub_;
   ros::Publisher odom_pub_;
-  ros::Subscriber ackermann_sub_;
   ros::Subscriber ackermann_curvature_sub_;
   ros::Subscriber joystick_sub_;
   ros::SteadyTimer timer_;

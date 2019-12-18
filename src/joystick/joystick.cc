@@ -56,8 +56,8 @@ bool Joystick::Open(const char *dev) {
   ioctl(fd, JSIOCGAXES,               &num_axes);
   ioctl(fd, JSIOCGBUTTONS,            &num_buttons);
   ioctl(fd, JSIOCGNAME(sizeof(name)), name);
-  if (num_axes < 0) num_axes = 0;
-  if (num_buttons < 0) num_buttons = 0;
+  // if (num_axes < 0) num_axes = 0;
+  // if (num_buttons < 0) num_buttons = 0;
   axes_.resize(num_axes, 0);
   buttons_.resize(num_buttons, 0);
   name_ = string(name);
