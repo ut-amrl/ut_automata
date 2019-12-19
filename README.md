@@ -3,7 +3,7 @@ Mono-Repository for F1/10 courses
 
 ## Dependencies
 ```
-sudo apt install python-pygame ros-melodic-ackermann-msgs ros-melodic-serial libgoogle-glog-dev libgflags-dev
+sudo apt install ros-melodic-serial libgoogle-glog-dev libgflags-dev
 ```
 
 ## Build
