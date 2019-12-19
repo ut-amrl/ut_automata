@@ -18,7 +18,7 @@
 #include "shared/math/math_util.h"
 
 static const bool kDebug = false;
-static const float kCommandRate = 50;
+static const float kCommandRate = 20;
 static const float kCommandInterval = 1.0 / kCommandRate;
 
 using f1tenth_course::VescStateStamped;
