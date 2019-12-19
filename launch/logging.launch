@@ -1,3 +1,3 @@
 <launch>                                                                                         
-  <node name="logger" pkg="f1tenth_course" type="logger" respawn="false" args="-b /home/amrl_user/bagfiles/" />
+  <node name="logger" pkg="f1tenth_course" type="logger" respawn="false" args="--out_dir=/home/amrl_user/bagfiles/" />
 </launch>
