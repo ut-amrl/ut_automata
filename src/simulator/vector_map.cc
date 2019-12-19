@@ -453,13 +453,6 @@ void VectorMap::GetPredictedScan(const Vector2f& loc,
   if (line_cast.empty()) {
     return;
   }
-
-  /*
-  // Sort the raycast.
-  static const auto linecast_comparator =
-      [](const LineCast& l1, const LineCast& l2) { return l1.a0 <= l2.a0; };
-  std::sort(line_cast.begin(), line_cast.end(), linecast_comparator);
-  */
   // Iterate over the ray cast, filling the angles
   scan.resize(num_rays);
   const float da = (angle_max - angle_min) / static_cast<float>(num_rays);
