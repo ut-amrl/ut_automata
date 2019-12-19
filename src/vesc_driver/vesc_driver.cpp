@@ -170,6 +170,7 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
   static const size_t kAutonomousDriveButton = 5;
 
   if (msg.buttons.size() < 6) return;
+  t_last_joystick_ = ros::WallTime::now().toSec();
   if (msg.buttons[kManualDriveButton] == 1) {
     if(kDebug) printf("Joystick\n");
     drive_mode_ = kJoystickDrive;
@@ -182,18 +183,18 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     mux_drive_speed_ = 0;
     mux_steering_angle_ = 0;
   }
-  if (drive_mode_ != kJoystickDrive) return;
-  t_last_joystick_ = ros::WallTime::now().toSec();
-  if (msg.axes.size() < 5) return;
-  const float steer_joystick = -msg.axes[0];
-  const float drive_joystick = -msg.axes[4];
-  const bool turbo_mode = (msg.axes[2] >= 0.9);
-  const float max_speed = (turbo_mode ? kTurboSpeed : kNormalSpeed);
-  float speed = drive_joystick * max_speed;
-  float steering_angle = steer_joystick * kMaxTurnRate;
-  mux_drive_speed_ = speed;
-  mux_steering_angle_ = steering_angle;
-  if (kDebug) printf("%7.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
+  if (drive_mode_ == kJoystickDrive) {
+    if (msg.axes.size() < 5) return;
+    const float steer_joystick = -msg.axes[0];
+    const float drive_joystick = -msg.axes[4];
+    const bool turbo_mode = (msg.axes[2] >= 0.9);
+    const float max_speed = (turbo_mode ? kTurboSpeed : kNormalSpeed);
+    float speed = drive_joystick * max_speed;
+    float steering_angle = steer_joystick * kMaxTurnRate;
+    mux_drive_speed_ = speed;
+    mux_steering_angle_ = steering_angle;
+    if (kDebug) printf("%7.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
+  }
 }
 
   /* TODO or TO-THINKABOUT LIST
@@ -229,11 +230,11 @@ void VescDriver::sendDriveCommands() {
   if (kDebug) {
     printf("%7.2f %7.2f %.1f\u00b0\n", mux_drive_speed_, smooth_speed, mux_steering_angle_);
   }
-  const double erpm =
+  const float erpm =
       speed_to_erpm_gain_ * smooth_speed + speed_to_erpm_offset_;
 
   // calc steering angle (servo)
-  const double servo = steering_to_servo_gain_ * mux_steering_angle_ +
+  const float servo = steering_to_servo_gain_ * mux_steering_angle_ +
       steering_to_servo_offset_;
 
   // Set speed command.
@@ -290,15 +291,15 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
   }
 }
 
-void VescDriver::updateOdometry(double rpm, double steering_angle) {
+void VescDriver::updateOdometry(float rpm, float steering_angle) {
   // TODO: calculate speed based on tachometer as opposed to rpm
 
   // Calcuate linear velocity
-  double lin_vel = (rpm - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+  float lin_vel = (rpm - speed_to_erpm_offset_) / speed_to_erpm_gain_;
 
   // Calculate angular velocity
-  double turn_radius = 0;
-  double rot_vel = 0;
+  float turn_radius = 0;
+  float rot_vel = 0;
   if (steering_angle != 0) {
     turn_radius = wheel_base_ / tan(steering_angle);
     rot_vel = lin_vel / turn_radius;
@@ -392,18 +393,21 @@ float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
 void VescDriver::ackermannCurvatureCallback(
     const f1tenth_course::AckermannCurvatureDriveMsg& cmd) {
   t_last_command_ = ros::WallTime::now().toSec();
-  mux_drive_speed_ = cmd.velocity;
-  const float rot_vel = cmd.velocity * cmd.curvature;
-  mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
+  if (drive_mode_ == kAutonomousDrive) {
+    mux_drive_speed_ = cmd.velocity;
+    const float rot_vel = cmd.velocity * cmd.curvature;
+    mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
+  }
 }
 
 VescDriver::CommandLimit::CommandLimit(const ros::NodeHandle& nh, const std::string& str,
-                                       const boost::optional<double>& min_lower,
-                                       const boost::optional<double>& max_upper) :
+                                       const boost::optional<float>& min_lower,
+                                       const boost::optional<float>& max_upper)
+:
   name(str)
 {
   // check if user's minimum value is outside of the range min_lower to max_upper
-  double param_min;
+  float param_min;
   if (nh.getParam(name + "_min", param_min)) {
     if (min_lower && param_min < *min_lower) {
       lower = *min_lower;
@@ -424,7 +428,7 @@ VescDriver::CommandLimit::CommandLimit(const ros::NodeHandle& nh, const std::str
   }
 
   // check if the uers' maximum value is outside of the range min_lower to max_upper
-  double param_max;
+  float param_max;
   if (nh.getParam(name + "_max", param_max)) {
     if (min_lower && param_max < *min_lower) {
       upper = *min_lower;
@@ -448,7 +452,7 @@ VescDriver::CommandLimit::CommandLimit(const ros::NodeHandle& nh, const std::str
   if (upper && lower && *lower > *upper) {
     ROS_WARN_STREAM("Parameter " << name << "_max (" << *upper
                     << ") is less than parameter " << name << "_min (" << *lower << ").");
-    double temp(*lower);
+    float temp(*lower);
     lower = *upper;
     upper = temp;
   }
@@ -460,7 +464,7 @@ VescDriver::CommandLimit::CommandLimit(const ros::NodeHandle& nh, const std::str
   ROS_DEBUG_STREAM(oss.str());
 }
 
-double VescDriver::CommandLimit::clip(double value)
+float VescDriver::CommandLimit::clip(float value)
 {
   if (lower && value < lower) {
     ROS_INFO_THROTTLE(10, "%s command value (%f) below minimum limit (%f), clipping.",

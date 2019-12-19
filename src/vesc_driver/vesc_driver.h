@@ -39,12 +39,12 @@ private:
     CommandLimit(
         const ros::NodeHandle& nh,
         const std::string& str,
-        const boost::optional<double>& min_lower = boost::optional<double>(),
-        const boost::optional<double>& max_upper = boost::optional<double>());
-    double clip(double value);
+        const boost::optional<float>& min_lower = boost::optional<float>(),
+        const boost::optional<float>& max_upper = boost::optional<float>());
+    float clip(float value);
     std::string name;
-    boost::optional<double> lower;
-    boost::optional<double> upper;
+    boost::optional<float> lower;
+    boost::optional<float> upper;
   };
   CommandLimit duty_cycle_limit_;
   CommandLimit current_limit_;
@@ -84,11 +84,11 @@ private:
   int fw_version_minor_;
 
   // Conversion parameters.
-  double speed_to_erpm_gain_;
-  double speed_to_erpm_offset_;
-  double steering_to_servo_gain_;
-  double steering_to_servo_offset_;
-  double wheel_base_;
+  float speed_to_erpm_gain_;
+  float speed_to_erpm_offset_;
+  float steering_to_servo_gain_;
+  float steering_to_servo_offset_;
+  float wheel_base_;
 
 
   // Time of last command, for safety motion profiling
@@ -96,7 +96,7 @@ private:
   // Time of last joystick message, for safety.
   std::atomic<double> t_last_joystick_;
   // Last servo angle command
-  double last_steering_angle_;
+  float last_steering_angle_;
 
   // Create an odometry message
   nav_msgs::Odometry odom_msg_;
@@ -117,7 +117,7 @@ private:
       const f1tenth_course::AckermannCurvatureDriveMsg& cmd);
   void joystickCallback(const sensor_msgs::Joy& msg);
 
-  void updateOdometry(double rpm, double steering_angle);
+  void updateOdometry(float rpm, float steering_angle);
 };
 
 } // namespace vesc_driver
