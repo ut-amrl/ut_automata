@@ -45,12 +45,7 @@ ADD_SUBDIRECTORY(src/shared)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/shared)
 
 SET(libs roslib roscpp popt glog gflags amrl-shared-lib
-    ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1)
-
-rosbuild_add_executable(motion_profiler
-  src/motion_profiler/motion_profiler.cpp
-)
-target_link_libraries(motion_profiler popt boost_system)
+    ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1 boost_system)
 
 rosbuild_add_executable(logger src/logger/logger.cpp)
 target_link_libraries(logger ${libs})
@@ -78,3 +73,9 @@ ROSBUILD_ADD_EXECUTABLE(joystick
     src/joystick/joystick.cc
     src/joystick/joystick_driver.cc)
 TARGET_LINK_LIBRARIES(joystick ${libs})
+
+ROSBUILD_ADD_EXECUTABLE(simulator
+    src/simulator/simulator.cc
+    src/simulator/vector_map.cc
+    src/simulator/simulator_main.cc)
+TARGET_LINK_LIBRARIES(simulator ${libs})
