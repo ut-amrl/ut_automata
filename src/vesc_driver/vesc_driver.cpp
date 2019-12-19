@@ -154,7 +154,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
 void VescDriver::checkCommandTimeout() {
   static const double kTimeout = 0.5;
   const double t_now = ros::WallTime::now().toSec();
-  if (t_now > t_last_command_ + kTimeout ||
+  if ((t_now > t_last_command_ + kTimeout && drive_mode_ == kAutonomousDrive) ||
       t_now > t_last_joystick_ + kTimeout) {
     mux_drive_speed_ = 0;
     mux_steering_angle_ = 0;
@@ -162,6 +162,7 @@ void VescDriver::checkCommandTimeout() {
 }
 
 void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
+  static const bool kDebug = false;
   static const float kMaxTurnRate = 0.25;
   static const float kTurboSpeed = 2.0;
   static const float kNormalSpeed = 1.0;
@@ -170,12 +171,18 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
 
   if (msg.buttons.size() < 6) return;
   if (msg.buttons[kManualDriveButton] == 1) {
+    if(kDebug) printf("Joystick\n");
     drive_mode_ = kJoystickDrive;
   } else if (msg.buttons[kAutonomousDriveButton] == 1) {
+    if(kDebug) printf("Autonomous\n");
     drive_mode_ = kAutonomousDrive;
   } else {
+    if(kDebug) printf("Stopped\n");
     drive_mode_ = kStoppedDrive;
+    mux_drive_speed_ = 0;
+    mux_steering_angle_ = 0;
   }
+  if (drive_mode_ != kJoystickDrive) return;
   t_last_joystick_ = ros::WallTime::now().toSec();
   if (msg.axes.size() < 5) return;
   const float steer_joystick = -msg.axes[0];
@@ -184,8 +191,9 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
   const float max_speed = (turbo_mode ? kTurboSpeed : kNormalSpeed);
   float speed = drive_joystick * max_speed;
   float steering_angle = steer_joystick * kMaxTurnRate;
-
-  printf("%.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
+  mux_drive_speed_ = speed;
+  mux_steering_angle_ = steering_angle;
+  if (kDebug) printf("%7.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
 }
 
   /* TODO or TO-THINKABOUT LIST
@@ -203,7 +211,7 @@ errors
   */
 
 void VescDriver::sendDriveCommands() {
-  static const bool kDebug = true;
+  static const bool kDebug = false;
   static const float kMaxAcceleration = 4.0; // m/s^2
   static const float kMaxDeceleration = 6.0; // m/s^2
   static float last_speed_ = 0;
@@ -219,7 +227,7 @@ void VescDriver::sendDriveCommands() {
       mux_drive_speed_);
   last_speed_ = smooth_speed;
   if (kDebug) {
-    printf("%.2f %.1f\u00b0\n", smooth_speed, mux_steering_angle_);
+    printf("%7.2f %7.2f %.1f\u00b0\n", mux_drive_speed_, smooth_speed, mux_steering_angle_);
   }
   const double erpm =
       speed_to_erpm_gain_ * smooth_speed + speed_to_erpm_offset_;
@@ -229,11 +237,7 @@ void VescDriver::sendDriveCommands() {
       steering_to_servo_offset_;
 
   // Set speed command.
-  if (false) {
-    vesc_.setSpeed(speed_limit_.clip(erpm));
-  } else {
-    vesc_.setSpeed(0);
-  }
+  vesc_.setSpeed(speed_limit_.clip(erpm));
 
   // Set servo position command.
   vesc_.setServo(servo_limit_.clip(servo));
