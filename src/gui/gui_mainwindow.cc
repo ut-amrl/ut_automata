@@ -149,6 +149,8 @@ void Execute(const string& cmd) {
 }
 
 void MainWindow::StartCar() {
+  Execute("screen -mdS start_car "
+          "/home/amrl_user/f1tenth_course/start_car.bash");
 }
 
 void MainWindow::StartRos() {
