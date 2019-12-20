@@ -284,6 +284,7 @@ void JoystickCallback(const sensor_msgs::Joy::ConstPtr& joy) {
 int main(int argc, char **argv) {
   ros::init(argc, argv, "logger");
   ros::NodeHandle nh;
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
 
 
   if (FLAGS_out_dir == "") {
@@ -295,7 +296,7 @@ int main(int argc, char **argv) {
   ROS_INFO("Bag file directory: %s", FLAGS_out_dir.c_str());
 
   ros::Subscriber joystick_subscriber = 
-    nh.subscribe("/bluetooth_teleop/joy",5, JoystickCallback);
+    nh.subscribe("/joystick",5, JoystickCallback);
 
 
   velocity_command_publisher =  nh.advertise<geometry_msgs::Twist>("/cmd_vel", 
