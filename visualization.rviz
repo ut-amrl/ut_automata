@@ -6,8 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Grid1/Offset1
-        - /LaserScan1/Status1
-        - /Simulator Pose1
+        - /Odometry1
+        - /Odometry1/Status1
       Splitter Ratio: 0.5
     Tree Height: 3372
   - Class: rviz/Selection
@@ -87,14 +87,13 @@ Visualization Manager:
       Use rainbow: true
       Value: true
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /simulator_visualization
-      Name: Map
+      Name: Simulator
       Namespaces:
-        map_lines: true
-        robot_position: true
+        {}
       Queue Size: 100
-      Value: true
+      Value: false
     - Class: rviz/TF
       Enabled: false
       Frame Timeout: 15
@@ -115,6 +114,88 @@ Visualization Manager:
       Name: Simulator Pose
       Radius: 0.10000000149011612
       Reference Frame: base_link
+      Value: true
+    - Alpha: 1
+      Arrow Length: 0.30000001192092896
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.009999999776482582
+      Class: rviz/PoseArray
+      Color: 255; 25; 0
+      Enabled: true
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
+      Name: Particle Filter
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
+      Shape: Arrow (Flat)
+      Topic: /particles
+      Unreliable: false
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /navigation_options
+      Name: Obstacle Avoidance
+      Namespaces:
+        navigation_options: true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /map
+      Name: Particle Filter Map
+      Namespaces:
+        map: true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /transformed_scan
+      Name: Particle Filter Laser Scan
+      Namespaces:
+        transformed_scan: true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /trajectory
+      Name: Particle Filter Trajectory
+      Namespaces:
+        trajectory: true
+      Queue Size: 100
+      Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 100
+      Name: Odometry
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 255; 25; 0
+        Head Length: 0.30000001192092896
+        Head Radius: 0.10000000149011612
+        Shaft Length: 1
+        Shaft Radius: 0.05000000074505806
+        Value: Arrow
+      Topic: /odom
+      Unreliable: false
       Value: true
   Enabled: true
   Global Options:
@@ -145,16 +226,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 52.10344314575195
+      Distance: 307.2860107421875
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 35.31005096435547
-        Y: 64.37130737304688
-        Z: -0.09206436574459076
+        X: 58.19021987915039
+        Y: 32.153446197509766
+        Z: -0.1242680773139
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false

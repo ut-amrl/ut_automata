@@ -277,8 +277,8 @@ void Simulator::publishLaser() {
   map_.GetPredictedScan(laserLoc,
                         scanDataMsg.range_min,
                         scanDataMsg.range_max,
-                        AngleMod(scanDataMsg.angle_min + curAngle),
-                        AngleMod(scanDataMsg.angle_max + curAngle),
+                        scanDataMsg.angle_min + curAngle,
+                        scanDataMsg.angle_max + curAngle,
                         num_rays,
                         &scanDataMsg.ranges);
   laserPublisher.publish(scanDataMsg);

@@ -46,11 +46,7 @@ private:
     boost::optional<float> lower;
     boost::optional<float> upper;
   };
-  CommandLimit duty_cycle_limit_;
-  CommandLimit current_limit_;
-  CommandLimit brake_limit_;
   CommandLimit speed_limit_;
-  CommandLimit position_limit_;
   CommandLimit servo_limit_;
 
   // ROS services
