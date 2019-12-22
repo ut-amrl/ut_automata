@@ -15,11 +15,29 @@
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 
+#include "config_reader/config_reader.h"
 #include "shared/math/math_util.h"
 
 static const bool kDebug = false;
 static const float kCommandRate = 20;
 static const float kCommandInterval = 1.0 / kCommandRate;
+
+CONFIG_FLOAT(speed_to_erpm_gain_, "speed_to_erpm_gain");
+CONFIG_FLOAT(speed_to_erpm_offset_, "speed_to_erpm_offset");
+
+CONFIG_FLOAT(steering_to_servo_gain_, "steering_angle_to_servo_gain");
+CONFIG_FLOAT(steering_to_servo_offset_, "steering_angle_to_servo_offset");
+
+CONFIG_FLOAT(wheelbase_, "wheelbase");
+
+CONFIG_FLOAT(erpm_speed_limit_, "erpm_speed_limit");
+CONFIG_FLOAT(servo_min_, "servo_min");
+CONFIG_FLOAT(servo_max_, "servo_max");
+
+config_reader::ConfigReader reader({
+  "config/car.lua",
+  "config/vesc.lua"
+});
 
 using f1tenth_course::VescStateStamped;
 
@@ -27,15 +45,6 @@ namespace {
 
 float mux_drive_speed_ = 0;
 float mux_steering_angle_ = 0;
-
-template <typename T>
-inline bool getRequiredParam(const ros::NodeHandle& nh,
-                             std::string name,
-                             T& value) {
-  if (nh.getParam(name, value)) return true;
-  ROS_FATAL("AckermannToVesc: Parameter %s is required.", name.c_str());
-  return false;
-}
 
 }  // namespace
 
@@ -47,8 +56,6 @@ VescDriver::VescDriver(ros::NodeHandle nh,
     vesc_(std::string(),
           boost::bind(&VescDriver::vescPacketCallback, this, _1),
           boost::bind(&VescDriver::vescErrorCallback, this, _1)),
-    speed_limit_(private_nh, "speed"),
-    servo_limit_(private_nh, "servo", 0.0, 1.0),
     driver_mode_(MODE_INITIALIZING),
     drive_mode_(kStoppedDrive),
     fw_version_major_(-1),
@@ -92,26 +99,6 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   std::string port;
   if (!private_nh.getParam("port", port)) {
     ROS_FATAL("VESC communication port parameter required.");
-    ros::shutdown();
-    return;
-  }
-
-  // Load conversion parameters.
-  if (!getRequiredParam(private_nh,
-                        "speed_to_erpm_gain",
-                        speed_to_erpm_gain_) ||
-      !getRequiredParam(private_nh,
-                        "speed_to_erpm_offset",
-                        speed_to_erpm_offset_) ||
-      !getRequiredParam(private_nh,
-                        "steering_angle_to_servo_gain",
-                        steering_to_servo_gain_) ||
-      !getRequiredParam(private_nh,
-                        "steering_angle_to_servo_offset",
-                        steering_to_servo_offset_) ||
-      !getRequiredParam(private_nh,
-                        "wheelbase",
-                        wheel_base_)) {
     ros::shutdown();
     return;
   }
@@ -207,6 +194,26 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
 errors
   */
 
+float Clip(float x, float x_min, float x_max, const char* name) {
+  if (x < x_min) {
+    fprintf(stderr,
+            "Clipping %s value %f to min limit, %f\n",
+            name,
+            x,
+            x_min);
+    return x_min;
+  }
+  if (x > x_max) {
+    fprintf(stderr,
+            "Clipping %s value %f to max limit, %f\n",
+            name,
+            x,
+            x_max);
+    return x_max;
+  }
+  return x;
+}
+
 void VescDriver::sendDriveCommands() {
   static const bool kDebug = false;
   static const float kMaxAcceleration = 4.0; // m/s^2
@@ -224,7 +231,8 @@ void VescDriver::sendDriveCommands() {
       mux_drive_speed_);
   last_speed_ = smooth_speed;
   if (kDebug) {
-    printf("%7.2f %7.2f %.1f\u00b0\n", mux_drive_speed_, smooth_speed, mux_steering_angle_);
+    printf("%7.2f %7.2f %.1f\u00b0\n",
+           mux_drive_speed_, smooth_speed, mux_steering_angle_);
   }
   const float erpm =
       speed_to_erpm_gain_ * smooth_speed + speed_to_erpm_offset_;
@@ -234,10 +242,10 @@ void VescDriver::sendDriveCommands() {
       steering_to_servo_offset_;
 
   // Set speed command.
-  vesc_.setSpeed(speed_limit_.clip(erpm));
+  vesc_.setSpeed(Clip(erpm, -erpm_speed_limit_, erpm_speed_limit_, "erpm"));
 
   // Set servo position command.
-  vesc_.setServo(servo_limit_.clip(servo));
+  vesc_.setServo(Clip(servo, servo_min_, servo_max_, "servo"));
   last_steering_angle_ = mux_steering_angle_;
 }
 
@@ -297,7 +305,7 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
   float turn_radius = 0;
   float rot_vel = 0;
   if (steering_angle != 0) {
-    turn_radius = wheel_base_ / tan(steering_angle);
+    turn_radius = wheelbase_ / tan(steering_angle);
     rot_vel = lin_vel / turn_radius;
   }
 
@@ -382,7 +390,7 @@ float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
   }
 
   float turn_radius = lin_vel / rot_vel;
-  steering_angle = std::atan(wheel_base_ / turn_radius);
+  steering_angle = std::atan(wheelbase_ / turn_radius);
   return steering_angle;
 }
 
@@ -395,85 +403,5 @@ void VescDriver::ackermannCurvatureCallback(
     mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
   }
 }
-
-VescDriver::CommandLimit::CommandLimit(const ros::NodeHandle& nh, const std::string& str,
-                                       const boost::optional<float>& min_lower,
-                                       const boost::optional<float>& max_upper)
-:
-  name(str)
-{
-  // check if user's minimum value is outside of the range min_lower to max_upper
-  float param_min;
-  if (nh.getParam(name + "_min", param_min)) {
-    if (min_lower && param_min < *min_lower) {
-      lower = *min_lower;
-      ROS_WARN_STREAM("Parameter " << name << "_min (" << param_min <<
-                      ") is less than the feasible minimum (" << *min_lower << ").");
-    }
-    else if (max_upper && param_min > *max_upper) {
-      lower = *max_upper;
-      ROS_WARN_STREAM("Parameter " << name << "_min (" << param_min <<
-                      ") is greater than the feasible maximum (" << *max_upper << ").");
-    }
-    else {
-      lower = param_min;
-    }
-  }
-  else if (min_lower) {
-    lower = *min_lower;
-  }
-
-  // check if the uers' maximum value is outside of the range min_lower to max_upper
-  float param_max;
-  if (nh.getParam(name + "_max", param_max)) {
-    if (min_lower && param_max < *min_lower) {
-      upper = *min_lower;
-      ROS_WARN_STREAM("Parameter " << name << "_max (" << param_max <<
-                      ") is less than the feasible minimum (" << *min_lower << ").");
-    }
-    else if (max_upper && param_max > *max_upper) {
-      upper = *max_upper;
-      ROS_WARN_STREAM("Parameter " << name << "_max (" << param_max <<
-                      ") is greater than the feasible maximum (" << *max_upper << ").");
-    }
-    else {
-      upper = param_max;
-    }
-  }
-  else if (max_upper) {
-    upper = *max_upper;
-  }
-
-  // check for min > max
-  if (upper && lower && *lower > *upper) {
-    ROS_WARN_STREAM("Parameter " << name << "_max (" << *upper
-                    << ") is less than parameter " << name << "_min (" << *lower << ").");
-    float temp(*lower);
-    lower = *upper;
-    upper = temp;
-  }
-
-  std::ostringstream oss;
-  oss << "  " << name << " limit: ";
-  if (lower) oss << *lower << " "; else oss << "(none) ";
-  if (upper) oss << *upper; else oss << "(none)";
-  ROS_DEBUG_STREAM(oss.str());
-}
-
-float VescDriver::CommandLimit::clip(float value)
-{
-  if (lower && value < lower) {
-    ROS_INFO_THROTTLE(10, "%s command value (%f) below minimum limit (%f), clipping.",
-                      name.c_str(), value, *lower);
-    return *lower;
-  }
-  if (upper && value > upper) {
-    ROS_INFO_THROTTLE(10, "%s command value (%f) above maximum limit (%f), clipping.",
-                      name.c_str(), value, *upper);
-    return *upper;
-  }
-  return value;
-}
-
 
 } // namespace vesc_driver

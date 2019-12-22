@@ -34,21 +34,6 @@ private:
   void vescErrorCallback(const std::string& error);
   void timerCallback(const ros::SteadyTimerEvent& event);
 
-  // limits on VESC commands
-  struct CommandLimit {
-    CommandLimit(
-        const ros::NodeHandle& nh,
-        const std::string& str,
-        const boost::optional<float>& min_lower = boost::optional<float>(),
-        const boost::optional<float>& max_upper = boost::optional<float>());
-    float clip(float value);
-    std::string name;
-    boost::optional<float> lower;
-    boost::optional<float> upper;
-  };
-  CommandLimit speed_limit_;
-  CommandLimit servo_limit_;
-
   // ROS services
   ros::Publisher state_pub_;
   ros::Publisher odom_pub_;
@@ -78,14 +63,6 @@ private:
   int fw_version_major_;
   // firmware minor version reported by vesc
   int fw_version_minor_;
-
-  // Conversion parameters.
-  float speed_to_erpm_gain_;
-  float speed_to_erpm_offset_;
-  float steering_to_servo_gain_;
-  float steering_to_servo_offset_;
-  float wheel_base_;
-
 
   // Time of last command, for safety motion profiling
   std::atomic<double> t_last_command_;

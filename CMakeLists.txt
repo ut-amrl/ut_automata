@@ -51,13 +51,13 @@ rosbuild_add_executable(logger src/logger/logger.cpp)
 target_link_libraries(logger ${libs})
 
 # node executable
-rosbuild_add_executable(vesc_driver_node
+rosbuild_add_executable(vesc_driver
                         src/vesc_driver/vesc_driver_node.cpp
                         src/vesc_driver/vesc_driver.cpp
                         src/vesc_driver/vesc_interface.cpp
                         src/vesc_driver/vesc_packet.cpp
                         src/vesc_driver/vesc_packet_factory.cpp)
-target_link_libraries(vesc_driver_node ${libs})
+target_link_libraries(vesc_driver ${libs})
 
 qt4_wrap_cpp(GUI_MOC_SRCS
     src/gui/gui_mainwindow.h

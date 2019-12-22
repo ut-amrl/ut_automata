@@ -67,7 +67,7 @@ CONFIG_FLOAT(cDT, "delta_t");
 CONFIG_FLOAT(cMinTurnR, "min_turn_radius");
 CONFIG_FLOAT(cMaxAccel, "max_accel");
 CONFIG_FLOAT(cMaxSpeed, "max_speed");
-config_reader::ConfigReader reader({"config/f1_config.lua"});
+config_reader::ConfigReader reader({"config/simulator.lua"});
 
 Simulator::Simulator() {
   tLastCmd = GetMonotonicTime();
