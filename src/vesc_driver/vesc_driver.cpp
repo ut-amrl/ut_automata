@@ -34,6 +34,8 @@ CONFIG_FLOAT(erpm_speed_limit_, "erpm_speed_limit");
 CONFIG_FLOAT(servo_min_, "servo_min");
 CONFIG_FLOAT(servo_max_, "servo_max");
 
+CONFIG_STRING(serial_port_, "serial_port");
+
 config_reader::ConfigReader reader({
   "config/car.lua",
   "config/vesc.lua"
@@ -95,18 +97,11 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   odom_msg_.pose.pose.orientation.y = 0;
   odom_msg_.pose.pose.orientation.z = 0;
 
-  // get vesc serial port address
-  std::string port;
-  if (!private_nh.getParam("port", port)) {
-    ROS_FATAL("VESC communication port parameter required.");
-    ros::shutdown();
-    return;
-  }
 
   // attempt to connect to the serial port
   try {
     if (kDebug) printf("CONNECT\n");
-    vesc_.connect(port);
+    vesc_.connect(serial_port_);
   } catch (SerialException e) {
     ROS_FATAL("Failed to connect to the VESC, %s.", e.what());
     ros::shutdown();

@@ -1,4 +1,4 @@
-port = "/dev/ttyACM0";
+serial_port = "/dev/ttyACM0";
 -- erpm (electrical rpm) = speed_to_erpm_gain * speed (meters / second) +
 --   speed_to_erpm_offset
 -- for offset=0. speed_to_erpm_gain =
