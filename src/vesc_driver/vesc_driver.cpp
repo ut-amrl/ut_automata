@@ -237,7 +237,9 @@ void VescDriver::sendDriveCommands() {
       steering_to_servo_offset_;
 
   // Set speed command.
-  vesc_.setSpeed(Clip(erpm, -erpm_speed_limit_, erpm_speed_limit_, "erpm"));
+  const float erpm_clipped = Clip(erpm, -erpm_speed_limit_, erpm_speed_limit_, "erpm");
+  vesc_.setSpeed(erpm_clipped);
+  // vesc_.setSpeed(0);
 
   // Set servo position command.
   vesc_.setServo(Clip(servo, servo_min_, servo_max_, "servo"));
