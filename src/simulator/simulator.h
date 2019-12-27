@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <stdio.h>
+#include <random>
 #include <vector>
 
 #include "eigen3/Eigen/Dense"
@@ -106,6 +107,10 @@ class Simulator{
   geometry_msgs::PoseStamped truePoseMsg;
 
   f1tenth_course::AckermannCurvatureDriveMsg last_cmd_;
+
+  std::default_random_engine rng_;
+  std::normal_distribution<float> laser_noise_;
+  std::normal_distribution<float> angular_error_;
 
 private:
   void initVizMarker(visualization_msgs::Marker& vizMarker,
