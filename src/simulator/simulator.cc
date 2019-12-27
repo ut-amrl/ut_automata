@@ -72,8 +72,8 @@ CONFIG_FLOAT(cMaxSpeed, "max_speed");
 CONFIG_FLOAT(cLaserStdDev, "laser_noise_stddev");
 CONFIG_FLOAT(cAngularErrorBias, "angular_error_bias");
 CONFIG_FLOAT(cAngularErrorRate, "angular_error_rate");
+config_reader::ConfigReader reader({"config/simulator.lua"});
 
-config_reader::ConfigReader reader({"config/f1_config.lua"});
 
 Simulator::Simulator() :
     laser_noise_(0, 1),

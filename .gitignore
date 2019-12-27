@@ -4,3 +4,4 @@ lib/
 msg_gen/
 src/f1tenth_course/
 *.kdev*
+config/car.lua
