@@ -4,7 +4,7 @@ serial_port = "/dev/ttyACM0";
 -- for offset=0. speed_to_erpm_gain =
 --   num_motor_poles*60/circumference_wheel_in_meters
 speed_to_erpm_gain = 5356; -- arrma 3800: 17T pinion gear + P48 T83 spur gear
-speed_to_erpm_offset = 0.0;
+speed_to_erpm_offset = 160.0;
 -- servo value (0 to 1) =  steering_angle_to_servo_gain * steering angle
 --    (radians) + steering_angle_to_servo_offset
 steering_angle_to_servo_gain = -0.9015;
