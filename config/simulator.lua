@@ -33,4 +33,9 @@ min_turn_radius = 0.98
 max_speed = 1.2
 max_accel = 3.0
 
+-- Laser noise simulation.
+laser_noise_stddev = 0.01
 
+-- Turning error simulation.
+angular_error_bias = DegToRad(0);
+angular_error_rate = 0.1;

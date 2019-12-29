@@ -15,7 +15,7 @@ export DISPLAY=:0
 set -x -e
 
 # Run VESC driver 
-roslaunch f1tenth_course vesc_driver_node.launch > /dev/null &
+$PROJECT_DIR/bin/vesc_driver > /dev/null &
 
 # Run the joystick driver
 $PROJECT_DIR/bin/joystick --idx 1 > /dev/null &

@@ -22,6 +22,8 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <random>
+
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
 #include "f1tenth_course/AckermannCurvatureDriveMsg.h"
@@ -67,9 +69,15 @@ CONFIG_FLOAT(cDT, "delta_t");
 CONFIG_FLOAT(cMinTurnR, "min_turn_radius");
 CONFIG_FLOAT(cMaxAccel, "max_accel");
 CONFIG_FLOAT(cMaxSpeed, "max_speed");
-config_reader::ConfigReader reader({"config/f1_config.lua"});
+CONFIG_FLOAT(cLaserStdDev, "laser_noise_stddev");
+CONFIG_FLOAT(cAngularErrorBias, "angular_error_bias");
+CONFIG_FLOAT(cAngularErrorRate, "angular_error_rate");
+config_reader::ConfigReader reader({"config/simulator.lua"});
 
-Simulator::Simulator() {
+
+Simulator::Simulator() :
+    laser_noise_(0, 1),
+    angular_error_(0, 1) {
   tLastCmd = GetMonotonicTime();
   truePoseMsg.header.seq = 0;
   truePoseMsg.header.frame_id = "map";
@@ -281,6 +289,10 @@ void Simulator::publishLaser() {
                         scanDataMsg.angle_max + curAngle,
                         num_rays,
                         &scanDataMsg.ranges);
+  for (float& r : scanDataMsg.ranges) {
+    if (r > scanDataMsg.range_max - 0.1) continue;
+    r = max<float>(0.0, r + cLaserStdDev * laser_noise_(rng_));
+  }
   laserPublisher.publish(scanDataMsg);
 }
 
@@ -360,10 +372,13 @@ void Simulator::update() {
   if (linear_motion) {
     dx = dist;
     dy = 0;
-    dtheta = 0;
+    dtheta = cDT * cAngularErrorBias;
   } else {
     const float r = 1.0 / desired_curvature;
-    dtheta = dist * desired_curvature;
+    dtheta = dist * desired_curvature +
+        angular_error_(rng_) * cDT * cAngularErrorBias +
+        angular_error_(rng_) * cAngularErrorRate * fabs(dist *
+            desired_curvature);
     dx = r * sin(dtheta);
     dy = r * (1.0 - cos(dtheta));
   }
