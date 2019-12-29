@@ -120,6 +120,11 @@ MainWindow::MainWindow(QWidget* parent) :
     QPushButton* stop_ros = new QPushButton("Stop roscore");
     QPushButton* start_car = new QPushButton("Start Car");
     QPushButton* stop_all = new QPushButton("Stop all nodes");
+    font.setPointSize(20);
+    start_ros->setFont(font);
+    stop_ros->setFont(font);
+    start_car->setFont(font);
+    stop_all->setFont(font);
     start_ros->setSizePolicy(expanding_policy);
     stop_ros->setSizePolicy(expanding_policy);
     start_car->setSizePolicy(expanding_policy);
