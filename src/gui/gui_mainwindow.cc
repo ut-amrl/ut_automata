@@ -43,8 +43,11 @@
 
 #include "std_msgs/String.h"
 
+#include "vector_display.h"
+
 using std::string;
 using std::vector;
+using vector_display::VectorDisplay;
 
 vector<string> GetIPAddresses() {
   static const bool kGetIPV6 = false;
@@ -86,7 +89,8 @@ MainWindow::MainWindow(QWidget* parent) :
     time_label_(nullptr),
     tab_widget_(nullptr),
     robot_label_(nullptr),
-    main_layout_(nullptr) {
+    main_layout_(nullptr),
+    display_(nullptr) {
   this->setWindowTitle("F1/10 GUI");
   robot_label_ = new QLabel("F1/10");
   QFont font("Arial");
@@ -109,10 +113,17 @@ MainWindow::MainWindow(QWidget* parent) :
   tab_widget_ = new QTabWidget();
   {
     QWidget* ros_group = new QWidget();
+    QSizePolicy expanding_policy;
+    expanding_policy.setVerticalPolicy(QSizePolicy::Expanding);
+    expanding_policy.setHorizontalPolicy(QSizePolicy::Expanding);
     QPushButton* start_ros = new QPushButton("Start roscore");
     QPushButton* stop_ros = new QPushButton("Stop roscore");
     QPushButton* start_car = new QPushButton("Start Car");
     QPushButton* stop_all = new QPushButton("Stop all nodes");
+    start_ros->setSizePolicy(expanding_policy);
+    stop_ros->setSizePolicy(expanding_policy);
+    start_car->setSizePolicy(expanding_policy);
+    stop_all->setSizePolicy(expanding_policy);
     connect(start_car, SIGNAL(clicked()), this, SLOT(StartCar()));
     connect(start_ros, SIGNAL(clicked()), this, SLOT(StartRos()));
     connect(stop_ros, SIGNAL(clicked()), this, SLOT(StopRos()));
@@ -123,14 +134,16 @@ MainWindow::MainWindow(QWidget* parent) :
     vbox->addWidget(start_car);
     vbox->addWidget(stop_all);
     ros_group->setLayout(vbox);
+    display_ = new VectorDisplay();
+    tab_widget_->addTab(robot_label_, "Main");
     tab_widget_->addTab(ros_group, tr("Startup / Shutdown"));
+    tab_widget_->addTab(display_, tr("Visualizations"));
   }
 
   main_layout_ = new QVBoxLayout(this);
   setLayout(main_layout_);
   main_layout_->addLayout(top_bar, Qt::AlignTop);
   main_layout_->addWidget(tab_widget_);
-  main_layout_->addWidget(robot_label_, Qt::AlignCenter);
 
   connect(close_button, SIGNAL(clicked()), this, SLOT(closeWindow()));
 

@@ -22,6 +22,7 @@ ROSBUILD_INIT()
 SET(ROS_BUILD_STATIC_LIBS true)
 SET(ROS_BUILD_SHARED_LIBS false)
 
+SET(QT_USE_QTOPENGL true)
 FIND_PACKAGE(Qt4 REQUIRED)
 INCLUDE(${QT_USE_FILE})
 
@@ -61,13 +62,15 @@ target_link_libraries(vesc_driver_node ${libs})
 
 qt4_wrap_cpp(GUI_MOC_SRCS
     src/gui/gui_mainwindow.h
+    src/gui/vector_display.h
 )
 
 ROSBUILD_ADD_EXECUTABLE(gui
     src/gui/gui_main.cc
     src/gui/gui_mainwindow.cc
+    src/gui/vector_display.cc
     ${GUI_MOC_SRCS})
-TARGET_LINK_LIBRARIES(gui ${QT_LIBRARIES} ${libs})
+TARGET_LINK_LIBRARIES(gui ${QT_LIBRARIES} ${libs} ${OPENGL_LIBRARY} GL)
 
 ROSBUILD_ADD_EXECUTABLE(joystick
     src/joystick/joystick.cc

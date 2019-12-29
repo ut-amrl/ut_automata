@@ -30,6 +30,10 @@ class QLabel;
 class QVBoxLayout;
 class QTabWidget;
 
+namespace vector_display {
+class VectorDisplay;
+}  // namespace vector_display
+
 namespace f1tenth_gui {
 
 class TouchVectorDisplay;
@@ -67,6 +71,9 @@ private:
 
   // Main layout of the window.
   QVBoxLayout* main_layout_;
+
+  // Vector display.
+  vector_display::VectorDisplay* display_;
 
   // Question ID.
   int interaction_id_;
