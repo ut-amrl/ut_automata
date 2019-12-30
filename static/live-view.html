@@ -1,0 +1,650 @@
+<!-- TODO -->
+<!-- Draw All The Waypoints -->
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- Basic Page Needs
+    ------------------------------------ -->
+    <meta charset="utf-8">
+    <title>UMass AMRL RoboFleet</title>
+  
+    <!-- Mobile Specific Metas
+    ------------------------------------ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  
+    <!-- FONT
+    ------------------------------------ -->
+    <link href='//fonts.googleapis.com/css?family=Lustria|Lato:400,700,400italic|Playfair+Display:700,400italic' rel='stylesheet' type='text/css'>
+  
+    <!-- CSS
+    ------------------------------------ -->
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/normalize/3.0.3/normalize.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/skeleton/2.0.4/skeleton.min.css">
+    <link rel="stylesheet" href="//amrl.cs.umass.edu/assets/style.css">
+  
+    <!-- Favicon
+    ------------------------------------ -->
+    <link rel="icon" type="image/png" href="//amrl.cs.umass.edu/assets/favicon.png">
+  
+    <!-- Required for GetSimple Plugins
+    ------------------------------------ -->
+    <meta name="keywords" content="robotics">
+  
+  </head>
+<body>
+<div id="container" class="container">
+  <div class="row">
+      <section class="twelve columns">
+        <hr />
+          <h1 style="text-align:center">UMass AMRL RoboFleet</h1>
+        <hr />
+      <form id="robotSelection">
+        <button id="refresh">
+          Refresh
+        </button>
+        <select id="selectRobot" onchange="changeRobot()">
+          <option>Select a robot</option>
+        </select>
+      </form>
+      <label for="authkey">Auth. Key:</label>
+      <input type="password" id="authkey" name="authkey">
+      <div id="canvases" > </div>
+      <div id="map" style='width:960px; height:650px; visibility:hidden;'> </div>
+      <div id="mapCmds" style='width:960px; height:auto; visibility:hidden;'>
+        <center>
+          <h4>Actions</h4>
+          <h5><label id="robotActionFeedbackLbl"></label></h5>
+          <select id="actionSelectList">
+            <option value="sendRobotTo">Send Robot To</option>
+            <option value="delivery">Delivery</option>
+            <option value="escort">Escort</option>
+          </select>
+          <input id="actionSelectButton" type="button" value="Submit">
+        </center>
+      </div>
+      <div id="mapCmdOptions" style='width:960px; height:auto; visibility:hidden;'>
+        <center>
+          <h5>
+            From: 
+            <input type="text" id="robotActionFromTxtInput" size="10">
+            To:
+            <input type="text" id="robotActionToTxtInput" size="10">
+          </h5>
+        </center>
+      </div>
+      </section>
+  </div>
+</div>
+<script>
+  const server_url='https://greyhound.cs.umass.edu/robofleet-server';
+
+  const kCanvasScale = 0.5;
+  window.onload = main();
+  const allowedTypes = [
+    'sensor_msgs/LaserScan',
+    'sensor_msgs/Image',
+    'sensor_msgs/CompressedImage',
+    'jackal_msgs_amrl/MapUpdate'
+  ];
+
+  let robots = [];
+  let selectedRobot = '';
+  let channels = [];
+
+  let map;
+  let currLocationMarker;
+  let destinationMarker;
+  let mapOverlayLines = [];
+  let mapOverlayShape;
+  let robotActionListener;
+
+  let currBuilding = "";
+  let building_lng;
+  let building_lat;
+  let building_angle;
+  let lat_constant = 135000.0;
+  let lng_constant = 98000.0;
+
+  function main() {
+    listRobots();
+    // setInterval(refreshStatus, 100);
+    
+  }
+  function deleteDisplays() {
+    let canvases = document.getElementById('canvases');
+    while (canvases.hasChildNodes()) {
+      canvases.removeChild(canvases.lastChild);
+    }
+    deleteMap()
+  }
+  function addDisplays() {
+    let canvases = document.getElementById('canvases');
+    let i = 0;
+    channels = channels.map((c) => {
+      c.displayId = `display-${i}`;
+      let tag = '';
+      if (c.type === 'sensor_msgs/Image' || 
+          c.type === 'sensor_msgs/CompressedImage') {
+        tag = 'img';
+      } else if (c.type === 'sensor_msgs/LaserScan') {
+        tag = 'canvas';
+      }
+      else if (c.type === 'jackal_msgs_amrl/MapUpdate') {
+        initializeMap();
+        tag = 'map';
+      }
+      if (tag !== '') {
+        let d = document.createElement(tag); 
+        d.setAttribute('id', c.displayId);
+        // d.setAttribute('width', '300');
+        // d.setAttribute('height', '300');
+        canvases.appendChild(d);
+        ++i;
+      }
+      return c;
+    });
+  }
+  function changeRobot() {
+    let robotName = document.getElementById("selectRobot").value;
+    console.log(`Changed robot to ${robotName}`);
+    clearInterval();
+    deleteDisplays();
+    let robot = robots.find((r) => { return r.name === robotName; });
+    if (robot === undefined) {
+      console.error(`Unable to list robot ${robotName}`);
+      selectedRobot = '';
+    } else {
+      channels = robot.channels.filter((c) => {
+        return (allowedTypes.includes(c.type));
+      });
+      selectedRobot = robotName;
+      // Create canvases?
+      addDisplays();
+      setInterval(refreshStatus, 100);
+    }
+  }
+  function refreshStatus() {
+    channels.forEach((c) => {
+      if (c.type === "sensor_msgs/Image") {
+          getUpdate(c.name, updateImage, c.displayId);
+      } else if (c.type === "sensor_msgs/CompressedImage") {
+          getUpdate(c.name, updateCompressedImage, c.displayId);
+      } else if (c.type === "sensor_msgs/LaserScan") {
+        getUpdate(c.name, updateLaser, c.displayId);
+      } else if (c.type === "jackal_msgs_amrl/MapUpdate") {
+        getUpdate(c.name, updateMap , c.displayId);
+      }
+    });
+  }
+  function updateImage(imageData, canvasId) {
+    let c = document.getElementById(canvasId);
+    c.setAttribute('width', kCanvasScale * imageData.width);
+    c.setAttribute('height', kCanvasScale * imageData.height);
+    c.src = 'data:image/jpeg;base64,' + imageData.data;
+  }
+
+  function updateCompressedImage(imageData, canvasId) {
+    let c = document.getElementById(canvasId);
+    // c.setAttribute('width', kCanvasScale * imageData.width);
+    // c.setAttribute('height', kCanvasScale * imageData.height);
+    c.src = 'data:image/jpeg;base64,' + imageData.data;
+  }
+
+  function drawLine(ctx, n1, n2, col) {
+    if (col === undefined) col = "#000000";
+    ctx.strokeStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(n1.x, n1.y);
+    ctx.lineTo(n2.x, n2.y);
+    ctx.stroke();
+  }
+
+  function updateLaser(laserData, canvasId) {
+    let c = document.getElementById(canvasId);
+    let ctx = c.getContext("2d");
+    ctx.clearRect(0, 0, c.width, c.height);
+    const scale = c.width / (2 * laserData.range_max);
+    let r = laserData.ranges;
+    const x0 = c.width / 2;
+    const y0 = c.height / 2;
+    ctx.strokeStyle = "#C0C0C030";
+    ctx.beginPath();
+    points = [];
+    for (let a = laserData.angle_min, i = 0; 
+        a < laserData.angle_max; 
+        a += laserData.angle_increment, ++i) {
+      const r = laserData.ranges[i];
+      if (r <= laserData.min_range || r >= laserData.max_range) {
+        continue;
+      }
+      const x = x0 + scale * Math.cos(a) * laserData.ranges[i];
+      const y = y0 - scale * Math.sin(a) * laserData.ranges[i];
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x, y);
+      points.push({x:x, y:y});
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#101010";
+    points.forEach((p) =>  ctx.fillRect(p.x-2, p.y-2, 4, 4));
+    ctx.fillStyle = "#FF1010";
+    ctx.beginPath();
+    ctx.arc(x0, y0, 6, 0, 2 * Math.PI);
+    ctx.fill();
+    drawLine(ctx, {x: x0, y:y0}, {x:1.1 * x0 , y:y0}, "#FF1010");
+  }
+
+  function updateMap(mapData, canvasId) {
+
+    let building = mapData.location
+
+    if(building !== currBuilding) {
+
+      currBuilding = building;
+
+      updateBuildingData(building)
+
+    }
+
+    let lng_start = getLng(mapData.x, mapData.y, building_angle, building_lng);
+    let lat_start = getLat(mapData.x, mapData.y, building_angle, building_lat);
+    let lng_end = getLng(mapData.x_goal, mapData.y_goal, building_angle, building_lng);
+    let lat_end = getLat(mapData.x_goal, mapData.y_goal, building_angle, building_lat);
+
+    let currP = currLocationMarker.getPosition();
+    if( Math.abs(lat_start - currP.lat()) > 0.0000001 || Math.abs(lng_start - currP.lng()) > 0.0000001 || map !== currLocationMarker.getMap()) {
+      currLocationMarker.setMap(null);
+      currLocationMarker = new google.maps.Marker({position: {lat: lat_start, lng: lng_start}, map: map});
+    }
+
+    let destP = destinationMarker.getPosition();
+    if( Math.abs(lat_end - destP.lat()) > 0.0000001 || Math.abs(lng_end - destP.lng()) > 0.0000001 || map !== destinationMarker.getMap()) {
+      let image = 'https://developers.google.com/maps/documentation/javascript/examples/full/images/beachflag.png'
+      destinationMarker.setMap(null);
+      destinationMarker = new google.maps.Marker({position: {lat: lat_end, lng: lng_end}, map: map, icon:image});
+    }
+
+  }
+
+
+
+  const robotName = "CoBot3";
+
+  function listRobots() {
+    const http = new XMLHttpRequest();
+    const url=server_url + '/ServerStatus';
+    http.addEventListener("load",()=>{
+      let msg = {};
+      try {
+        msg = JSON.parse(http.responseText);
+        var select = document.getElementById("selectRobot"); 
+        robots = msg.robots;
+        msg.robots.forEach((r)=> { 
+          let el = document.createElement("option");
+          el.text = r.name;
+          el.value = r.name;
+          select.add(el);
+        });
+      } catch(e) {
+        console.error(e);
+      }
+    });
+    http.open("GET", url, true);
+    http.send();
+  }
+  function getUpdate(topic, updateCallback, canvasId) {
+    if (selectedRobot === '') return;
+    const http = new XMLHttpRequest();
+    const url=server_url + '/RobotStatus';
+    http.open("POST", url, true);
+    const query = {
+      name: selectedRobot,
+      channel: topic
+    };
+    const queryString = JSON.stringify(query);
+    http.setRequestHeader("Content-type", "application/json");
+    http.send(queryString);
+
+    http.onreadystatechange=(e)=>{
+      let msg = {};
+      try {
+        msg = JSON.parse(http.responseText);
+      } catch(e) {
+        // Malformed data. It happens. The internet is hard. Ignore.
+        return;
+      }
+      updateCallback(msg, canvasId);
+    }
+  }
+
+  function initializeMap(){
+    currBuilding = ""
+    document.getElementById('map').style.visibility = "visible";
+    document.getElementById('mapCmds').style.visibility = "visible";
+    document.getElementById("actionSelectButton").addEventListener("click", robotAction);
+    document.getElementById("actionSelectList").addEventListener("change", actionChanged);
+  }
+
+  function initMap(){
+    let uluru = {lat: 42.394461, lng: -72.527061};
+    map = new google.maps.Map(
+    document.getElementById('map'), {
+         zoom: 19,
+          center: uluru,
+          styles: [{
+              featureType: 'poi',
+            stylers: [{ visibility: 'off' }]  // Turn off POI.
+          },
+          {
+            featureType: 'transit.station',
+              stylers: [{ visibility: 'off' }]  // Turn off bus, train stations etc.
+          }],
+            clickableIcons: false,
+            disableDoubleClickZoom: true,
+            // draggable: false,
+            streetViewControl: false,
+            // zoomControl: false
+      });
+    currLocationMarker = new google.maps.Marker({position: uluru, map: null});
+    destinationMarker = new google.maps.Marker({position: uluru, map: null});
+
+    mapOverlayShape = new google.maps.Polygon({
+      paths: [],
+      strokeColor: '#FF0000',
+      strokeOpacity: 0.8,
+      strokeWeight: 2,
+      fillColor: '#FF0000',
+      fillOpacity: 0.35,
+      draggable: false,
+      map: null
+    });
+
+  }
+
+  function adjustMapAndDrawOverlay(bldLat, bldLng, bldZoom, bldMapOverlay){
+    let mapOverlayShapeBuffer = 0.0001;
+
+    let uluru = {lat: bldLat, lng: bldLng};
+    map = new google.maps.Map(
+    document.getElementById('map'), {
+         zoom: bldZoom,
+          center: uluru,
+          styles: [{
+              featureType: 'poi',
+            stylers: [{ visibility: 'off' }]  // Turn off POI.
+          },
+          {
+            featureType: 'transit.station',
+              stylers: [{ visibility: 'off' }]  // Turn off bus, train stations etc.
+          }],
+            clickableIcons: false,
+            disableDoubleClickZoom: true,
+            // draggable: false,
+            streetViewControl: false,
+            // zoomControl: false
+      });
+    currLocationMarker = new google.maps.Marker({position: uluru, map: null});
+    destinationMarker = new google.maps.Marker({position: uluru, map: null});
+
+    let starting_pnt = {
+      lat: getLat(bldMapOverlay[0][0], bldMapOverlay[0][1], building_angle, building_lat),
+      lng: getLng(bldMapOverlay[0][0], bldMapOverlay[0][1], building_angle, building_lng)
+    }
+
+    let min_lat_pnt = starting_pnt;
+    let max_lat_pnt = starting_pnt;
+    let min_lng_pnt = starting_pnt;
+    let max_lng_pnt = starting_pnt;
+
+    for(let i = 0; i < bldMapOverlay.length; i++){
+      let x1 = bldMapOverlay[i][0];
+      let y1 = bldMapOverlay[i][1];
+      let x2 = bldMapOverlay[i][2];
+      let y2 = bldMapOverlay[i][3];
+
+      let lng1 = getLng(x1, y1, building_angle, building_lng);
+      let lat1 = getLat(x1, y1, building_angle, building_lat);
+      let lng2 = getLng(x2, y2, building_angle, building_lng);
+      let lat2 = getLat(x2, y2, building_angle, building_lat);
+
+      if(lat1 < min_lat_pnt.lat) min_lat_pnt = {lat: lat1, lng: lng1};
+      if(lat1 > max_lat_pnt.lat) max_lat_pnt = {lat: lat1, lng: lng1};
+
+      if(lat2 < min_lat_pnt.lat) min_lat_pnt = {lat: lat2, lng: lng2};
+      if(lat2 > max_lat_pnt.lat) max_lat_pnt = {lat: lat2, lng: lng2};
+
+      if(lng1 < min_lng_pnt.lng) min_lng_pnt = {lat: lat1, lng: lng1};
+      if(lng1 > max_lng_pnt.lng) max_lng_pnt = {lat: lat1, lng: lng1};
+
+      if(lng2 < min_lng_pnt.lng) min_lng_pnt = {lat: lat2, lng: lng2};
+      if(lng2 > max_lng_pnt.lng) max_lng_pnt = {lat: lat2, lng: lng2};
+
+      let curr_line = new google.maps.Polyline({editable: false, strokeColor: "blue", strokeOpacity: 0.5, map: map});
+      let path = [new google.maps.LatLng({lat: lat1, lng: lng1}), new google.maps.LatLng({lat: lat2, lng: lng2})];
+      curr_line.setPath(path);
+      mapOverlayLines.push(curr_line);
+
+    }
+    
+    // console.log();
+    // console.log("Min Lat, Max, Min Lng, Max");
+    // console.log(min_lat);
+    // console.log(max_lat);
+    // console.log(min_lng);
+    // console.log(max_lng);
+
+    min_lat_pnt = {lat: min_lat_pnt.lat-mapOverlayShapeBuffer, lng: min_lat_pnt.lng}
+    max_lat_pnt = {lat: max_lat_pnt.lat+mapOverlayShapeBuffer, lng: max_lat_pnt.lng}
+    min_lng_pnt = {lat: min_lng_pnt.lat, lng: min_lng_pnt.lng-mapOverlayShapeBuffer}
+    max_lng_pnt = {lat: max_lng_pnt.lat, lng: max_lng_pnt.lng+mapOverlayShapeBuffer}
+
+    mapOverlayShapePath = [min_lat_pnt, max_lng_pnt, max_lat_pnt, min_lng_pnt];
+
+    mapOverlayShape = new google.maps.Polygon({
+      paths: mapOverlayShapePath,
+      strokeColor: '#FF0000',
+      strokeOpacity: 0,
+      strokeWeight: 0,
+      fillColor: '#FF0000',
+      fillOpacity: 0,
+      draggable: false,
+      map: map,
+      zIndex: 100
+    });
+
+  }
+
+  function deleteMap(){
+    document.getElementById('map').style.visibility = "hidden";
+    currLocationMarker.setMap(null);
+    destinationMarker.setMap(null);
+    mapOverlayShape.setMap(null);
+
+    for(let i = 0; i < mapOverlayLines.length; i++){
+      mapOverlayLines[i].setMap(null);
+    }
+  }
+
+  function updateBuildingData(building){
+    const http = new XMLHttpRequest();
+    const url=server_url + '/getData';
+    http.open("POST", url, true);
+    const query = {
+      type: "building", 
+      subdir: "",
+      key: building
+    };
+    const queryString = JSON.stringify(query);
+    http.setRequestHeader("Content-type", "application/json");
+    http.send(queryString);
+
+    http.onreadystatechange=(e)=>{
+      let msg = {};
+      try {
+        msg = JSON.parse(http.responseText);
+        try{
+          building_lat = msg.lat;
+          building_lng = msg.lng;
+          building_angle = msg.angle;
+          let currZoom = msg.zoom;
+          let currMapOverlay = msg.overlay;
+          adjustMapAndDrawOverlay(building_lat, building_lng, currZoom, currMapOverlay)
+        } catch(e2) {
+          console.log("Unrecognized Building: " + building)
+        }
+      } catch(e) {
+        console.log("Malformed Data")
+      }
+    }
+  }
+
+  function getLng(local_x, local_y, building_angle, start_lng){
+    let x1_rot = local_x * Math.cos(building_angle) - local_y * Math.sin(building_angle);
+
+    return start_lng + x1_rot/lng_constant;
+  }
+
+  function getLat(local_x, local_y, building_angle, start_lat){
+    let y1_rot = local_x * Math.sin(building_angle) + local_y * Math.cos(building_angle);
+
+    return start_lat + (y1_rot/lat_constant);
+  }
+
+  function getXY(lat, lng, building_angle, start_lat, start_lng){
+    let y_diff = lat - start_lat;
+    let x_diff = lng - start_lng;
+
+    let x_diff_meters = x_diff * lng_constant;
+    let y_diff_meters = y_diff * lat_constant;
+
+    let x1_rot = x_diff_meters * Math.cos(-1.0*building_angle) - y_diff_meters * Math.sin(-1.0*building_angle);
+    let y1_rot = x_diff_meters * Math.sin(-1.0*building_angle) + y_diff_meters * Math.cos(-1.0*building_angle);
+
+    return [x1_rot, y1_rot];
+  }
+
+  function robotAction(e){
+    let my_val = document.getElementById('actionSelectList');
+    let value = my_val.options[my_val.selectedIndex].value;
+
+    let fromVal = document.getElementById('robotActionFromTxtInput').value;
+    let toVal = document.getElementById('robotActionToTxtInput').value;
+
+    if (value === 'sendRobotTo') {
+      document.getElementById('robotActionFeedbackLbl').innerHTML = "Select Destination On Map";
+      robotActionListener = mapOverlayShape.addListener('click', sendRobotTo);
+    } else if( (value === 'delivery' || value === 'escort') && !fromVal && !toVal) {
+      // Invalid Requested Data
+      document.getElementById('robotActionFeedbackLbl').innerHTML = "Invalid From/To Value";
+      console.log("Invalid Data Submitted")
+    }else if( (value === 'delivery' || value === 'escort') && fromVal && toVal) {
+      sendRobotCommand(value, fromVal, toVal);
+      document.getElementById('robotActionFeedbackLbl').innerHTML = "Request Sent";
+      console.log(value + " robot requested");
+    } else {
+      document.getElementById('robotActionFeedbackLbl').innerHTML = "Unknown Action Submitted for Robot";
+      console.log('Unknown Action Submitted for Robot')
+    }
+  }
+
+  function actionChanged(e){
+    document.getElementById('robotActionFeedbackLbl').innerHTML = "";
+    google.maps.event.removeListener(robotActionListener);
+
+    let my_val = document.getElementById('actionSelectList');
+    let value = my_val.options[my_val.selectedIndex].value;
+
+    if (value === 'sendRobotTo') {
+      document.getElementById('mapCmdOptions').style.visibility = "hidden";
+    } else if(value === 'delivery' || value === 'escort') {
+      document.getElementById('mapCmdOptions').style.visibility = "visible";
+    } else {
+      console.log('Unknown Action Selected for Robot')
+    }
+
+  }
+
+  function sendRobotCommand(act, from_loc, to_loc){
+    let authkey = document.getElementById('authkey').value;
+
+    // Send Request to the Robofleet Server
+    const http = new XMLHttpRequest();
+    const url=server_url + '/sendPlannerCmd';
+    http.open("POST", url, true);
+    const query = {
+      robot: selectedRobot,
+      action: act,
+      from: from_loc,
+      to: to_loc,
+      auth: authkey
+    };
+    const queryString = JSON.stringify(query);
+    http.setRequestHeader("Content-type", "application/json");
+    http.send(queryString);
+
+    http.onreadystatechange=(e)=>{
+      let msg = {};
+      try {
+        msg = http.responseText;
+        // console.log(msg);
+      } catch(e) {
+        // Malformed data. It happens. The internet is hard. Ignore.
+        console.log(e)
+        return;
+      }
+    }
+  }
+
+  function sendRobotTo(e){
+    google.maps.event.removeListener(robotActionListener);
+    document.getElementById('robotActionFeedbackLbl').innerHTML = "Request Sent";
+    let authkey = document.getElementById('authkey').value;
+    // console.log(`Auth:${authkey}`);
+    let click_lat = e.latLng;
+
+    let xy_loc = getXY(click_lat.lat(), click_lat.lng(), building_angle, building_lat, building_lng);
+    let x_loc = xy_loc[0];
+    let y_loc = xy_loc[1];
+
+    // console.log(x_loc);
+    // console.log(y_loc);
+    // console.log(currBuilding);
+    // console.log(selectedRobot);
+
+    // Send Request to the Robofleet Server
+    const http = new XMLHttpRequest();
+    const url=server_url + '/SendRobotTo';
+    http.open("POST", url, true);
+    const query = {
+      robot: selectedRobot,
+      building: currBuilding,
+      x: x_loc,
+      y: y_loc,
+      auth: authkey
+    };
+    const queryString = JSON.stringify(query);
+    http.setRequestHeader("Content-type", "application/json");
+    http.send(queryString);
+
+    http.onreadystatechange=(e)=>{
+      let msg = {};
+      try {
+        msg = http.responseText;
+        // console.log(msg);
+      } catch(e) {
+        // Malformed data. It happens. The internet is hard. Ignore.
+        console.log(e)
+        return;
+      }
+    }
+
+  }
+
+</script>
+
+<script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSJ2VFB_csfM5fUXUnHYtWEZHmcyD7Qxw&callback=initMap">
+</script>
+
+</body>
+</html>
