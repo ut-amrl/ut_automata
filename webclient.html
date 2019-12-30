@@ -42,6 +42,10 @@ var mouseDown = false;
 var setLocation = false;
 var setNavTarget = false;
 
+if (window.localStorage.getItem('ipaddr')) {
+  document.getElementById('ipaddr').value = 
+      window.localStorage.getItem('ipaddr');
+}
 canvas.addEventListener('wheel', onMouseScroll, false);
 window.addEventListener("keypress", onKeyPress, false );
 canvas.onmouseup = onMouseUp;
@@ -150,6 +154,7 @@ function main(ipaddr) {
 
     ros.on('connection', function() {
       updateStatus('Connected to websocket server.');
+      window.localStorage.setItem('ipaddr', ipaddr);
     });
 
     ros.on('error', function(error) {
