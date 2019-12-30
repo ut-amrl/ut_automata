@@ -30,107 +30,212 @@
 
 
 <script type="text/javascript" type="text/javascript">
-    // Connecting to ROS
-    // -----------------
-  
-    var ros = undefined;
 
-    function updateStatus(str) {
-      let s = document.getElementById("status");
-      s.innerHTML = str;
-    }
-    function main(ipaddr) {
-        try {
-          ros = new ROSLIB.Ros({
-          url : 'ws://' + ipaddr + ':9090'
-          });
-        } catch(e) {
-          updateStatus('ERROR: ' + e.toString());
-          return;
-        }
-    
-        ros.on('connection', function() {
-          updateStatus('Connected to websocket server.');
-        });
-    
-        ros.on('error', function(error) {
-          updateStatus('Error connecting to websocket server: ', error);
-        });
-    
-        ros.on('close', function() {
-          updateStatus('Connection to websocket server closed.');
-        });
-    }
+var ros = undefined;
+var scale = 100;
+var origin = {x: 0, y: 0};
+var prev_origin = {x: 0, y: 0};
+var canvas = document.getElementById("canvas");
+var ctx = canvas.getContext("2d");
+var mouseDownLoc;
+var mouseDown = false;
+var setLocation = false;
+var setNavTarget = false;
 
-    function connect() {
-      let ipaddr = document.getElementById('ipaddr').value;
-      main(ipaddr)
-      var listener = new ROSLIB.Topic({
-        ros : ros,
-        name : '/scan',
-        messageType : 'sensor_msgs/LaserScan'
+canvas.addEventListener('wheel', onMouseScroll, false);
+window.addEventListener("keypress", onKeyPress, false );
+canvas.onmouseup = onMouseUp;
+canvas.onmousedown = onMouseDown;
+canvas.onmousemove = onMouseMove;
+
+// Get the "true" mouse location, compensting for scroll, zoom, etc.
+function getMouseLocation(event, element) {
+  var posx = 0;
+  var posy = 0;
+  if (!event) var event = window.event;
+  if (event.pageX || event.pageY)   {
+    posx = event.pageX;
+    posy = event.pageY;
+  } else if (event.clientX || event.clientY)  {
+    posx = event.clientX + document.body.scrollLeft
+      + document.documentElement.scrollLeft;
+    posy = event.clientY + document.body.scrollTop
+      + document.documentElement.scrollTop;
+  }
+  if (element != undefined &&
+      isFinite(element.offsetLeft) &&
+      isFinite(element.offsetTop)) {
+    posx -= element.offsetLeft;
+    posy -= element.offsetTop;
+  }
+  return ({x:posx, y:posy});
+}
+
+function onMouseMove(event){
+  loc = getMouseLocation(event, canvas);
+  if (!mouseDown) return;
+  if (setLocation || setNavTarget) return;
+  origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
+  origin.y = prev_origin.y + loc.y - mouseDownLoc.y;
+};
+
+function onMouseDown(event){
+  mouseDownLoc = getMouseLocation(event, canvas);
+  mouseDown = true;
+  prev_origin = {x: origin.x, y:origin.y};
+  if (event.ctrlKey) {
+    setNavTarget = true;
+  } else if (event.shiftKey) {
+    setLocation = true;
+  }
+};
+
+function onMouseUp(event){
+  loc = getMouseLocation(event, canvas);
+  if (setNavTarget) {
+    // Set nav target here.
+  } else if (setLocation) {
+    // Set localization here.
+  } else {
+    // Pan.
+    origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
+    origin.y = prev_origin.y + loc.y - mouseDownLoc.y;
+    prev_origin = origin;
+  }
+  setNavTarget = false;
+  setLocation = false;
+  mouseDown = false;
+}
+
+function onMouseScroll(event) {
+  if (event.deltaY > 0) {
+    scale *= 0.95;
+  } else if (event.deltaY < 0) {
+    scale *= 1.05;
+  }
+  return false; 
+}
+
+
+function onKeyPress(event) {
+  console.log("Pressed: " + event.which);
+};
+
+function drawPoint(color, x, y) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x  * scale + origin.x,
+               origin.y - y * scale, 2, 2);
+}
+
+function drawLine(color, x1, y1, x2, y2) {
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+}
+
+function updateStatus(str) {
+  let s = document.getElementById("status");
+  s.innerHTML = str;
+}
+function main(ipaddr) {
+    try {
+      ros = new ROSLIB.Ros({
+      url : 'ws://' + ipaddr + ':9090'
       });
-    
-      listener.subscribe(function(message) {
-        if (false) {
-          updateStatus('Received message on ' + listener.name + ': ' +
-              Date.now().toString());
-        }
-        drawScan(message);
-      });
+    } catch(e) {
+      updateStatus('ERROR: ' + e.toString());
+      return;
     }
-  
-    // // Publishing a Topic
-    // // ------------------
-  
-    // var cmdVel = new ROSLIB.Topic({
-    //   ros : ros,
-    //   name : '/cmd_vel',
-    //   messageType : 'geometry_msgs/Twist'
-    // });
-  
-    // var twist = new ROSLIB.Message({
-    //   linear : {
-    //     x : 0.1,
-    //     y : 0.2,
-    //     z : 0.3
-    //   },
-    //   angular : {
-    //     x : -0.1,
-    //     y : -0.2,
-    //     z : -0.3
-    //   }
-    // });
-    // cmdVel.publish(twist);
-  
-    // Subscribing to a Topic
-    // ----------------------
-  
 
-    function drawScan(msg){
-      
-      // Clear canvas
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+    ros.on('connection', function() {
+      updateStatus('Connected to websocket server.');
+    });
 
-      // Update map and draw line being made.
-      ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
-      ctx.lineWidth = 2;
+    ros.on('error', function(error) {
+      updateStatus('Error connecting to websocket server: ', error);
+    });
 
-      // Draw red dot
-      ctx.fillStyle = "#dd3838";
-      // ctx.arc(100, 100, 4, 0, 2*Math.PI, false);
-      for (let i = 0; i < msg.ranges.length; ++i) {
-        // ctx.beginPath();
-        const a = msg.angle_min + i * msg.angle_increment;
-        const x = Math.cos(a) * msg.ranges[i];
-        const y = Math.sin(a) * msg.ranges[i];
-        ctx.fillRect(x * 100, y * 100, 2, 2);
-        // ctx.fill();
-      }
+    ros.on('close', function() {
+      updateStatus('Connection to websocket server closed.');
+    });
+}
+
+function connect() {
+  let ipaddr = document.getElementById('ipaddr').value;
+  main(ipaddr)
+  var listener = new ROSLIB.Topic({
+    ros : ros,
+    name : '/scan',
+    messageType : 'sensor_msgs/LaserScan'
+  });
+
+  listener.subscribe(function(message) {
+    if (false) {
+      updateStatus('Received message on ' + listener.name + ': ' +
+          Date.now().toString());
     }
-  
-    var canvas = document.getElementById("canvas");
-    var ctx = canvas.getContext("2d");
+    drawScan(message);
+  });
+}
+
+// // Publishing a Topic
+// // ------------------
+
+// var cmdVel = new ROSLIB.Topic({
+//   ros : ros,
+//   name : '/cmd_vel',
+//   messageType : 'geometry_msgs/Twist'
+// });
+
+// var twist = new ROSLIB.Message({
+//   linear : {
+//     x : 0.1,
+//     y : 0.2,
+//     z : 0.3
+//   },
+//   angular : {
+//     x : -0.1,
+//     y : -0.2,
+//     z : -0.3
+//   }
+// });
+// cmdVel.publish(twist);
+
+// Subscribing to a Topic
+// ----------------------
+
+
+function drawScan(msg){
+  // Clear canvas
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Update map and draw line being made.
+  // ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
+  // ctx.lineWidth = 2;
+  for (let i = 0; i < msg.ranges.length; ++i) {
+    const a = msg.angle_min + i * msg.angle_increment;
+    const x = Math.cos(a) * msg.ranges[i];
+    const y = Math.sin(a) * msg.ranges[i];
+    drawPoint("#eb8334", x, y);
+  }
+  drawGrid();
+}
+
+function drawGrid() {
+  const D = 50 * scale;
+  const d = 2 * scale;
+  ctx.strokeStyle = "#d1d1d1";
+  ctx.beginPath();
+  ctx.lineWidth = 1;
+  for (let i = -D; i < D; i += d) {
+    ctx.moveTo(i + origin.x, -D + origin.y);
+    ctx.lineTo(i + origin.x, D + origin.y);
+    ctx.moveTo(-D + origin.x, i + origin.y);
+    ctx.lineTo(D + origin.x, i + origin.y);
+  }
+  ctx.stroke();
+}
   </script>
 </body>
 </html>
