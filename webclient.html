@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+
+<script type="text/javascript" src="http://static.robotwebtools.org/EventEmitter2/current/eventemitter2.min.js"></script>
+<script type="text/javascript" src="http://static.robotwebtools.org/roslibjs/current/roslib.min.js"></script>
+
+<style>
+    body{
+      margin:0;
+      background: #eee;
+    }
+    #canvas{
+      width:640px;
+      height:360px;
+      background: #fff;
+    }
+</style>
+
+</head>
+
+<body>
+  <h1>F1/10 Web Interface</h1>
+
+  Car IP Address: <input type="text" id="ipaddr" value="localhost">
+  <input type="button" onclick="connect()" value="Connect"><br>
+  Status: <label id="status">Unknown</label><br>
+  <canvas id="canvas" width="640" height="360" tabindex="0"> </canvas>
+
+
+<script type="text/javascript" type="text/javascript">
+    // Connecting to ROS
+    // -----------------
+  
+    var ros = undefined;
+
+    function updateStatus(str) {
+      let s = document.getElementById("status");
+      s.innerHTML = str;
+    }
+    function main(ipaddr) {
+        try {
+          ros = new ROSLIB.Ros({
+          url : 'ws://' + ipaddr + ':9090'
+          });
+        } catch(e) {
+          updateStatus('ERROR: ' + e.toString());
+          return;
+        }
+    
+        ros.on('connection', function() {
+          updateStatus('Connected to websocket server.');
+        });
+    
+        ros.on('error', function(error) {
+          updateStatus('Error connecting to websocket server: ', error);
+        });
+    
+        ros.on('close', function() {
+          updateStatus('Connection to websocket server closed.');
+        });
+    }
+
+    function connect() {
+      let ipaddr = document.getElementById('ipaddr').value;
+      main(ipaddr)
+      var listener = new ROSLIB.Topic({
+        ros : ros,
+        name : '/scan',
+        messageType : 'sensor_msgs/LaserScan'
+      });
+    
+      listener.subscribe(function(message) {
+        if (false) {
+          updateStatus('Received message on ' + listener.name + ': ' +
+              Date.now().toString());
+        }
+        drawScan(message);
+      });
+    }
+  
+    // // Publishing a Topic
+    // // ------------------
+  
+    // var cmdVel = new ROSLIB.Topic({
+    //   ros : ros,
+    //   name : '/cmd_vel',
+    //   messageType : 'geometry_msgs/Twist'
+    // });
+  
+    // var twist = new ROSLIB.Message({
+    //   linear : {
+    //     x : 0.1,
+    //     y : 0.2,
+    //     z : 0.3
+    //   },
+    //   angular : {
+    //     x : -0.1,
+    //     y : -0.2,
+    //     z : -0.3
+    //   }
+    // });
+    // cmdVel.publish(twist);
+  
+    // Subscribing to a Topic
+    // ----------------------
+  
+
+    function drawScan(msg){
+      
+      // Clear canvas
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      // Update map and draw line being made.
+      ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
+      ctx.lineWidth = 2;
+
+      // Draw red dot
+      ctx.fillStyle = "#dd3838";
+      // ctx.arc(100, 100, 4, 0, 2*Math.PI, false);
+      for (let i = 0; i < msg.ranges.length; ++i) {
+        // ctx.beginPath();
+        const a = msg.angle_min + i * msg.angle_increment;
+        const x = Math.cos(a) * msg.ranges[i];
+        const y = Math.sin(a) * msg.ranges[i];
+        ctx.fillRect(x * 100, y * 100, 2, 2);
+        // ctx.fill();
+      }
+    }
+  
+    var canvas = document.getElementById("canvas");
+    var ctx = canvas.getContext("2d");
+  </script>
+</body>
+</html>

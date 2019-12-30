@@ -23,3 +23,5 @@ $PROJECT_DIR/bin/joystick --idx 1 > /dev/null &
 # Hokuyo Lidar
 roslaunch $PATH_TO_LIDAR_LAUNCH  > /dev/null &
 
+# ROS Websocket bridge.
+roslaunch rosbridge_server rosbridge_websocket.launch > /dev/null &

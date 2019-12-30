@@ -1,1 +1,1 @@
-sudo apt install python-pygame ros-melodic-ackermann-msgs ros-melodic-serial libgoogle-glog-dev libgflags-dev
+sudo apt install python-pygame ros-melodic-ackermann-msgs ros-melodic-serial libgoogle-glog-dev libgflags-dev ros-melodic-rosbridge-suite
