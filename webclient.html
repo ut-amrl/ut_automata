@@ -27,6 +27,8 @@
   <input type="button" onclick="connect()" value="Connect"><br>
   Status: <label id="status">Unknown</label><br>
   <canvas id="canvas" width="640" height="360" tabindex="0"> </canvas>
+  <br>
+  <label id="coords">0,0</label>
 
 
 <script type="text/javascript" type="text/javascript">
@@ -41,6 +43,38 @@ var mouseDownLoc;
 var mouseDown = false;
 var setLocation = false;
 var setNavTarget = false;
+var coords = document.getElementById("coords");
+var initialposePublisher;
+var initialPose = new ROSLIB.Message({
+  header: {
+    seq: 0,
+    stamp: Date.now(),
+    frame_id: "map"
+  },
+  pose: {
+    pose: {
+      position: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      orientation: {
+        x: 0,
+        y: 0,
+        z: 0,
+        w: 1
+      }
+    },
+    covariance: [
+      1, 0, 0, 0, 0, 0,
+      0, 1, 0, 0, 0, 0,
+      0, 0, 1, 0, 0, 0,
+      0, 0, 0, 1, 0, 0,
+      0, 0, 0, 0, 1, 0,
+      0, 0, 0, 0, 0, 1
+    ]
+  }
+});
 
 if (window.localStorage.getItem('ipaddr')) {
   document.getElementById('ipaddr').value = 
@@ -75,8 +109,26 @@ function getMouseLocation(event, element) {
   return ({x:posx, y:posy});
 }
 
+function canvasToWorld(p) {
+  return {
+    x: (p.x - origin.x) / scale,
+    y: (origin.y - p.y) / scale
+  };
+}
+
+function worldToCanvas(p) {
+  return {
+    x: p.x * scale + origin.x,
+    y: origin.y - p.y * scale
+  };
+}
+
 function onMouseMove(event){
   loc = getMouseLocation(event, canvas);
+  w = canvasToWorld(loc);
+  const x_str = w.x.toFixed(3);
+  const y_str = w.y.toFixed(3);
+  coords.innerHTML = `x=${x_str}, y=${y_str}`;
   if (!mouseDown) return;
   if (setLocation || setNavTarget) return;
   origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
@@ -100,6 +152,14 @@ function onMouseUp(event){
     // Set nav target here.
   } else if (setLocation) {
     // Set localization here.
+    w = canvasToWorld(loc);
+    initialPose.header.seq++;
+    initialPose.pose.pose.position.x = w.x;
+    initialPose.pose.pose.position.y = w.y;
+    a = Math.atan2(mouseDownLoc.y - loc.y, loc.x - mouseDownLoc.x);
+    initialPose.pose.pose.orientation.w = Math.cos(0.5 * a);
+    initialPose.pose.pose.orientation.z = Math.sin(0.5 * a);
+    initialposePublisher.publish(initialPose);
   } else {
     // Pan.
     origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
@@ -127,15 +187,18 @@ function onKeyPress(event) {
 
 function drawPoint(color, x, y) {
   ctx.fillStyle = color;
-  ctx.fillRect(x  * scale + origin.x,
-               origin.y - y * scale, 2, 2);
+  const p = worldToCanvas({x:x, y:y});
+  ctx.fillRect(p.x, p.y, 2, 2);
 }
 
 function drawLine(color, x1, y1, x2, y2) {
   ctx.strokeStyle = color;
   ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
+  const p1 = worldToCanvas({x: x1, y:y1});
+  const p2 = worldToCanvas({x: x2, y:y2});
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.stroke();
 }
 
 function updateStatus(str) {
@@ -155,6 +218,11 @@ function main(ipaddr) {
     ros.on('connection', function() {
       updateStatus('Connected to websocket server.');
       window.localStorage.setItem('ipaddr', ipaddr);
+      initialposePublisher = new ROSLIB.Topic({
+        ros : ros,
+        name : '/initialpose',
+        messageType : 'geometry_msgs/PoseWithCovarianceStamped'
+      });
     });
 
     ros.on('error', function(error) {
@@ -240,6 +308,10 @@ function drawGrid() {
     ctx.lineTo(D + origin.x, i + origin.y);
   }
   ctx.stroke();
+
+  ctx.lineWidth = 4;
+  drawLine("#EF0000", 0, 0, 1.5, 0);
+  drawLine("#00AF00", 0, 0, 0, 1.5);
 }
   </script>
 </body>
