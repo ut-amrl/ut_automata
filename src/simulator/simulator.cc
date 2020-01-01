@@ -290,7 +290,10 @@ void Simulator::publishLaser() {
                         num_rays,
                         &scanDataMsg.ranges);
   for (float& r : scanDataMsg.ranges) {
-    if (r > scanDataMsg.range_max - 0.1) continue;
+    if (r > scanDataMsg.range_max - 0.1) {
+      r = scanDataMsg.range_max;
+      continue;
+    }
     r = max<float>(0.0, r + cLaserStdDev * laser_noise_(rng_));
   }
   laserPublisher.publish(scanDataMsg);
