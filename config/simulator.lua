@@ -12,8 +12,8 @@ end
 
 map_name =  "maps/GDC1.txt"
 -- Simulator starting location.
-start_x = 35.7
-start_y = 71.0
+start_x = -21
+start_y = 9.0
 start_angle = 0.0
 
 -- Time-step for simulation.
