@@ -120,7 +120,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   if (kDebug) printf("CONNECTED\n");
   state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
-  car_status_pub_ = nh.advertise<CarStatusMsg>("status", 1);
+  car_status_pub_ = nh.advertise<CarStatusMsg>("car_status", 1);
 
   ackermann_curvature_sub_ = nh.subscribe(
       "/ackermann_curvature_drive",
@@ -377,6 +377,7 @@ packet)
     car_status_msg_.header.stamp = ros::Time::now();
     car_status_msg_.battery_voltage = values->v_in();
     car_status_msg_.status = static_cast<uint8_t>(drive_mode_);
+    car_status_pub_.publish(car_status_msg_);
 
     updateOdometry(values->rpm(), last_steering_angle_);
 
