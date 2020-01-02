@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include "boost/bind.hpp"
+#include "f1tenth_course/CarStatusMsg.h"
 #include "f1tenth_course/VescStateStamped.h"
 #include "f1tenth_course/AckermannCurvatureDriveMsg.h"
 #include "ackermann_msgs/AckermannDriveStamped.h"
@@ -41,6 +42,7 @@ config_reader::ConfigReader reader({
   "config/vesc.lua"
 });
 
+using f1tenth_course::CarStatusMsg;
 using f1tenth_course::VescStateStamped;
 
 namespace {
@@ -48,6 +50,9 @@ namespace {
 float mux_drive_speed_ = 0;
 float mux_steering_angle_ = 0;
 
+
+VescStateStamped state_msg_;
+CarStatusMsg car_status_msg_;
 }  // namespace
 
 namespace vesc_driver
@@ -64,6 +69,10 @@ VescDriver::VescDriver(ros::NodeHandle nh,
     fw_version_minor_(-1),
     t_last_command_(0),
     t_last_joystick_(0) {
+  state_msg_.header.seq = 0;
+  state_msg_.header.frame_id = "base_link";
+  car_status_msg_.header = state_msg_.header;
+
   odom_msg_.header.stamp = ros::Time::now();
   odom_msg_.header.frame_id = "odom";
   odom_msg_.child_frame_id = "base_link";
@@ -109,10 +118,9 @@ VescDriver::VescDriver(ros::NodeHandle nh,
     return;
   }
   if (kDebug) printf("CONNECTED\n");
-  // create vesc state (telemetry) publisher
-  state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 10);
-
-  odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 10);
+  state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
+  odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
+  car_status_pub_ = nh.advertise<CarStatusMsg>("status", 1);
 
   ackermann_curvature_sub_ = nh.subscribe(
       "/ackermann_curvature_drive",
@@ -350,23 +358,26 @@ packet)
     boost::shared_ptr<VescPacketValues const> values =
       boost::dynamic_pointer_cast<VescPacketValues const>(packet);
 
-    VescStateStamped::Ptr state_msg(new VescStateStamped);
-    state_msg->header.stamp = ros::Time::now();
-    state_msg->state.voltage_input = values->v_in();
-    state_msg->state.temperature_pcb = values->temp_pcb();
-    state_msg->state.current_motor = values->current_motor();
-    state_msg->state.current_input = values->current_in();
-    state_msg->state.speed = values->rpm();
-    state_msg->state.duty_cycle = values->duty_now();
-    state_msg->state.charge_drawn = values->amp_hours();
-    state_msg->state.charge_regen = values->amp_hours_charged();
-    state_msg->state.energy_drawn = values->watt_hours();
-    state_msg->state.energy_regen = values->watt_hours_charged();
-    state_msg->state.displacement = values->tachometer();
-    state_msg->state.distance_traveled = values->tachometer_abs();
-    state_msg->state.fault_code = values->fault_code();
+    state_msg_.header.stamp = ros::Time::now();
+    state_msg_.state.voltage_input = values->v_in();
+    state_msg_.state.temperature_pcb = values->temp_pcb();
+    state_msg_.state.current_motor = values->current_motor();
+    state_msg_.state.current_input = values->current_in();
+    state_msg_.state.speed = values->rpm();
+    state_msg_.state.duty_cycle = values->duty_now();
+    state_msg_.state.charge_drawn = values->amp_hours();
+    state_msg_.state.charge_regen = values->amp_hours_charged();
+    state_msg_.state.energy_drawn = values->watt_hours();
+    state_msg_.state.energy_regen = values->watt_hours_charged();
+    state_msg_.state.displacement = values->tachometer();
+    state_msg_.state.distance_traveled = values->tachometer_abs();
+    state_msg_.state.fault_code = values->fault_code();
+    state_pub_.publish(state_msg_);
 
-    state_pub_.publish(state_msg);
+    car_status_msg_.header.stamp = ros::Time::now();
+    car_status_msg_.battery_voltage = values->v_in();
+    car_status_msg_.status = static_cast<uint8_t>(drive_mode_);
+
     updateOdometry(values->rpm(), last_steering_angle_);
 
   }

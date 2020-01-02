@@ -47,21 +47,23 @@ public:
   MainWindow(QWidget *parent = 0);
 public slots:
   void closeWindow();
-  void UpdateTime();
+  void UpdateIP();
   void StartRos();
   void StartCar();
   void StopRos();
   void StopAll();
+  void UpdateStatusSlot(int mode, float battery);
 
 signals:
   void UpdateQuestion(std::string question,
                       std::vector<std::string> responses);
   void UpdateSignal();
+  void UpdateStatus(int mode, float battery);
 
 private:
 
   // Used to show the time.
-  QLabel* time_label_;
+  QLabel* ipaddr_label_;
 
   // Vector display.
   QTabWidget* tab_widget_;
@@ -77,6 +79,9 @@ private:
 
   // Question ID.
   int interaction_id_;
+
+  // Robot status display.
+  QLabel* status_label_;
 };
 
 

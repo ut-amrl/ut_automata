@@ -49,7 +49,7 @@ using std::string;
 using std::vector;
 using vector_display::VectorDisplay;
 
-vector<string> GetIPAddresses() {
+vector<string> GetIPAddresses(bool ignore_lo) {
   static const bool kGetIPV6 = false;
   vector<string> ips;
   struct ifaddrs * ifAddrStruct=NULL;
@@ -59,9 +59,8 @@ vector<string> GetIPAddresses() {
   getifaddrs(&ifAddrStruct);
 
   for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
-    if (!ifa->ifa_addr) {
-        continue;
-    }
+    if (!ifa->ifa_addr) continue;
+    if (ignore_lo && string(ifa->ifa_name) == string("lo")) continue;
     if (ifa->ifa_addr->sa_family == AF_INET) {
       // is a valid IP4 Address
       tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
@@ -86,11 +85,12 @@ vector<string> GetIPAddresses() {
 namespace f1tenth_gui {
 
 MainWindow::MainWindow(QWidget* parent) :
-    time_label_(nullptr),
+    ipaddr_label_(nullptr),
     tab_widget_(nullptr),
     robot_label_(nullptr),
     main_layout_(nullptr),
-    display_(nullptr) {
+    display_(nullptr),
+    status_label_(nullptr) {
   this->setWindowTitle("F1/10 GUI");
   robot_label_ = new QLabel("F1/10");
   QFont font("Arial");
@@ -101,12 +101,14 @@ MainWindow::MainWindow(QWidget* parent) :
   QPushButton* close_button = new QPushButton("Close");
   close_button->setFocusPolicy(Qt::NoFocus);
   QHBoxLayout* top_bar = new QHBoxLayout();
-  time_label_ = new QLabel("00:00 AM");
-  time_label_->setWordWrap(true);
-  QLabel* status_label = new QLabel("Mode: Autonomous");
-  top_bar->addWidget(status_label);
+  font.setPointSize(20);
+  ipaddr_label_ = new QLabel();
+  ipaddr_label_->setWordWrap(true);
+  status_label_ = new QLabel("Mode: Autonomous\nBattery: 0V");
+  status_label_->setFont(font);
+  top_bar->addWidget(status_label_);
   top_bar->addStretch();
-  top_bar->addWidget(time_label_);
+  top_bar->addWidget(ipaddr_label_);
   top_bar->addStretch();
   top_bar->addWidget(close_button);
 
@@ -120,7 +122,6 @@ MainWindow::MainWindow(QWidget* parent) :
     QPushButton* stop_ros = new QPushButton("Stop roscore");
     QPushButton* start_car = new QPushButton("Start Car");
     QPushButton* stop_all = new QPushButton("Stop all nodes");
-    font.setPointSize(20);
     start_ros->setFont(font);
     stop_ros->setFont(font);
     start_car->setFont(font);
@@ -152,10 +153,10 @@ MainWindow::MainWindow(QWidget* parent) :
 
   connect(close_button, SIGNAL(clicked()), this, SLOT(closeWindow()));
 
-  QTimer* time_update_timer = new QTimer(this);
-  connect(time_update_timer, SIGNAL(timeout()), this, SLOT(UpdateTime()));
-  time_update_timer->start(1000);
-  UpdateTime();
+  QTimer* ip_update_timer = new QTimer(this);
+  connect(ip_update_timer, SIGNAL(timeout()), this, SLOT(UpdateIP()));
+  ip_update_timer->start(1000);
+  UpdateIP();
 }
 
 void Execute(const string& cmd) {
@@ -187,14 +188,18 @@ void MainWindow::closeWindow() {
   close();
 }
 
-void MainWindow::UpdateTime() {
-  const vector<string> ips = GetIPAddresses();
+void MainWindow::UpdateIP() {
+  const vector<string> ips = GetIPAddresses(true);
   string s;
   for (const string& ip : ips) {
     s = s + ip + "\n";
   }
-  time_label_->setText(QString::fromUtf8(s.c_str()));
-  // time_label_->setText(QTime::currentTime().toString("hh:mm AP"));
+  ipaddr_label_->setText(QString::fromUtf8(s.c_str()));
+  // ipaddr_label_->setText(QTime::currentTime().toString("hh:mm AP"));
+}
+
+void MainWindow::UpdateStatusSlot(int mode, float battery) {
+
 }
 
 
