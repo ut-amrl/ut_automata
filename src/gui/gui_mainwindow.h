@@ -45,6 +45,8 @@ class MainWindow : public QWidget {
 
 public:
   MainWindow(QWidget *parent = 0);
+  void UpdateStatus(int mode, float battery);
+
 public slots:
   void closeWindow();
   void UpdateIP();
@@ -58,7 +60,7 @@ signals:
   void UpdateQuestion(std::string question,
                       std::vector<std::string> responses);
   void UpdateSignal();
-  void UpdateStatus(int mode, float battery);
+  void UpdateStatusSignal(int mode, float battery);
 
 private:
 

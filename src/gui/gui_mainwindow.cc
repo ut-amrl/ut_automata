@@ -35,6 +35,7 @@
 #include <QPushButton>
 #include <QBoxLayout>
 #include <QLabel>
+#include <QString>
 #include <QTime>
 #include <QTimer>
 #include <QWidget>
@@ -157,6 +158,10 @@ MainWindow::MainWindow(QWidget* parent) :
   connect(ip_update_timer, SIGNAL(timeout()), this, SLOT(UpdateIP()));
   ip_update_timer->start(1000);
   UpdateIP();
+
+  connect(this,
+          SIGNAL(UpdateStatusSignal(int, float)),
+          SLOT(UpdateStatusSlot(int, float)));
 }
 
 void Execute(const string& cmd) {
@@ -198,8 +203,28 @@ void MainWindow::UpdateIP() {
   // ipaddr_label_->setText(QTime::currentTime().toString("hh:mm AP"));
 }
 
-void MainWindow::UpdateStatusSlot(int mode, float battery) {
+void MainWindow::UpdateStatus(int mode, float battery) {
+  UpdateStatusSignal(mode, battery);
+}
 
+void MainWindow::UpdateStatusSlot(int mode, float battery) {
+  QString status("Status: ");
+  switch (mode) {
+    case 0: {
+      status += "Stopped\n";
+    } break;
+    case 1: {
+      status += "Joystick\n";
+    } break;
+    case 2: {
+      status += "Autonomous\n";
+    } break;
+    default: {
+      status += "UNKNOWN\n";
+    } break;
+  }
+  status += "Battery: " + QString::number(battery, 'g', 4) + "V";
+  status_label_->setText(status);
 }
 
 
