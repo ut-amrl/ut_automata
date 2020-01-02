@@ -263,7 +263,7 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
   checkCommandTimeout();
   // VESC interface should not unexpectedly disconnect, but test for it anyway
   if (!vesc_.isConnected()) {
-    fprintf(stderr, "Unexpectedly disconnected from serial port.");
+    fprintf(stderr, "Unexpectedly disconnected from serial port.\n");
     timer_.stop();
     ros::shutdown();
     exit(2);
@@ -277,7 +277,7 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
    */
   if (driver_mode_ == MODE_INITIALIZING) {
     if (ros::WallTime::now().toSec() > kTStart + kMaxInitPeriod) {
-      fprintf(stderr, "FAIL: Timed out while trying to initialize VESC.");
+      fprintf(stderr, "FAIL: Timed out while trying to initialize VESC.\n");
       ros::shutdown();
       exit(3);
       return;
@@ -287,7 +287,7 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
     // numbers
     vesc_.requestFWVersion();
     if (fw_version_major_ >= 0 && fw_version_minor_ >= 0) {
-      printf("Connected to VESC with firmware version %d.%d",
+      printf("Connected to VESC with firmware version %d.%d\n",
              fw_version_major_, fw_version_minor_);
       driver_mode_ = MODE_OPERATING;
     }
@@ -346,7 +346,7 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
     odom_msg_.pose.pose.orientation.z = sin(0.5 * orientation);
     odom_pub_.publish(odom_msg_);
   } else {
-    printf("Odometry messages received out of order.") ;
+    printf("Odometry messages received out of order.\n") ;
   }
   last_frame_time = current_frame_time;
 }
@@ -392,7 +392,7 @@ packet)
 }
 
 void VescDriver::vescErrorCallback(const std::string& error) {
-  fprintf(stderr, "VESC Error: %s", error.c_str());
+  fprintf(stderr, "VESC Error: %s\n", error.c_str());
 }
 
 float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
