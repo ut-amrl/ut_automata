@@ -101,15 +101,17 @@ MainWindow::MainWindow(QWidget* parent) :
 
   QPushButton* close_button = new QPushButton("Close");
   close_button->setFocusPolicy(Qt::NoFocus);
+  close_button->setFixedHeight(60);
   QHBoxLayout* top_bar = new QHBoxLayout();
   font.setPointSize(20);
   ipaddr_label_ = new QLabel();
   ipaddr_label_->setWordWrap(true);
   status_label_ = new QLabel("Mode: Autonomous\nBattery: 0V");
   status_label_->setFont(font);
-  top_bar->addWidget(status_label_);
-  top_bar->addStretch();
+  status_label_->setAlignment(Qt::AlignHCenter);
   top_bar->addWidget(ipaddr_label_);
+  top_bar->addStretch();
+  top_bar->addWidget(status_label_);
   top_bar->addStretch();
   top_bar->addWidget(close_button);
 
