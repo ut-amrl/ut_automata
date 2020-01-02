@@ -19,13 +19,14 @@
 */
 //========================================================================
 
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
 #include <string.h>
-#include <arpa/inet.h>
+#include <unistd.h>
 
 #include "gui_mainwindow.h"
 
@@ -41,6 +42,8 @@
 #include <QWidget>
 #include <QGroupBox>
 #include <QTabWidget>
+
+#include <ros/package.h>
 
 #include "std_msgs/String.h"
 
@@ -167,6 +170,31 @@ MainWindow::MainWindow(QWidget* parent) :
 }
 
 void Execute(const string& cmd) {
+  if (false) {
+    const string path = ros::package::getPath("f1tenth_course");
+
+    // const string exec_cmd = "/bin/echo $ROS_MASTER_URI && /bin/pwd";
+    const string exec_cmd =
+        "-mdS roscore " + path + "/scripts/start_ros.sh";
+    const int pid = fork();
+    if (pid == 0) {
+      printf("%s\n", exec_cmd.c_str());
+      if (chdir(path.c_str()) == -1) {
+        perror("Error changing directory");
+        exit(1);
+      }
+      if (execl("/usr/bin/screen", "-mdS top top", nullptr) == -1) {
+        perror("Error executing command");
+        exit(1);
+      }
+      // Should never get here, since exec never returns.
+      exit(0);
+    } else {
+      printf("Launched process with PID %d\n", pid);
+    }
+
+    return;
+  }
   if (system(cmd.c_str()) != 0) {
     printf("Error running '%s'\n", cmd.c_str());
   } else {
@@ -175,12 +203,17 @@ void Execute(const string& cmd) {
 }
 
 void MainWindow::StartCar() {
-  Execute("screen -mdS start_car "
-          "/home/amrl_user/f1tenth_course/start_car.bash");
+  const string path = ros::package::getPath("f1tenth_course");
+  Execute("screen -mdS start_car " +
+          path +
+          "/start_car.sh");
 }
 
 void MainWindow::StartRos() {
-  Execute("screen -mdS roscore roscore");
+  const string path = ros::package::getPath("f1tenth_course");
+  Execute("screen -mdS roscore " +
+          path +
+          "/scripts/start_ros.sh");
 }
 
 void MainWindow::StopRos() {
