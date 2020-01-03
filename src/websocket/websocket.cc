@@ -48,9 +48,29 @@
 **
 ****************************************************************************/
 #include "websocket.h"
+
+#include <vector>
+
 #include <QtWebSockets/qwebsocketserver.h>
 #include <QtWebSockets/qwebsocket.h>
 #include <QtCore/QDebug>
+
+#include "f1tenth_course/Pose2Df.h"
+#include "f1tenth_course/Point2D.h"
+#include "f1tenth_course/ColoredPoint2D.h"
+#include "f1tenth_course/ColoredLine2D.h"
+#include "f1tenth_course/ColoredArc2D.h"
+#include "f1tenth_course/VisualizationMsg.h"
+#include "f1tenth_course/PathVisualization.h"
+
+using f1tenth_course::Pose2Df;
+using f1tenth_course::Point2D;
+using f1tenth_course::ColoredArc2D;
+using f1tenth_course::ColoredLine2D;
+using f1tenth_course::ColoredPoint2D;
+using f1tenth_course::VisualizationMsg;
+using f1tenth_course::PathVisualization;
+using std::vector;
 
 QT_USE_NAMESPACE
 
@@ -102,9 +122,16 @@ void EchoServer::onNewConnection() {
 //! [onNewConnection]
 
 template <typename T>
-char* WriteElement(const T& x, char* buf) {
+char* WriteElement(const T& x, char* const buf) {
   *reinterpret_cast<T*>(buf) = x;
   return (buf + sizeof(x));
+}
+
+template <typename T>
+char* WriteElementVector(const std::vector<T>& v, char* const buf) {
+  const size_t len = v.size() * sizeof(T);
+  memcpy(buf, v.data(), len);
+  return (buf + len);
 }
 
 //! [processTextMessage]
@@ -115,13 +142,58 @@ void EchoServer::processTextMessage(QString message) {
     }
     if (pClient) {
       QByteArray data;
-      data.resize(4);
-      uint32_t x = 1021;
+      MessageHeader msg;
+      msg.num_particles = 80;
+      msg.num_path_options = 20;
+      msg.num_points = 10;
+      msg.num_lines = 0;
+      msg.num_arcs = 0;
+      msg.num_laser_rays = 270 * 4;
+      msg.laser_min_angle = -135;
+      msg.laser_max_angle = 135;
+      data.resize(msg.GetByteLength());
+      printf("Data size: %lu\n", msg.GetByteLength());
+
       char* buf = data.data();
-      WriteElement(x, buf);
-      // memcpy(data.data_ptr(), &x, 4);
+      buf = WriteElement(msg, buf);
+
+      // =============================================================
+      // Initialize the data.
+      vector<uint16_t> laser(msg.num_laser_rays, 0);
+      for (size_t i = 0; i < laser.size(); ++i) {
+        laser[i] = 10 * i;
+      }
+      vector<Pose2Df> particles(msg.num_particles);
+      for (size_t i = 0; i < particles.size(); ++i) {
+        particles[i].x = 1.0 * static_cast<float>(i) + 0.1;
+        particles[i].y = 2.0 * static_cast<float>(i) + 0.2;
+        particles[i].theta = 3.0 * static_cast<float>(i) + 0.3;
+      }
+      vector<PathVisualization> path_options(msg.num_path_options);
+      for (size_t i = 0; i < path_options.size(); ++i) {
+        path_options[i].curvature = 1.0 * static_cast<float>(i) + 0.1;
+        path_options[i].distance = 2.0 * static_cast<float>(i) + 0.2;
+        path_options[i].clearance = 3.0 * static_cast<float>(i) + 0.3;
+      }
+      vector<ColoredPoint2D> points(msg.num_points);
+      for (size_t i = 0; i < points.size(); ++i) {
+        points[i].point.x = 1.0 * static_cast<float>(i) + 0.1;
+        points[i].point.y = 2.0 * static_cast<float>(i) + 0.2;
+        const uint8_t x = static_cast<uint8_t>(i);
+        points[i].color = (x << 16) | (x << 8) | x;
+      }
+      vector<ColoredLine2D> lines(msg.num_lines);
+      vector<ColoredArc2D> arcs(msg.num_arcs);
+      // =============================================================
+
+      buf = WriteElementVector(laser, buf);
+      buf = WriteElementVector(particles, buf);
+      buf = WriteElementVector(path_options, buf);
+      buf = WriteElementVector(points, buf);
+      buf = WriteElementVector(lines, buf);
+      buf = WriteElementVector(arcs, buf);
+
       pClient->sendBinaryMessage(data);
-      // pClient->sendTextMessage(message);
     }
 }
 //! [processTextMessage]

@@ -50,12 +50,37 @@
 #ifndef ECHOSERVER_H
 #define ECHOSERVER_H
 
+#include <stdint.h>
 #include <QtCore/QObject>
 #include <QtCore/QList>
 #include <QtCore/QByteArray>
 
 QT_FORWARD_DECLARE_CLASS(QWebSocketServer)
 QT_FORWARD_DECLARE_CLASS(QWebSocket)
+
+struct MessageHeader {
+  MessageHeader() : nonce(42) {}
+  uint32_t nonce;
+  uint32_t num_particles;
+  uint32_t num_path_options;
+  uint32_t num_points;
+  uint32_t num_lines;
+  uint32_t num_arcs;
+  uint32_t num_laser_rays;
+  float laser_min_angle;
+  float laser_max_angle;
+  size_t GetByteLength() {
+    const size_t len = 9 * 4 + 
+        num_particles * 3 * 4 +     // x, y, theta
+        num_path_options * 3 * 4 +  // curvature, distance, clearance
+        num_points * 3 * 4 +        // x, y, color
+        num_lines * 5 * 4 +         // x1, y1, x2, y2, color
+        num_arcs * 6 * 4 +          // x, y, radius, start_angle, end_angle, color
+        num_laser_rays * 2;         // each ray is uint16_t
+
+    return len;
+  }
+};
 
 class EchoServer : public QObject {
   Q_OBJECT
