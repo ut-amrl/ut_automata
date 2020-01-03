@@ -101,6 +101,12 @@ void EchoServer::onNewConnection() {
 }
 //! [onNewConnection]
 
+template <typename T>
+char* WriteElement(const T& x, char* buf) {
+  *reinterpret_cast<T*>(buf) = x;
+  return (buf + sizeof(x));
+}
+
 //! [processTextMessage]
 void EchoServer::processTextMessage(QString message) {
     QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
@@ -108,7 +114,14 @@ void EchoServer::processTextMessage(QString message) {
         qDebug() << "Message received:" << message;
     }
     if (pClient) {
-        pClient->sendTextMessage(message);
+      QByteArray data;
+      data.resize(4);
+      uint32_t x = 1021;
+      char* buf = data.data();
+      WriteElement(x, buf);
+      // memcpy(data.data_ptr(), &x, 4);
+      pClient->sendBinaryMessage(data);
+      // pClient->sendTextMessage(message);
     }
 }
 //! [processTextMessage]
