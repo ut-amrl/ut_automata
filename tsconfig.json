@@ -1,0 +1,19 @@
+{
+  "include": [
+    "ts"
+    ],
+  "exclude": [
+    "dist"
+  ],
+  "compilerOptions": {
+    "declaration": true,
+    "pretty": true,
+    "strict": true,
+    "noImplicitReturns": true,
+    "inlineSourceMap": true,
+    "module": "commonjs",
+    "outDir": "./dist",
+    "lib": ["es2016", "dom"],
+    "target": "es2015"
+  }
+}
