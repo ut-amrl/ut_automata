@@ -1,10 +1,18 @@
 PROJECT(f1tenth_course)
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
 
 MESSAGE(STATUS "Compilers found: ${CMAKE_CXX_COMPILER_LIST}")
 MESSAGE(STATUS "Using compiler: ${CMAKE_CXX_COMPILER}")
 MESSAGE(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 MESSAGE(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}")
+
+SET(CMAKE_AUTOMOC ON)
+SET(CMAKE_AUTORCC ON)
+SET(CMAKE_AUTOUIC ON)
+
+if(CMAKE_VERSION VERSION_LESS "3.7.0")
+    set(CMAKE_INCLUDE_CURRENT_DIR ON)
+endif()
 
 SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g -rdynamic")
 
@@ -22,9 +30,9 @@ ROSBUILD_INIT()
 SET(ROS_BUILD_STATIC_LIBS true)
 SET(ROS_BUILD_SHARED_LIBS false)
 
-SET(QT_USE_QTOPENGL true)
-FIND_PACKAGE(Qt4 REQUIRED)
-INCLUDE(${QT_USE_FILE})
+find_package(Qt5 COMPONENTS Core Widgets Gui OpenGL WebSockets REQUIRED)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 
 MESSAGE(STATUS "ROS-Overrride Build Type: ${CMAKE_BUILD_TYPE}")
 MESSAGE(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS}")
@@ -57,17 +65,17 @@ rosbuild_add_executable(vesc_driver
                         src/vesc_driver/vesc_packet_factory.cpp)
 target_link_libraries(vesc_driver ${libs})
 
-qt4_wrap_cpp(GUI_MOC_SRCS
-    src/gui/gui_mainwindow.h
-    src/gui/vector_display.h
-)
-
 ROSBUILD_ADD_EXECUTABLE(gui
     src/gui/gui_main.cc
     src/gui/gui_mainwindow.cc
     src/gui/vector_display.cc
     ${GUI_MOC_SRCS})
-TARGET_LINK_LIBRARIES(gui ${QT_LIBRARIES} ${libs} ${OPENGL_LIBRARY} GL)
+TARGET_LINK_LIBRARIES(gui
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::OpenGL
+    ${libs} ${OPENGL_LIBRARY} GL)
 
 ROSBUILD_ADD_EXECUTABLE(joystick
     src/joystick/joystick.cc
@@ -79,3 +87,14 @@ ROSBUILD_ADD_EXECUTABLE(simulator
     src/simulator/vector_map.cc
     src/simulator/simulator_main.cc)
 TARGET_LINK_LIBRARIES(simulator ${libs})
+
+ROSBUILD_ADD_EXECUTABLE(webserver
+    src/webserver/webserver_main.cc
+    src/webserver/echoserver.cc
+)
+TARGET_LINK_LIBRARIES(webserver
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::WebSockets
+    ${libs} ${OPENGL_LIBRARY} GL)
