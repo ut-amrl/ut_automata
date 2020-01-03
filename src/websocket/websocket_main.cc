@@ -24,16 +24,22 @@
 #include "sensor_msgs/LaserScan.h"
 
 #include "websocket.h"
+#include "f1tenth_course/VisualizationMsg.h"
 #include "shared/util/timer.h"
 
 using sensor_msgs::LaserScan;
 
 namespace {
 bool run_ = true;
+f1tenth_course::VisualizationMsg vis_msg_;
+RobotWebSocket* server_ = nullptr;
 }  // namespace
 
 
-void LaserCallback(const LaserScan& msg) {;
+void LaserCallback(const LaserScan& msg) {
+  if (server_) {
+    server_->Send(vis_msg_);
+  }
 }
 
 void* RosThread(void* arg) {
@@ -63,7 +69,6 @@ void SignalHandler(int) {
 }
 
 int main(int argc, char *argv[]) {
-  static const bool kDebug = true;
   ros::init(argc, argv, "websocket", ros::init_options::NoSigintHandler);
 
   pthread_t ptid = 0;
@@ -71,8 +76,8 @@ int main(int argc, char *argv[]) {
 
   QCoreApplication a(argc, argv);
 
-  EchoServer *server = new EchoServer(10272, kDebug);
-  QObject::connect(server, &EchoServer::closed, &a, &QCoreApplication::quit);
+  server_ = new RobotWebSocket(10272);
+  QObject::connect(server_, &RobotWebSocket::closed, &a, &QCoreApplication::quit);
 
   const int retval = a.exec();
   run_ = false;

@@ -8,13 +8,14 @@
 <body>
   <h1>F1/10 Web Interface</h1>
 
-  Car IP Address: <input type="text" id="ipaddr" value="localhost">
-  <input type="button" onclick="connect()" value="Connect"><br>
+  <form onsubmit="connect()">
+    Car IP Address: <input type="text" id="ipaddr" value="localhost">
+    <input type="button" onclick="connect()" value="Connect"><br>
+  </form>
   Status: <label id="status">Unknown</label><br>
 
   <script type="text/javascript" type="text/javascript">
 
-    let socket = new WebSocket("ws://localhost:10272");
 
     class DataParser {
       constructor(arrayBuffer) {
@@ -174,59 +175,47 @@
     };
 
     function receiveData(d) {
-      /*
-      let littleEndian = true;
-      if (d[0] === 0) {
-        littleEndian = false;
-      }
-      console.log(`littleEndian: ${littleEndian}`);
-      let view = new DataView(d);
-      let len = d.byteLength;
-      for (let offset = 0; offset + 4 <= len; offset += 4) {
-        let x = view.getUint32(offset, littleEndian);
-        console.log(x);
-      }
-      */
       let parser = new DataParser(d);
       let message = parser.readMessage();
+      console.log(message.header);
       console.log(message);
-      /*
-      let header = parser.readHeader();
-      console.log(header);
-      for (let i = 0; i < header.num_particles; ++i) {
-        console.log(parser.readPose());
-      }
-      for (let i = 0; i < header.num_path_options; ++i) {
-        console.log(parser.readPathVisualization());
-      }
-      console.log("Laser:");
-      console.log(parser.readLaser(header));
-      */
     }
-    socket.onopen = function (e) {
-      console.log("[open] Connection established");
-      console.log("Sending to server");
-      socket.send("Ready.");
-    };
 
-    socket.onmessage = function (event) {
-      console.log(`[message] Data received from server: ${event.data}`);
-      console.log(event.data);
-      new Response(event.data).arrayBuffer().then(
-        receiveData);
-    };
+    function connect() {
+      let ipaddr = document.getElementById('ipaddr').value;
+      let socket = new WebSocket("ws://" + ipaddr + ":10272");
+      
+      socket.onopen = function (e) {
+        window.localStorage.setItem('ipaddr', ipaddr);
+        console.log("[open] Connection established");
+        console.log("Sending to server");
+        socket.send("Ready.");
+      };
 
-    socket.onclose = function (event) {
-      if (event.wasClean) {
-        console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
-      } else {
-        // e.g. server process killed or network down
-        // event.code is usually 1006 in this case
-        console.log('[close] Connection died');
-      }
-    };
+      socket.onmessage = function (event) {
+        console.log(`[message] Data received from server: ${event.data}`);
+        console.log(event.data);
+        new Response(event.data).arrayBuffer().then(
+          receiveData);
+      };
 
-    socket.onerror = function (error) {
-      console.log(`[error] ${error.message}`);
-    };
+      socket.onclose = function (event) {
+        if (event.wasClean) {
+          console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+        } else {
+          // e.g. server process killed or network down
+          // event.code is usually 1006 in this case
+          console.log('[close] Connection died');
+        }
+      };
+
+      socket.onerror = function (error) {
+        console.log(`[error] ${error.message}`);
+      };
+    }
+
+    if (window.localStorage.getItem('ipaddr')) {
+      document.getElementById('ipaddr').value =
+        window.localStorage.getItem('ipaddr');
+    }
   </script>

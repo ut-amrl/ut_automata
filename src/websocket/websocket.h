@@ -51,12 +51,15 @@
 #define ECHOSERVER_H
 
 #include <stdint.h>
+#include <QtCore/QMutex>
 #include <QtCore/QObject>
 #include <QtCore/QList>
 #include <QtCore/QByteArray>
 
-QT_FORWARD_DECLARE_CLASS(QWebSocketServer)
-QT_FORWARD_DECLARE_CLASS(QWebSocket)
+#include "f1tenth_course/VisualizationMsg.h"
+
+class QWebSocketServer;
+class QWebSocket;
 
 struct MessageHeader {
   MessageHeader() : nonce(42) {}
@@ -82,26 +85,29 @@ struct MessageHeader {
   }
 };
 
-class EchoServer : public QObject {
+class RobotWebSocket : public QObject {
   Q_OBJECT
 public:
-  explicit EchoServer(quint16 port,
-                      bool debug);
-  ~EchoServer();
+  explicit RobotWebSocket(uint16_t port);
+  ~RobotWebSocket();
+  void Send(const f1tenth_course::VisualizationMsg& msg);
 
 Q_SIGNALS:
   void closed();
+  void SendDataSignal();
 
 private Q_SLOTS:
   void onNewConnection();
   void processTextMessage(QString message);
   void processBinaryMessage(QByteArray message);
   void socketDisconnected();
+  void SendDataSlot();
 
 private:
-  QWebSocketServer *m_pWebSocketServer;
-  QList<QWebSocket *> m_clients;
-  bool m_debug;
+  QWebSocketServer* ws_server_;
+  QList<QWebSocket*> clients_;
+  QMutex data_mutex_;
+  f1tenth_course::VisualizationMsg data_msg_;
 };
 
 #endif //ECHOSERVER_H

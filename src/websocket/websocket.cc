@@ -75,49 +75,46 @@ using std::vector;
 QT_USE_NAMESPACE
 
 //! [constructor]
-EchoServer::EchoServer(quint16 port,
-                       bool debug) :
+RobotWebSocket::RobotWebSocket(uint16_t port) :
     QObject(nullptr),
-    m_pWebSocketServer(new QWebSocketServer(
-        QStringLiteral("Echo Server"),
-        QWebSocketServer::NonSecureMode,
-        this)),
-    m_debug(true) {
-    if (m_pWebSocketServer->listen(QHostAddress::Any, port)) {
-        if (m_debug) {
-            qDebug() << "Echoserver listening on port" << port;
-        }
-        connect(m_pWebSocketServer,
-                &QWebSocketServer::newConnection,
-                this, &EchoServer::onNewConnection);
-        connect(m_pWebSocketServer,
-                &QWebSocketServer::closed, this, &EchoServer::closed);
-    }
+    ws_server_(new QWebSocketServer(("Echo Server"), QWebSocketServer::NonSecureMode, this)) {
+  connect(this,
+          &RobotWebSocket::SendDataSignal,
+          this,
+          &RobotWebSocket::SendDataSlot);
+  if (ws_server_->listen(QHostAddress::Any, port)) {
+      qDebug() << "Listening on port" << port;
+      connect(ws_server_,
+              &QWebSocketServer::newConnection,
+              this, &RobotWebSocket::onNewConnection);
+      connect(ws_server_,
+              &QWebSocketServer::closed, this, &RobotWebSocket::closed);
+  }
 }
 //! [constructor]
 
-EchoServer::~EchoServer() {
-    m_pWebSocketServer->close();
-    qDeleteAll(m_clients.begin(), m_clients.end());
+RobotWebSocket::~RobotWebSocket() {
+    ws_server_->close();
+    qDeleteAll(clients_.begin(), clients_.end());
 }
 
 //! [onNewConnection]
-void EchoServer::onNewConnection() {
-    QWebSocket *pSocket = m_pWebSocketServer->nextPendingConnection();
+void RobotWebSocket::onNewConnection() {
+    QWebSocket *pSocket = ws_server_->nextPendingConnection();
 
     connect(pSocket,
             &QWebSocket::textMessageReceived,
             this,
-            &EchoServer::processTextMessage);
+            &RobotWebSocket::processTextMessage);
     connect(pSocket,
             &QWebSocket::binaryMessageReceived,
             this,
-            &EchoServer::processBinaryMessage);
+            &RobotWebSocket::processBinaryMessage);
     connect(pSocket,
             &QWebSocket::disconnected,
             this,
-            &EchoServer::socketDisconnected);
-    m_clients << pSocket;
+            &RobotWebSocket::socketDisconnected);
+    clients_ << pSocket;
 }
 //! [onNewConnection]
 
@@ -135,90 +132,119 @@ char* WriteElementVector(const std::vector<T>& v, char* const buf) {
 }
 
 //! [processTextMessage]
-void EchoServer::processTextMessage(QString message) {
-    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
-    if (m_debug) {
-        qDebug() << "Message received:" << message;
+void RobotWebSocket::processTextMessage(QString message) {
+  QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+  qDebug() << "Message received:" << message;
+  if (pClient) {
+    QByteArray data;
+    MessageHeader msg;
+    msg.num_particles = 100;
+    msg.num_path_options = 20;
+    msg.num_points = 100;
+    msg.num_lines = 50;
+    msg.num_arcs = 10;
+    msg.num_laser_rays = 270 * 4;
+    msg.laser_min_angle = -135;
+    msg.laser_max_angle = 135;
+    data.resize(msg.GetByteLength());
+    printf("Data size: %lu\n", msg.GetByteLength());
+
+    char* buf = data.data();
+    buf = WriteElement(msg, buf);
+
+    // =============================================================
+    // Initialize the data.
+    vector<uint16_t> laser(msg.num_laser_rays, 0);
+    for (size_t i = 0; i < laser.size(); ++i) {
+      laser[i] = 10 * i;
     }
-    if (pClient) {
-      QByteArray data;
-      MessageHeader msg;
-      msg.num_particles = 80;
-      msg.num_path_options = 20;
-      msg.num_points = 10;
-      msg.num_lines = 0;
-      msg.num_arcs = 0;
-      msg.num_laser_rays = 270 * 4;
-      msg.laser_min_angle = -135;
-      msg.laser_max_angle = 135;
-      data.resize(msg.GetByteLength());
-      printf("Data size: %lu\n", msg.GetByteLength());
-
-      char* buf = data.data();
-      buf = WriteElement(msg, buf);
-
-      // =============================================================
-      // Initialize the data.
-      vector<uint16_t> laser(msg.num_laser_rays, 0);
-      for (size_t i = 0; i < laser.size(); ++i) {
-        laser[i] = 10 * i;
-      }
-      vector<Pose2Df> particles(msg.num_particles);
-      for (size_t i = 0; i < particles.size(); ++i) {
-        particles[i].x = 1.0 * static_cast<float>(i) + 0.1;
-        particles[i].y = 2.0 * static_cast<float>(i) + 0.2;
-        particles[i].theta = 3.0 * static_cast<float>(i) + 0.3;
-      }
-      vector<PathVisualization> path_options(msg.num_path_options);
-      for (size_t i = 0; i < path_options.size(); ++i) {
-        path_options[i].curvature = 1.0 * static_cast<float>(i) + 0.1;
-        path_options[i].distance = 2.0 * static_cast<float>(i) + 0.2;
-        path_options[i].clearance = 3.0 * static_cast<float>(i) + 0.3;
-      }
-      vector<ColoredPoint2D> points(msg.num_points);
-      for (size_t i = 0; i < points.size(); ++i) {
-        points[i].point.x = 1.0 * static_cast<float>(i) + 0.1;
-        points[i].point.y = 2.0 * static_cast<float>(i) + 0.2;
-        const uint8_t x = static_cast<uint8_t>(i);
-        points[i].color = (x << 16) | (x << 8) | x;
-      }
-      vector<ColoredLine2D> lines(msg.num_lines);
-      vector<ColoredArc2D> arcs(msg.num_arcs);
-      // =============================================================
-
-      buf = WriteElementVector(laser, buf);
-      buf = WriteElementVector(particles, buf);
-      buf = WriteElementVector(path_options, buf);
-      buf = WriteElementVector(points, buf);
-      buf = WriteElementVector(lines, buf);
-      buf = WriteElementVector(arcs, buf);
-
-      pClient->sendBinaryMessage(data);
+    vector<Pose2Df> particles(msg.num_particles);
+    for (size_t i = 0; i < particles.size(); ++i) {
+      particles[i].x = 1.0 * static_cast<float>(i) + 0.1;
+      particles[i].y = 2.0 * static_cast<float>(i) + 0.2;
+      particles[i].theta = 3.0 * static_cast<float>(i) + 0.3;
     }
+    vector<PathVisualization> path_options(msg.num_path_options);
+    for (size_t i = 0; i < path_options.size(); ++i) {
+      path_options[i].curvature = 1.0 * static_cast<float>(i) + 0.1;
+      path_options[i].distance = 2.0 * static_cast<float>(i) + 0.2;
+      path_options[i].clearance = 3.0 * static_cast<float>(i) + 0.3;
+    }
+    vector<ColoredPoint2D> points(msg.num_points);
+    for (size_t i = 0; i < points.size(); ++i) {
+      points[i].point.x = 1.0 * static_cast<float>(i) + 0.1;
+      points[i].point.y = 2.0 * static_cast<float>(i) + 0.2;
+      const uint8_t x = static_cast<uint8_t>(i);
+      points[i].color = (x << 16) | (x << 8) | x;
+    }
+    vector<ColoredLine2D> lines(msg.num_lines);
+    for (size_t i = 0; i < lines.size(); ++i) {
+      lines[i].p0.x = 0.1 * i;
+      lines[i].p0.y = 0.01 * i;
+      lines[i].p1.x = 1.0 * i;
+      lines[i].p1.y = 10.0 * i;
+      const uint8_t x = static_cast<uint8_t>(i);
+      lines[i].color = (x << 16) | (x << 8) | x;
+    }
+    vector<ColoredArc2D> arcs(msg.num_arcs);
+    for (size_t i = 0; i < arcs.size(); ++i) {
+      arcs[i].center.x = 1.0 * i;
+      arcs[i].center.y = 2.0 * i;
+      arcs[i].radius = i;
+      arcs[i].start_angle = 2.0 * i;
+      arcs[i].end_angle = 3.0 * i;
+      if (i == 0) {
+        arcs[i].radius = 1.0 / 0.0;
+        arcs[i].start_angle = 0.0 / 0.0;
+        arcs[i].end_angle = -10.0 / 0.0;
+      }
+      const uint8_t x = static_cast<uint8_t>(i);
+      arcs[i].color = (x << 16) | (x << 8) | x;
+    }
+    // =============================================================
+
+    buf = WriteElementVector(laser, buf);
+    buf = WriteElementVector(particles, buf);
+    buf = WriteElementVector(path_options, buf);
+    buf = WriteElementVector(points, buf);
+    buf = WriteElementVector(lines, buf);
+    buf = WriteElementVector(arcs, buf);
+
+    pClient->sendBinaryMessage(data);
+  }
 }
 //! [processTextMessage]
 
 //! [processBinaryMessage]
-void EchoServer::processBinaryMessage(QByteArray message) {
-    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
-    if (m_debug) {
-        qDebug() << "Binary Message received:" << message;
-    }
-    if (pClient) {
-        pClient->sendBinaryMessage(message);
-    }
+void RobotWebSocket::processBinaryMessage(QByteArray message) {
+  QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+  qDebug() << "Binary Message received:" << message;
+  if (pClient) {
+    pClient->sendBinaryMessage(message);
+  }
 }
 //! [processBinaryMessage]
 
 //! [socketDisconnected]
-void EchoServer::socketDisconnected() {
-    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
-    if (m_debug) {
-        qDebug() << "socketDisconnected:" << pClient;
-    }
-    if (pClient) {
-        m_clients.removeAll(pClient);
-        pClient->deleteLater();
-    }
+void RobotWebSocket::socketDisconnected() {
+  QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+  qDebug() << "socketDisconnected:" << pClient;
+  if (pClient) {
+    clients_.removeAll(pClient);
+    pClient->deleteLater();
+  }
+}
+
+void RobotWebSocket::SendDataSlot() {
+  data_mutex_.lock();
+  printf("Send data!\n");
+  data_mutex_.unlock();
+}
+
+void RobotWebSocket::Send(const VisualizationMsg& msg) {
+  data_mutex_.lock();
+  data_msg_ = msg;
+  data_mutex_.unlock();
+  SendDataSignal();
 }
 //! [socketDisconnected]
