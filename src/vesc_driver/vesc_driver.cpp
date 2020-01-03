@@ -11,10 +11,7 @@
 #include "f1tenth_course/CarStatusMsg.h"
 #include "f1tenth_course/VescStateStamped.h"
 #include "f1tenth_course/AckermannCurvatureDriveMsg.h"
-#include "ackermann_msgs/AckermannDriveStamped.h"
 #include "nav_msgs/Odometry.h"
-#include "tf2/LinearMath/Quaternion.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 
 #include "config_reader/config_reader.h"
 #include "shared/math/math_util.h"

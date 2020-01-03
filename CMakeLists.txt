@@ -48,9 +48,6 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/shared)
 SET(libs roslib roscpp popt glog gflags amrl-shared-lib
     ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1 boost_system)
 
-rosbuild_add_executable(logger src/logger/logger.cpp)
-target_link_libraries(logger ${libs})
-
 # node executable
 rosbuild_add_executable(vesc_driver
                         src/vesc_driver/vesc_driver_node.cpp

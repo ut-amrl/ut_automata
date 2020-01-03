@@ -9,7 +9,6 @@
 #include "ros/ros.h"
 #include "std_msgs/Float64.h"
 #include "boost/optional.hpp"
-#include "ackermann_msgs/AckermannDriveStamped.h"
 #include "f1tenth_course/AckermannCurvatureDriveMsg.h"
 #include "nav_msgs/Odometry.h"
 #include "sensor_msgs/Joy.h"
@@ -85,8 +84,6 @@ private:
   void sendDriveCommands();
 
   // ROS callbacks
-  void ackermannCmdCallback(
-      const ackermann_msgs::AckermannDriveStamped::ConstPtr& cmd);
   void ackermannCurvatureCallback(
       const f1tenth_course::AckermannCurvatureDriveMsg& cmd);
   void joystickCallback(const sensor_msgs::Joy& msg);
