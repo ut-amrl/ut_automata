@@ -1,5 +1,6 @@
 std_msgs/Header header
-string namespace
+# Namespace
+string ns
 
 # Provided by particle filter
 Pose2Df[] particles
