@@ -19,6 +19,8 @@
 */
 //========================================================================
 
+#include <GL/gl.h>
+
 #include "QGLWidget"
 
 #include "vector_display.h"
