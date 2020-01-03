@@ -88,11 +88,11 @@ ROSBUILD_ADD_EXECUTABLE(simulator
     src/simulator/simulator_main.cc)
 TARGET_LINK_LIBRARIES(simulator ${libs})
 
-ROSBUILD_ADD_EXECUTABLE(webserver
-    src/webserver/webserver_main.cc
-    src/webserver/echoserver.cc
+ROSBUILD_ADD_EXECUTABLE(websocket
+    src/websocket/websocket_main.cc
+    src/websocket/websocket.cc
 )
-TARGET_LINK_LIBRARIES(webserver
+TARGET_LINK_LIBRARIES(websocket
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets
