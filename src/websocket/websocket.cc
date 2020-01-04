@@ -28,6 +28,8 @@
 #include <QtWebSockets/qwebsocketserver.h>
 #include <QtWebSockets/qwebsocket.h>
 #include <QtCore/QDebug>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
 
 #include "f1tenth_course/Pose2Df.h"
 #include "f1tenth_course/Point2D.h"
@@ -80,9 +82,11 @@ RobotWebSocket::~RobotWebSocket() {
 void RobotWebSocket::onNewConnection() {
   QWebSocket *new_client = ws_server_->nextPendingConnection();
   if (client_ != nullptr) {
-    // We already have a client. 
+    // We already have a client.
     new_client->sendTextMessage(
         "{ \"error\": \"Too many clients\" }");
+    qInfo() << "Ignoring new client" << new_client
+            << ", we already have one:" << client_;
     delete new_client;
     return;
   }
@@ -195,7 +199,7 @@ DataMessage DataMessage::FromRosMessages(
   }
   msg.particles = vis_msg.particles;
   msg.path_options = vis_msg.path_options;
-  msg.points = vis_msg.points;  
+  msg.points = vis_msg.points;
   msg.lines = vis_msg.lines;
   msg.arcs = vis_msg.arcs;
   msg.header.num_particles = msg.particles.size();
@@ -209,6 +213,15 @@ DataMessage DataMessage::FromRosMessages(
 void RobotWebSocket::processTextMessage(QString message) {
   QWebSocket *client = qobject_cast<QWebSocket *>(sender());
   qDebug() << "Message received:" << message;
+  QStringList str_list;
+  QJsonDocument doc = QJsonDocument::fromJson(message.toLocal8Bit());
+  QJsonObject json = doc.object();
+  if (false) {
+    const char* str = "{\"Test\":3.1415}";
+    doc = QJsonDocument::fromJson(str);
+    json = doc.object();
+  }
+  qInfo() << "JSON:\n" << json;
   if (client) {
     MessageHeader header;
     header.num_particles = 100;
@@ -250,9 +263,9 @@ void RobotWebSocket::socketDisconnected() {
 void RobotWebSocket::SendDataSlot() {
   if (client_ == nullptr) return;
   data_mutex_.lock();
-  const auto data = 
+  const auto data =
       DataMessage::FromRosMessages(laser_scan_, global_vis_);
-  qInfo() << "Sending message with" << data.header.num_laser_rays << "rays";
+  // qInfo() << "Sending message with" << data.header.num_laser_rays << "rays";
   const auto buffer = data.ToByteArray();
   CHECK_EQ(data.header.GetByteLength(), buffer.size());
   client_->sendBinaryMessage(buffer);
