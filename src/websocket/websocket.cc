@@ -187,6 +187,11 @@ DataMessage DataMessage::FromRosMessages(
   DataMessage msg;
   msg.header.laser_min_angle = laser_msg.angle_min;
   msg.header.laser_max_angle = laser_msg.angle_max;
+  msg.header.num_laser_rays = laser_msg.ranges.size();
+  msg.laser_scan.resize(laser_msg.ranges.size());
+  for (size_t i = 0; i < laser_msg.ranges.size(); ++i) {
+    msg.laser_scan[i] = static_cast<uint16_t>(laser_msg.ranges[i] * 1000.0);
+  }
   msg.particles = vis_msg.particles;
   msg.path_options = vis_msg.path_options;
   msg.points = vis_msg.points;  
@@ -245,11 +250,10 @@ void RobotWebSocket::socketDisconnected() {
 void RobotWebSocket::SendDataSlot() {
   if (client_ == nullptr) return;
   data_mutex_.lock();
-  printf("TODO: Send data!\n");
-  std::cout << laser_scan_.header << std::endl;
-  QByteArray buffer = 
-      DataMessage::FromRosMessages(laser_scan_, global_vis_).ToByteArray();
-  client_->sendBinaryMessage(buffer);
+  const auto data = 
+      DataMessage::FromRosMessages(laser_scan_, global_vis_);
+  qInfo() << "Sending message with" << data.header.num_laser_rays << "rays";
+  client_->sendBinaryMessage(data.ToByteArray());
   data_mutex_.unlock();
 }
 
