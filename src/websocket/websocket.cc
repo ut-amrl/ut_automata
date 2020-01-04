@@ -24,6 +24,7 @@
 #include <iostream>
 #include <vector>
 
+#include "glog/logging.h"
 #include <QtWebSockets/qwebsocketserver.h>
 #include <QtWebSockets/qwebsocket.h>
 #include <QtCore/QDebug>
@@ -242,8 +243,7 @@ void RobotWebSocket::socketDisconnected() {
     client_ = nullptr;
   } else {
     // Should never happen!
-    qCritical() << "ERROR: Disconnection from unexpected client 0x%016X\n"
-                << client;
+    CHECK(false);
   }
 }
 
@@ -253,7 +253,9 @@ void RobotWebSocket::SendDataSlot() {
   const auto data = 
       DataMessage::FromRosMessages(laser_scan_, global_vis_);
   qInfo() << "Sending message with" << data.header.num_laser_rays << "rays";
-  client_->sendBinaryMessage(data.ToByteArray());
+  const auto buffer = data.ToByteArray();
+  CHECK_EQ(data.header.GetByteLength(), buffer.size());
+  client_->sendBinaryMessage(buffer);
   data_mutex_.unlock();
 }
 
