@@ -1,54 +1,27 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtWebSockets module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:BSD$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** BSD License Usage
-** Alternatively, you may use this file under the terms of the BSD license
-** as follows:
-**
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
-**
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+//========================================================================
+//  This software is free: you can redistribute it and/or modify
+//  it under the terms of the GNU Lesser General Public License Version 3,
+//  as published by the Free Software Foundation.
+//
+//  This software is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU Lesser General Public License for more details.
+//
+//  You should have received a copy of the GNU Lesser General Public License
+//  Version 3 in the file COPYING that came with this distribution.
+//  If not, see <http://www.gnu.org/licenses/>.
+//========================================================================
+/*!
+ * \file    websocket.cc
+ * \brief   Lightweight interface to send data from a robot
+ *          to a web-based visualization page.
+ * \author  Joydeep Biswas, (C) 2020
+ */
+//========================================================================
 #include "websocket.h"
 
+#include <iostream>
 #include <vector>
 
 #include <QtWebSockets/qwebsocketserver.h>
@@ -60,8 +33,9 @@
 #include "f1tenth_course/ColoredPoint2D.h"
 #include "f1tenth_course/ColoredLine2D.h"
 #include "f1tenth_course/ColoredArc2D.h"
-#include "f1tenth_course/VisualizationMsg.h"
 #include "f1tenth_course/PathVisualization.h"
+#include "f1tenth_course/VisualizationMsg.h"
+#include "sensor_msgs/LaserScan.h"
 
 using f1tenth_course::Pose2Df;
 using f1tenth_course::Point2D;
@@ -70,14 +44,16 @@ using f1tenth_course::ColoredLine2D;
 using f1tenth_course::ColoredPoint2D;
 using f1tenth_course::VisualizationMsg;
 using f1tenth_course::PathVisualization;
+using sensor_msgs::LaserScan;
 using std::vector;
 
 QT_USE_NAMESPACE
 
-//! [constructor]
 RobotWebSocket::RobotWebSocket(uint16_t port) :
     QObject(nullptr),
-    ws_server_(new QWebSocketServer(("Echo Server"), QWebSocketServer::NonSecureMode, this)) {
+    ws_server_(new QWebSocketServer(("Echo Server"),
+        QWebSocketServer::NonSecureMode, this)),
+    client_(nullptr) {
   connect(this,
           &RobotWebSocket::SendDataSignal,
           this,
@@ -91,32 +67,39 @@ RobotWebSocket::RobotWebSocket(uint16_t port) :
               &QWebSocketServer::closed, this, &RobotWebSocket::closed);
   }
 }
-//! [constructor]
 
 RobotWebSocket::~RobotWebSocket() {
-    ws_server_->close();
-    qDeleteAll(clients_.begin(), clients_.end());
+  ws_server_->close();
+  if(client_) {
+    delete client_;
+    client_ = nullptr;
+  }
 }
 
-//! [onNewConnection]
 void RobotWebSocket::onNewConnection() {
-    QWebSocket *pSocket = ws_server_->nextPendingConnection();
-
-    connect(pSocket,
-            &QWebSocket::textMessageReceived,
-            this,
-            &RobotWebSocket::processTextMessage);
-    connect(pSocket,
-            &QWebSocket::binaryMessageReceived,
-            this,
-            &RobotWebSocket::processBinaryMessage);
-    connect(pSocket,
-            &QWebSocket::disconnected,
-            this,
-            &RobotWebSocket::socketDisconnected);
-    clients_ << pSocket;
+  QWebSocket *new_client = ws_server_->nextPendingConnection();
+  if (client_ != nullptr) {
+    // We already have a client. 
+    new_client->sendTextMessage(
+        "{ \"error\": \"Too many clients\" }");
+    delete new_client;
+    return;
+  }
+  client_ = new_client;
+  qInfo() << "New client: " << client_;
+  connect(client_,
+          &QWebSocket::textMessageReceived,
+          this,
+          &RobotWebSocket::processTextMessage);
+  connect(client_,
+          &QWebSocket::binaryMessageReceived,
+          this,
+          &RobotWebSocket::processBinaryMessage);
+  connect(client_,
+          &QWebSocket::disconnected,
+          this,
+          &RobotWebSocket::socketDisconnected);
 }
-//! [onNewConnection]
 
 template <typename T>
 char* WriteElement(const T& x, char* const buf) {
@@ -131,120 +114,153 @@ char* WriteElementVector(const std::vector<T>& v, char* const buf) {
   return (buf + len);
 }
 
-//! [processTextMessage]
+DataMessage GenerateTestData(const MessageHeader& h) {
+  DataMessage msg;
+  msg.header = h;
+  msg.laser_scan.resize(h.num_laser_rays);
+  msg.particles.resize(h.num_particles);
+  msg.path_options.resize(h.num_path_options);
+  msg.points.resize(h.num_points);
+  msg.lines.resize(h.num_lines);
+  msg.arcs.resize(h.num_arcs);
+  for (size_t i = 0; i < msg.laser_scan.size(); ++i) {
+    msg.laser_scan[i] = 10 * i;
+  }
+  for (size_t i = 0; i < msg.particles.size(); ++i) {
+    msg.particles[i].x = 1.0 * static_cast<float>(i) + 0.1;
+    msg.particles[i].y = 2.0 * static_cast<float>(i) + 0.2;
+    msg.particles[i].theta = 3.0 * static_cast<float>(i) + 0.3;
+  }
+  for (size_t i = 0; i < msg.path_options.size(); ++i) {
+    msg.path_options[i].curvature = 1.0 * static_cast<float>(i) + 0.1;
+    msg.path_options[i].distance = 2.0 * static_cast<float>(i) + 0.2;
+    msg.path_options[i].clearance = 3.0 * static_cast<float>(i) + 0.3;
+  }
+  for (size_t i = 0; i < msg.points.size(); ++i) {
+    msg.points[i].point.x = 1.0 * static_cast<float>(i) + 0.1;
+    msg.points[i].point.y = 2.0 * static_cast<float>(i) + 0.2;
+    const uint8_t x = static_cast<uint8_t>(i);
+    msg.points[i].color = (x << 16) | (x << 8) | x;
+  }
+  for (size_t i = 0; i < msg.lines.size(); ++i) {
+    msg.lines[i].p0.x = 0.1 * i;
+    msg.lines[i].p0.y = 0.01 * i;
+    msg.lines[i].p1.x = 1.0 * i;
+    msg.lines[i].p1.y = 10.0 * i;
+    const uint8_t x = static_cast<uint8_t>(i);
+    msg.lines[i].color = (x << 16) | (x << 8) | x;
+  }
+  for (size_t i = 0; i < msg.arcs.size(); ++i) {
+    msg.arcs[i].center.x = 1.0 * i;
+    msg.arcs[i].center.y = 2.0 * i;
+    msg.arcs[i].radius = i;
+    msg.arcs[i].start_angle = 2.0 * i;
+    msg.arcs[i].end_angle = 3.0 * i;
+    if (i == 0) {
+      msg.arcs[i].radius = 1.0 / 0.0;
+      msg.arcs[i].start_angle = 0.0 / 0.0;
+      msg.arcs[i].end_angle = -10.0 / 0.0;
+    }
+    const uint8_t x = static_cast<uint8_t>(i);
+    msg.arcs[i].color = (x << 16) | (x << 8) | x;
+  }
+  return msg;
+}
+
+QByteArray DataMessage::ToByteArray() const {
+  QByteArray data;
+  data.resize(header.GetByteLength());
+  char* buf = data.data();
+  buf = WriteElement(header, buf);
+  buf = WriteElementVector(laser_scan, buf);
+  buf = WriteElementVector(particles, buf);
+  buf = WriteElementVector(path_options, buf);
+  buf = WriteElementVector(points, buf);
+  buf = WriteElementVector(lines, buf);
+  buf = WriteElementVector(arcs, buf);
+  return data;
+}
+
+DataMessage DataMessage::FromRosMessages(
+      const LaserScan& laser_msg,
+      const VisualizationMsg& vis_msg) {
+  DataMessage msg;
+  msg.header.laser_min_angle = laser_msg.angle_min;
+  msg.header.laser_max_angle = laser_msg.angle_max;
+  msg.particles = vis_msg.particles;
+  msg.path_options = vis_msg.path_options;
+  msg.points = vis_msg.points;  
+  msg.lines = vis_msg.lines;
+  msg.arcs = vis_msg.arcs;
+  msg.header.num_particles = msg.particles.size();
+  msg.header.num_path_options = msg.path_options.size();
+  msg.header.num_points = msg.points.size();
+  msg.header.num_lines = msg.lines.size();
+  msg.header.num_arcs = msg.arcs.size();
+  return msg;
+}
+
 void RobotWebSocket::processTextMessage(QString message) {
-  QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+  QWebSocket *client = qobject_cast<QWebSocket *>(sender());
   qDebug() << "Message received:" << message;
-  if (pClient) {
-    QByteArray data;
-    MessageHeader msg;
-    msg.num_particles = 100;
-    msg.num_path_options = 20;
-    msg.num_points = 100;
-    msg.num_lines = 50;
-    msg.num_arcs = 10;
-    msg.num_laser_rays = 270 * 4;
-    msg.laser_min_angle = -135;
-    msg.laser_max_angle = 135;
-    data.resize(msg.GetByteLength());
-    printf("Data size: %lu\n", msg.GetByteLength());
+  if (client) {
+    MessageHeader header;
+    header.num_particles = 100;
+    header.num_path_options = 20;
+    header.num_points = 40;
+    header.num_lines = 100;
+    header.num_arcs = 100;
+    header.num_laser_rays = 270 * 4;
+    header.laser_min_angle = -135;
+    header.laser_max_angle = 135;
+    printf("Data size: %lu\n", header.GetByteLength());
 
-    char* buf = data.data();
-    buf = WriteElement(msg, buf);
-
-    // =============================================================
-    // Initialize the data.
-    vector<uint16_t> laser(msg.num_laser_rays, 0);
-    for (size_t i = 0; i < laser.size(); ++i) {
-      laser[i] = 10 * i;
-    }
-    vector<Pose2Df> particles(msg.num_particles);
-    for (size_t i = 0; i < particles.size(); ++i) {
-      particles[i].x = 1.0 * static_cast<float>(i) + 0.1;
-      particles[i].y = 2.0 * static_cast<float>(i) + 0.2;
-      particles[i].theta = 3.0 * static_cast<float>(i) + 0.3;
-    }
-    vector<PathVisualization> path_options(msg.num_path_options);
-    for (size_t i = 0; i < path_options.size(); ++i) {
-      path_options[i].curvature = 1.0 * static_cast<float>(i) + 0.1;
-      path_options[i].distance = 2.0 * static_cast<float>(i) + 0.2;
-      path_options[i].clearance = 3.0 * static_cast<float>(i) + 0.3;
-    }
-    vector<ColoredPoint2D> points(msg.num_points);
-    for (size_t i = 0; i < points.size(); ++i) {
-      points[i].point.x = 1.0 * static_cast<float>(i) + 0.1;
-      points[i].point.y = 2.0 * static_cast<float>(i) + 0.2;
-      const uint8_t x = static_cast<uint8_t>(i);
-      points[i].color = (x << 16) | (x << 8) | x;
-    }
-    vector<ColoredLine2D> lines(msg.num_lines);
-    for (size_t i = 0; i < lines.size(); ++i) {
-      lines[i].p0.x = 0.1 * i;
-      lines[i].p0.y = 0.01 * i;
-      lines[i].p1.x = 1.0 * i;
-      lines[i].p1.y = 10.0 * i;
-      const uint8_t x = static_cast<uint8_t>(i);
-      lines[i].color = (x << 16) | (x << 8) | x;
-    }
-    vector<ColoredArc2D> arcs(msg.num_arcs);
-    for (size_t i = 0; i < arcs.size(); ++i) {
-      arcs[i].center.x = 1.0 * i;
-      arcs[i].center.y = 2.0 * i;
-      arcs[i].radius = i;
-      arcs[i].start_angle = 2.0 * i;
-      arcs[i].end_angle = 3.0 * i;
-      if (i == 0) {
-        arcs[i].radius = 1.0 / 0.0;
-        arcs[i].start_angle = 0.0 / 0.0;
-        arcs[i].end_angle = -10.0 / 0.0;
-      }
-      const uint8_t x = static_cast<uint8_t>(i);
-      arcs[i].color = (x << 16) | (x << 8) | x;
-    }
-    // =============================================================
-
-    buf = WriteElementVector(laser, buf);
-    buf = WriteElementVector(particles, buf);
-    buf = WriteElementVector(path_options, buf);
-    buf = WriteElementVector(points, buf);
-    buf = WriteElementVector(lines, buf);
-    buf = WriteElementVector(arcs, buf);
-
-    pClient->sendBinaryMessage(data);
+    const DataMessage data_msg = GenerateTestData(header);
+    client->sendBinaryMessage(data_msg.ToByteArray());
   }
 }
-//! [processTextMessage]
 
-//! [processBinaryMessage]
 void RobotWebSocket::processBinaryMessage(QByteArray message) {
-  QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+  QWebSocket *client = qobject_cast<QWebSocket *>(sender());
   qDebug() << "Binary Message received:" << message;
-  if (pClient) {
-    pClient->sendBinaryMessage(message);
+  if (client) {
+    client->sendBinaryMessage(message);
   }
 }
-//! [processBinaryMessage]
 
-//! [socketDisconnected]
+
 void RobotWebSocket::socketDisconnected() {
-  QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
-  qDebug() << "socketDisconnected:" << pClient;
-  if (pClient) {
-    clients_.removeAll(pClient);
-    pClient->deleteLater();
+  QWebSocket *client = qobject_cast<QWebSocket *>(sender());
+  if (client == client_) {
+    qDebug() << "socketDisconnected:" << client;
+    delete client;
+    client_ = nullptr;
+  } else {
+    // Should never happen!
+    qCritical() << "ERROR: Disconnection from unexpected client 0x%016X\n"
+                << client;
   }
 }
 
 void RobotWebSocket::SendDataSlot() {
+  if (client_ == nullptr) return;
   data_mutex_.lock();
-  printf("Send data!\n");
+  printf("TODO: Send data!\n");
+  std::cout << laser_scan_.header << std::endl;
+  QByteArray buffer = 
+      DataMessage::FromRosMessages(laser_scan_, global_vis_).ToByteArray();
+  client_->sendBinaryMessage(buffer);
   data_mutex_.unlock();
 }
 
-void RobotWebSocket::Send(const VisualizationMsg& msg) {
+void RobotWebSocket::Send(const VisualizationMsg& local_vis,
+                          const VisualizationMsg& global_vis,
+                          const LaserScan& laser_scan) {
   data_mutex_.lock();
-  data_msg_ = msg;
+  local_vis_ = local_vis;
+  global_vis_ = global_vis;
+  laser_scan_ = laser_scan;
   data_mutex_.unlock();
   SendDataSignal();
 }
-//! [socketDisconnected]
+

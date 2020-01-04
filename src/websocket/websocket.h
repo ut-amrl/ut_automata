@@ -1,52 +1,24 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtWebSockets module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:BSD$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** BSD License Usage
-** Alternatively, you may use this file under the terms of the BSD license
-** as follows:
-**
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
-**
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+//========================================================================
+//  This software is free: you can redistribute it and/or modify
+//  it under the terms of the GNU Lesser General Public License Version 3,
+//  as published by the Free Software Foundation.
+//
+//  This software is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU Lesser General Public License for more details.
+//
+//  You should have received a copy of the GNU Lesser General Public License
+//  Version 3 in the file COPYING that came with this distribution.
+//  If not, see <http://www.gnu.org/licenses/>.
+//========================================================================
+/*!
+ * \file    websocket.h
+ * \brief   Lightweight interface to send data from a robot
+ *          to a web-based visualization page.
+ * \author  Joydeep Biswas, (C) 2020
+ */
+//========================================================================
 #ifndef ECHOSERVER_H
 #define ECHOSERVER_H
 
@@ -55,8 +27,16 @@
 #include <QtCore/QObject>
 #include <QtCore/QList>
 #include <QtCore/QByteArray>
+#include <vector>
 
+#include "f1tenth_course/Pose2Df.h"
+#include "f1tenth_course/Point2D.h"
+#include "f1tenth_course/ColoredPoint2D.h"
+#include "f1tenth_course/ColoredLine2D.h"
+#include "f1tenth_course/ColoredArc2D.h"
+#include "f1tenth_course/PathVisualization.h"
 #include "f1tenth_course/VisualizationMsg.h"
+#include "sensor_msgs/LaserScan.h"
 
 class QWebSocketServer;
 class QWebSocket;
@@ -72,7 +52,7 @@ struct MessageHeader {
   uint32_t num_laser_rays;
   float laser_min_angle;
   float laser_max_angle;
-  size_t GetByteLength() {
+  size_t GetByteLength() const {
     const size_t len = 9 * 4 + 
         num_particles * 3 * 4 +     // x, y, theta
         num_path_options * 3 * 4 +  // curvature, distance, clearance
@@ -80,9 +60,22 @@ struct MessageHeader {
         num_lines * 5 * 4 +         // x1, y1, x2, y2, color
         num_arcs * 6 * 4 +          // x, y, radius, start_angle, end_angle, color
         num_laser_rays * 2;         // each ray is uint16_t
-
     return len;
   }
+};
+
+struct DataMessage {
+  MessageHeader header;
+  std::vector<uint16_t> laser_scan;
+  std::vector<f1tenth_course::Pose2Df> particles;
+  std::vector<f1tenth_course::PathVisualization> path_options;
+  std::vector<f1tenth_course::ColoredPoint2D> points;
+  std::vector<f1tenth_course::ColoredLine2D> lines;
+  std::vector<f1tenth_course::ColoredArc2D> arcs;
+  QByteArray ToByteArray() const;
+  static DataMessage FromRosMessages(
+      const sensor_msgs::LaserScan& laser_msg,
+      const f1tenth_course::VisualizationMsg& vis_msg);
 };
 
 class RobotWebSocket : public QObject {
@@ -90,7 +83,9 @@ class RobotWebSocket : public QObject {
 public:
   explicit RobotWebSocket(uint16_t port);
   ~RobotWebSocket();
-  void Send(const f1tenth_course::VisualizationMsg& msg);
+  void Send(const f1tenth_course::VisualizationMsg& local_vis,
+            const f1tenth_course::VisualizationMsg& global_vis,
+            const sensor_msgs::LaserScan& laser_scan);
 
 Q_SIGNALS:
   void closed();
@@ -105,9 +100,11 @@ private Q_SLOTS:
 
 private:
   QWebSocketServer* ws_server_;
-  QList<QWebSocket*> clients_;
+  QWebSocket* client_;
   QMutex data_mutex_;
-  f1tenth_course::VisualizationMsg data_msg_;
+  f1tenth_course::VisualizationMsg local_vis_;
+  f1tenth_course::VisualizationMsg global_vis_;
+  sensor_msgs::LaserScan laser_scan_;
 };
 
 #endif //ECHOSERVER_H

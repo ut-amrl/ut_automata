@@ -177,7 +177,7 @@
     function receiveData(d) {
       let parser = new DataParser(d);
       let message = parser.readMessage();
-      console.log(message.header);
+      // console.log(message.header);
       console.log(message);
     }
 
@@ -189,12 +189,16 @@
         window.localStorage.setItem('ipaddr', ipaddr);
         console.log("[open] Connection established");
         console.log("Sending to server");
-        socket.send("Ready.");
+        socket.send(JSON.stringify({
+          type: "set_location",
+          x: 0,
+          y: 42,
+          theta: Math.PI
+        }));
+        //socket.send("Ready.");
       };
 
       socket.onmessage = function (event) {
-        console.log(`[message] Data received from server: ${event.data}`);
-        console.log(event.data);
         new Response(event.data).arrayBuffer().then(
           receiveData);
       };

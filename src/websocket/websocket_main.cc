@@ -18,8 +18,11 @@
  * \author  Joydeep Biswas, (C) 2019
  */
 //========================================================================
+#include <algorithm>
 #include <QCoreApplication>
+#include <vector>
 
+#include "gflags/gflags.h"
 #include "ros/ros.h"
 #include "sensor_msgs/LaserScan.h"
 
@@ -27,31 +30,116 @@
 #include "f1tenth_course/VisualizationMsg.h"
 #include "shared/util/timer.h"
 
+using f1tenth_course::VisualizationMsg;
 using sensor_msgs::LaserScan;
+using std::vector;
+
+DEFINE_double(max_age, 2.0, "Maximum age of a message before it gets dropped.");
 
 namespace {
 bool run_ = true;
-f1tenth_course::VisualizationMsg vis_msg_;
+vector<VisualizationMsg> vis_msgs_;
+LaserScan laser_scan_;
+bool updates_pending_ = false;
 RobotWebSocket* server_ = nullptr;
 }  // namespace
 
 
 void LaserCallback(const LaserScan& msg) {
-  if (server_) {
-    server_->Send(vis_msg_);
+  laser_scan_ = msg;
+  updates_pending_ = true;
+}
+
+void VisualizationCallback(const VisualizationMsg& msg) {
+  static bool warning_showed_ = false;
+  if (msg.header.frame_id != "base_link" &&
+      msg.header.frame_id != "map") {
+    if (!warning_showed_) {
+      fprintf(stderr, 
+              "WARNING: Ignoring visualization for unknown frame '%s'."
+              " This message prints only once.\n",
+              msg.header.frame_id.c_str());
+      warning_showed_ = true;
+    }
+    return;
   }
+  auto prev_msg = 
+      std::find_if(vis_msgs_.begin(), 
+                   vis_msgs_.end(),
+                   [&msg](const VisualizationMsg& m) {
+                     return m.ns == msg.ns;
+                   });
+  if (prev_msg == vis_msgs_.end()) {
+    vis_msgs_.push_back(msg);
+  } else {
+    *prev_msg = msg;
+  }
+  updates_pending_ = true;
+}
+
+template <typename T>
+void MergeVector(const std::vector<T>& v1, std::vector<T>* v2) {
+  v2->insert(v2->end(), v1.begin(), v1.end());
+}
+
+// Merge message m1 into m2.
+void MergeMessage(const VisualizationMsg& m1,
+                  VisualizationMsg* m2_ptr) {
+  VisualizationMsg& m2 = *m2_ptr;
+  MergeVector(m1.particles, &m2.particles);
+  MergeVector(m1.path_options, &m2.path_options);
+  MergeVector(m1.points, &m2.points);
+  MergeVector(m1.lines, &m2.lines);
+  MergeVector(m1.arcs, &m2.arcs);
+}
+
+void DropOldMessages() {
+  const auto now = ros::Time::now();
+  if ((now - laser_scan_.header.stamp).toSec() > FLAGS_max_age) {
+    laser_scan_.header.stamp = ros::Time(0);
+  }
+  std::remove_if(
+      vis_msgs_.begin(),
+      vis_msgs_.end(),
+      [&now](const VisualizationMsg& m) { 
+        return ((now - m.header.stamp).toSec() > FLAGS_max_age);
+      });
+}
+
+void SendUpdate() {
+  if (server_ == nullptr || !updates_pending_) return;
+  DropOldMessages();
+  updates_pending_ = false;
+  if (laser_scan_.header.stamp.toSec() == 0 && vis_msgs_.empty()) {
+    return;
+  }
+  VisualizationMsg local_msgs;
+  VisualizationMsg global_msgs;
+  for (const VisualizationMsg& m : vis_msgs_) {
+    if (m.header.frame_id == "map") {
+      MergeMessage(m, &global_msgs);
+    } else {
+      MergeMessage(m, &local_msgs);
+    }
+  }
+  server_->Send(local_msgs, global_msgs, laser_scan_);
 }
 
 void* RosThread(void* arg) {
   pthread_detach(pthread_self());
 
   ros::NodeHandle n;
-  ros::Subscriber status_sub =
-      n.subscribe("/scan", 1, &LaserCallback);
+  ros::Subscriber laser_sub =
+      n.subscribe("/scan", 5, &LaserCallback);
+  ros::Subscriber vis_sub =
+      n.subscribe("/visualization", 10, &VisualizationCallback);
 
-  RateLoop loop(5.0);
+  RateLoop loop(10.0);
   while(ros::ok() && run_) {
+    // Consume all pending messages.
     ros::spinOnce();
+    // Update rate is throttled by the rate loop timer.
+    SendUpdate();
     loop.Sleep();
   }
 
@@ -70,7 +158,7 @@ void SignalHandler(int) {
 
 int main(int argc, char *argv[]) {
   ros::init(argc, argv, "websocket", ros::init_options::NoSigintHandler);
-
+  laser_scan_.header.stamp = ros::Time(0);
   pthread_t ptid = 0;
   pthread_create(&ptid, NULL, &RosThread, NULL);
 
