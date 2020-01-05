@@ -210,19 +210,61 @@ DataMessage DataMessage::FromRosMessages(
   return msg;
 }
 
+void RobotWebSocket::SendError(const QString& error_val) {
+  CHECK_NOTNULL(client_);
+  client_->sendTextMessage(
+        "{ \"error\": \"" + error_val + "\" }");
+}
+
+bool AllNumericalKeysPresent(const QStringList& expected,
+                             const QJsonObject& json) {
+  for (const QString& key : expected) {
+    if (!json.contains(key)) return false;
+    const QJsonValue val = json.value(key);
+    if (!val.isDouble()) return false;
+  }
+  return true;
+}
+
+void RobotWebSocket::ProcessCallback(const QJsonObject& json) {
+  static const bool kDebug = true;
+  if (kDebug) {
+    qInfo() << "Callback JSON:\n" << json;
+  }
+  if (!json.contains("type")) {
+    SendError("Malformed request");
+    return;
+  }
+  const auto type = json.value("type");
+  if (type == "set_initial_pose") {
+    if (!AllNumericalKeysPresent({"x", "y", "theta"}, json)) {
+      SendError("Invalid set_initial_pose parameters");
+    }
+    SetInitialPoseSignal(json.value("x").toDouble(),
+                         json.value("y").toDouble(),
+                         json.value("theta").toDouble());
+   } else if (type == "set_nav_goal") {
+    if (!AllNumericalKeysPresent({"x", "y", "theta"}, json)) {
+      SendError("Invalid set_nav_goal parameters");
+    }
+    SetNavGoalSignal(json.value("x").toDouble(),
+                     json.value("y").toDouble(),
+                     json.value("theta").toDouble());
+  } else {
+    SendError("Unrecognized request type");
+  }
+}
+
 void RobotWebSocket::processTextMessage(QString message) {
+  static const bool kSendTestMessage = false;
   QWebSocket *client = qobject_cast<QWebSocket *>(sender());
-  qDebug() << "Message received:" << message;
-  QStringList str_list;
+  CHECK_EQ(client, client_);
+  CHECK_NOTNULL(client_);
   QJsonDocument doc = QJsonDocument::fromJson(message.toLocal8Bit());
   QJsonObject json = doc.object();
-  if (false) {
-    const char* str = "{\"Test\":3.1415}";
-    doc = QJsonDocument::fromJson(str);
-    json = doc.object();
-  }
-  qInfo() << "JSON:\n" << json;
-  if (client) {
+  ProcessCallback(json);
+
+  if (kSendTestMessage) {
     MessageHeader header;
     header.num_particles = 100;
     header.num_path_options = 20;
@@ -232,10 +274,9 @@ void RobotWebSocket::processTextMessage(QString message) {
     header.num_laser_rays = 270 * 4;
     header.laser_min_angle = -135;
     header.laser_max_angle = 135;
-    printf("Data size: %lu\n", header.GetByteLength());
-
+    printf("Test message data size: %lu\n", header.GetByteLength());
     const DataMessage data_msg = GenerateTestData(header);
-    client->sendBinaryMessage(data_msg.ToByteArray());
+    client_->sendBinaryMessage(data_msg.ToByteArray());
   }
 }
 

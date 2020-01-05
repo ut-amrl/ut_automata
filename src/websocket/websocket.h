@@ -53,7 +53,7 @@ struct MessageHeader {
   float laser_min_angle;
   float laser_max_angle;
   size_t GetByteLength() const {
-    const size_t len = 9 * 4 + 
+    const size_t len = 9 * 4 +
         num_particles * 3 * 4 +     // x, y, theta
         num_path_options * 3 * 4 +  // curvature, distance, clearance
         num_points * 3 * 4 +        // x, y, color
@@ -90,6 +90,8 @@ public:
 Q_SIGNALS:
   void closed();
   void SendDataSignal();
+  void SetInitialPoseSignal(float x, float y, float theta);
+  void SetNavGoalSignal(float x, float y, float theta);
 
 private Q_SLOTS:
   void onNewConnection();
@@ -99,8 +101,13 @@ private Q_SLOTS:
   void SendDataSlot();
 
 private:
+  void ProcessCallback(const QJsonObject& json);
+  void SendError(const QString& error_val);
+
+private:
   QWebSocketServer* ws_server_;
   QWebSocket* client_;
+
   QMutex data_mutex_;
   f1tenth_course::VisualizationMsg local_vis_;
   f1tenth_course::VisualizationMsg global_vis_;

@@ -15,8 +15,6 @@
   Status: <label id="status">Unknown</label><br>
 
   <script type="text/javascript" type="text/javascript">
-
-
     class DataParser {
       constructor(arrayBuffer) {
         this.header = {
@@ -34,7 +32,7 @@
         this.dataView = new DataView(arrayBuffer, 0);
         this.offset = 0;
         this.littleEndian = true;
-        // The first 4 bytes are the encoded number '42'. 
+        // The first 4 bytes are the encoded number '42'.
         // If the data is littleEndian the first byte should not be 0.
         if (arrayBuffer[0] === 0) {
           this.littleEndian = false;
@@ -174,36 +172,46 @@
       }
     };
 
-    function receiveData(d) {
-      let parser = new DataParser(d);
-      let message = parser.readMessage();
-      // console.log(message.header);
-      console.log(message);
-    }
+    class RobotInterface {
+      // Constructor: set up callbacks.
+      constructor() {
+        this.socket = null;
+        // Set up callbacks.
+        this.callbacks = {
+          onopen: null,
+          onReceiveRobotData: null,
+          onReceiveJSON: null,
+          onerror: null,
+          onclose: null
+        };
+      }
 
-    function connect() {
-      let ipaddr = document.getElementById('ipaddr').value;
-      let socket = new WebSocket("ws://" + ipaddr + ":10272");
-      
-      socket.onopen = function (e) {
-        window.localStorage.setItem('ipaddr', ipaddr);
-        console.log("[open] Connection established");
-        console.log("Sending to server");
-        socket.send(JSON.stringify({
-          type: "set_location",
-          x: 0,
-          y: 42,
-          theta: Math.PI
-        }));
-        //socket.send("Ready.");
-      };
+      onopen(event) {
+        console.log(`Connected to ${this.socket.url}`);
+        if (this.callbacks.onopen) this.callbacks.onopen(event);
+      }
 
-      socket.onmessage = function (event) {
-        new Response(event.data).arrayBuffer().then(
-          receiveData);
-      };
+      onReceiveRobotData(data) {
+        let parser = new DataParser(data);
+        let message = parser.readMessage();
+        this.callbacks.onReceiveRobotData(message);
+      }
 
-      socket.onclose = function (event) {
+      onmessage(event) {
+        if (typeof(event.data) === "string" &&
+            this.callbacks.onReceiveJSON) {
+          this.callbacks.onReceiveJSON(JSON.parse(event.data));
+        } else if (typeof(event.data) === "object" &&
+            this.callbacks.onReceiveRobotData) {
+          new Response(event.data).arrayBuffer().then(
+            (data) => this.onReceiveRobotData(data)
+          );
+        } else {
+          console.error(`Unknown data type: ${typeof(event.data)}`);
+        }
+      }
+
+      onclose(e) {
         if (event.wasClean) {
           console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
         } else {
@@ -211,11 +219,79 @@
           // event.code is usually 1006 in this case
           console.log('[close] Connection died');
         }
-      };
+        if (this.callbacks.onclose) this.callbacks.onclose(e);
+        this.socket = null;
+      }
 
-      socket.onerror = function (error) {
+      onerror(error) {
         console.log(`[error] ${error.message}`);
+        if (this.callbacks.onerror) this.callbacks.onerror(e);
+      }
+
+      // Connect to a host.
+      connect(hostname, callbacks) {
+        this.callbacks = callbacks;
+        // Create ws.
+        if (this.socket) {
+          console.error(`Error: Already connected to ${this.socket.url}`);
+          return;
+        }
+        this.socket = new WebSocket("ws://" + hostname + ":10272");
+        this.socket.onopen = (e) => this.onopen(e);
+        this.socket.onmessage = (e) => this.onmessage(e);
+        this.socket.onclose = (e) => this.onclose(e);
+        this.socket.onerror = (e) => this.onerror(e);
+      }
+
+      // Send initial pose message.
+      setInitialPose(x, y, theta) {
+        if (!this.socket) {
+          console.error('Error: not connected');
+          return;
+        }
+        this.socket.send(JSON.stringify({
+          type: "set_initial_pose",
+          x: x,
+          y: y,
+          theta: theta
+        }));
+      }
+
+      // Send navigation target.
+      setNavGoal(x, y, theta) {
+        if (!this.socket) {
+          console.error('Error: not connected');
+          return;
+        }
+        this.socket.send(JSON.stringify({
+          type: "set_nav_goal",
+          x: x,
+          y: y,
+          theta: theta
+        }));
+      }
+    };
+
+    let robot_interface = null;
+
+    function receiveData(d) {
+      console.log(d);
+    }
+
+    function processJsonData(json) {
+      console.log("Received JSON:");
+      console.log(json);
+    }
+
+    function connect() {
+      let ipaddr = document.getElementById('ipaddr').value;
+      let callbacks = {
+        onReceiveRobotData: receiveData,
+        onReceiveJSON: processJsonData,
+        onopen: () => window.localStorage.setItem('ipaddr', ipaddr)
       };
+      robot_interface = new RobotInterface();
+      robot_interface.connect(ipaddr, callbacks);
     }
 
     if (window.localStorage.getItem('ipaddr')) {
