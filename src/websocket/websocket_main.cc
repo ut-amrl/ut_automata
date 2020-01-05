@@ -116,7 +116,7 @@ void DropOldMessages() {
 void SendUpdate() {
   if (server_ == nullptr || !updates_pending_)
     return;
-  DropOldMessages();
+  // DropOldMessages();
   updates_pending_ = false;
   if (laser_scan_.header.stamp.toSec() == 0 && vis_msgs_.empty()) {
     return;
@@ -124,12 +124,14 @@ void SendUpdate() {
   VisualizationMsg local_msgs;
   VisualizationMsg global_msgs;
   for (const VisualizationMsg &m : vis_msgs_) {
+    // std::cout << m << std::endl;
     if (m.header.frame_id == "map") {
       MergeMessage(m, &global_msgs);
     } else {
       MergeMessage(m, &local_msgs);
     }
   }
+  // std::cout << global_msgs << std::endl;
   server_->Send(local_msgs, global_msgs, laser_scan_);
 }
 

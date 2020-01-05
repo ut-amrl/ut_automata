@@ -51,7 +51,7 @@
   <input type="button" id="connect" onclick="connect()" value="Connect"><br>
   Status: <label id="status">Unknown</label><br>
   <input type="button" id="setLocation" onclick="setLocationButton()" value="Set Pose">
-  <input type="button" id="setNavTarget" onclick="setNavTargetButton()" value="Set Nav Target">
+  <input type="button" id="setNavGoal" onclick="setNavGoalButton()" value="Set Nav Target">
   Map:
   <select id="map" value="GDC1" onchange="changeMap()">
     <option value="GDC1">GDC1</option>
@@ -73,9 +73,10 @@
     var mouseDownLoc;
     var mouseDown = false;
     var setLocation = false;
-    var setNavTarget = false;
+    var setNavGoal = false;
     var coords = document.getElementById("coords");
     var mapList = document.getElementById("map");
+    var robotPose = undefined;
     var tLastDraw = 0;
     var map = [];
     var lastLaserScan = undefined;
@@ -167,7 +168,7 @@
         };
         pose.x = this.readFloat32();
         pose.y = this.readFloat32();
-        pose.z = this.readFloat32();
+        pose.theta = this.readFloat32();
         return pose;
       }
 
@@ -239,6 +240,25 @@
         };
       }
 
+      computeRobotPose(particles) {
+        if (particles.length < 1) return undefined;
+        let total  = particles.reduce(
+          function(cur_total, v) {
+            cur_total.x += v.x / particles.length;
+            cur_total.y += v.y / particles.length;
+            cur_total.c += Math.cos(v.theta) / particles.length;
+            cur_total.s += Math.sin(v.theta) / particles.length;
+            return cur_total;
+          },
+          { x: 0, y: 0, c: 0, s: 0}
+        )
+        let pose = {
+          x: total.x,
+          y: total.y,
+          theta: Math.atan2(total.s, total.c)
+        }
+        return pose;
+      }
       readMessage() {
         let message = {
           header: this.readHeader(),
@@ -247,8 +267,10 @@
           path_options: this.readMultiple(this.header.num_path_options, () => this.readPathVisualization()),
           points: this.readMultiple(this.header.num_points, () => this.readPoint()),
           lines: this.readMultiple(this.header.num_lines, () => this.readLine()),
-          arcs: this.readMultiple(this.header.num_arcs, () => this.readArc())
+          arcs: this.readMultiple(this.header.num_arcs, () => this.readArc()),
+          robotPose: undefined
         }
+        message.robotPose = this.computeRobotPose(message.particles);
         return message;
       }
     };
@@ -382,14 +404,14 @@
 
     function setLocationButton() {
       setLocation = true;
-      setNavTarget = false;
+      setNavGoal = false;
       document.getElementById("setLocation").style = "border-style:inset;";
     }
 
-    function setNavTargetButton() {
+    function setNavGoalButton() {
       setLocation = false;
-      setNavTarget = true;
-      document.getElementById("setNavTarget").style = "border-style:inset;";
+      setNavGoal = true;
+      document.getElementById("setNavGoal").style = "border-style:inset;";
     }
 
     // Get the "true" mouse location, compensting for scroll, zoom, etc.
@@ -436,7 +458,7 @@
       const y_str = w.y.toFixed(3);
       coords.innerHTML = `x=${x_str}, y=${y_str}`;
       if (!mouseDown) return;
-      if (setLocation || setNavTarget) return;
+      if (setLocation || setNavGoal) return;
       origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
       origin.y = prev_origin.y + loc.y - mouseDownLoc.y;
     };
@@ -446,7 +468,7 @@
       mouseDown = true;
       prev_origin = { x: origin.x, y: origin.y };
       if (event.ctrlKey) {
-        setNavTarget = true;
+        setNavGoal = true;
       } else if (event.shiftKey) {
         setLocation = true;
       }
@@ -455,36 +477,31 @@
     function onMouseUp(event) {
       let loc = getMouseLocation(event, canvas);
       let w = canvasToWorld(loc);
-      if (setNavTarget) {
+      if (setNavGoal) {
         // Set nav target here.
-        navTargetMsg.header.seq++;
-        navTargetMsg.pose.position.x = w.x;
-        navTargetMsg.pose.position.y = w.y;
-        let a = Math.atan2(mouseDownLoc.y - loc.y, loc.x - mouseDownLoc.x);
-        navTargetMsg.pose.orientation.w = Math.cos(0.5 * a);
-        navTargetMsg.pose.orientation.z = Math.sin(0.5 * a);
-        navTargetPublisher.publish(navTargetMsg);
+        if (robot_interface) {
+          let w0 = canvasToWorld(mouseDownLoc);
+          let a = Math.atan2(mouseDownLoc.y - loc.y, loc.x - mouseDownLoc.x);
+          robot_interface.setNavGoal(w0.x, w0.y, a);
+        }
       } else if (setLocation) {
         // Set localization here.
-        let w0 = canvasToWorld(mouseDownLoc);
-        initialPose.header.seq++;
-        initialPose.pose.pose.position.x = w0.x;
-        initialPose.pose.pose.position.y = w0.y;
-        let a = Math.atan2(mouseDownLoc.y - loc.y, loc.x - mouseDownLoc.x);
-        initialPose.pose.pose.orientation.w = Math.cos(0.5 * a);
-        initialPose.pose.pose.orientation.z = Math.sin(0.5 * a);
-        initialposePublisher.publish(initialPose);
+        if (robot_interface) {
+          let w0 = canvasToWorld(mouseDownLoc);
+          let a = Math.atan2(mouseDownLoc.y - loc.y, loc.x - mouseDownLoc.x);
+          robot_interface.setInitialPose(w0.x, w0.y, a);
+        }
       } else {
         // Pan.
         origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
         origin.y = prev_origin.y + loc.y - mouseDownLoc.y;
         prev_origin = origin;
       }
-      setNavTarget = false;
+      setNavGoal = false;
       setLocation = false;
       mouseDown = false;
       document.getElementById("setLocation").style = "";
-      document.getElementById("setNavTarget").style = "";
+      document.getElementById("setNavGoal").style = "";
     }
 
     function onMouseScroll(event) {
@@ -533,6 +550,7 @@
       // console.log(d.header);
       lastLaserScan = d.laser;
       particles = d.particles;
+      robotPose = d.robotPose;
     }
 
     function processJsonData(json) {
@@ -678,7 +696,8 @@
 
     function drawLaserScan() {
       if (!lastLaserScan) return;
-
+      let offset = { x:0, y:0, theta:0 };
+      if (robotPose) offset = robotPose;
       // Update map and draw line being made.
       // ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
       // ctx.lineWidth = 2;
@@ -687,9 +706,9 @@
       for (let i = 0; i < lastLaserScan.ranges.length; ++i) {
         const r = lastLaserScan.ranges[i];
         // if (r >= msg.range_max || r <= msg.range_min) continue;
-        const a = lastLaserScan.angle_min + i * da;
-        const x = Math.cos(a) * r;
-        const y = Math.sin(a) * r;
+        const a = lastLaserScan.angle_min + i * da + offset.theta;
+        const x = Math.cos(a) * r + offset.x;
+        const y = Math.sin(a) * r + offset.y;
         drawPoint("#eb8334", x, y);
       }
     }

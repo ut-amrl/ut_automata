@@ -306,7 +306,6 @@ void RobotWebSocket::SendDataSlot() {
   data_mutex_.lock();
   const auto data =
       DataMessage::FromRosMessages(laser_scan_, global_vis_);
-  // qInfo() << "Sending message with" << data.header.num_laser_rays << "rays";
   const auto buffer = data.ToByteArray();
   CHECK_EQ(data.header.GetByteLength(), buffer.size());
   client_->sendBinaryMessage(buffer);
