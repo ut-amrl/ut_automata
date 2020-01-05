@@ -27,6 +27,5 @@ set -x -e
 # Hokuyo Lidar
 roslaunch src/hokuyo/launch/hokuyo_10lx.launch  > /dev/null &
 
-# ROS Websocket bridge.
-roslaunch rosbridge_server rosbridge_websocket.launch > /dev/null &
-
+# Run Websocket server.
+./bin/websocket > /dev/null &
