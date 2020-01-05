@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+
+  <script type="text/javascript"
+    src="http://static.robotwebtools.org/EventEmitter2/current/eventemitter2.min.js"></script>
+  <script type="text/javascript" src="http://static.robotwebtools.org/roslibjs/current/roslib.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background: #eee;
+    }
+
+    #canvas {
+      width: 800px;
+      height: 600px;
+      background: #fff;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -webkit-touch-callout: none;
+      -khtml-user-select: none;
+      -ms-user-select: none;
+      outline: none;
+      -webkit-tap-highlight-color: rgba(255, 255, 255, 0);
+      /* mobile webkit */
+    }
+
+    input[type=button] {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -webkit-touch-callout: none;
+      -khtml-user-select: none;
+      -ms-user-select: none;
+      outline: none;
+      -webkit-tap-highlight-color: rgba(255, 255, 255, 0);
+      /* mobile webkit */
+    }
+  </style>
+
+</head>
+
+<body>
+  <h1>F1/10 Web Interface</h1>
+
+  Car IP Address: <input type="text" id="ipaddr" value="localhost">
+  <input type="button" onclick="connect()" value="Connect"><br>
+  Status: <label id="status">Unknown</label><br>
+  <input type="button" id="setLocation" onclick="setLocationButton()" value="Set Pose">
+  <input type="button" id="setNavTarget" onclick="setNavTargetButton()" value="Set Nav Target">
+  Map:
+  <select id="map" value="GDC1" onchange="changeMap()">
+    <option value="GDC1">GDC1</option>
+    <option value="GDC2">GDC2</option>
+    <option value="GDC3">GDC3</option>
+  </select>
+  <br>
+  <canvas id="canvas" width="800" height="600" tabindex="0"> </canvas>
+  <br>
+  <label id="coords">0,0</label>
+
+
+  <script type="text/javascript" type="text/javascript">
+
+    var ros = undefined;
+    var scale = 100;
+    var origin = { x: 0, y: 0 };
+    var prev_origin = { x: 0, y: 0 };
+    var canvas = document.getElementById("canvas");
+    var ctx = canvas.getContext("2d");
+    var mouseDownLoc;
+    var mouseDown = false;
+    var setLocation = false;
+    var setNavTarget = false;
+    var coords = document.getElementById("coords");
+    var mapList = document.getElementById("map");
+    var initialposePublisher;
+    var navTargetPublisher;
+    var tLastDraw = 0;
+    var map = [];
+    var lastLaserScan = undefined;
+    var markers = [];
+    var particles = undefined;
+    var initialPose = new ROSLIB.Message({
+      header: {
+        seq: 0,
+        stamp: Date.now(),
+        frame_id: "map"
+      },
+      pose: {
+        pose: {
+          position: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          orientation: {
+            x: 0,
+            y: 0,
+            z: 0,
+            w: 1
+          }
+        },
+        covariance: [
+          1, 0, 0, 0, 0, 0,
+          0, 1, 0, 0, 0, 0,
+          0, 0, 1, 0, 0, 0,
+          0, 0, 0, 1, 0, 0,
+          0, 0, 0, 0, 1, 0,
+          0, 0, 0, 0, 0, 1
+        ]
+      }
+    });
+    const navTargetMsg = new ROSLIB.Message({
+      header: {
+        seq: 0,
+        stamp: Date.now(),
+        frame_id: "map"
+      },
+      pose: {
+        position: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        orientation: {
+          x: 0,
+          y: 0,
+          z: 0,
+          w: 1
+        }
+      },
+    });
+
+    if (window.localStorage.getItem('ipaddr')) {
+      document.getElementById('ipaddr').value =
+        window.localStorage.getItem('ipaddr');
+    }
+    canvas.addEventListener('wheel', onMouseScroll, false);
+    window.addEventListener("keypress", onKeyPress, false);
+    canvas.onmouseup = onMouseUp;
+    canvas.onmousedown = onMouseDown;
+    canvas.onmousemove = onMouseMove;
+    changeMap();
+
+    function changeMap() {
+      let url = `http://amrl.cs.utexas.edu/web_rviz/maps/${mapList.value}.json`;
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      // xhr.responseType = 'json';
+      xhr.onload = function () {
+        var status = xhr.status;
+        if (status === 200) {
+          map = JSON.parse(xhr.response);
+        } else {
+          console.log("XHR ERROR");
+        }
+      };
+      xhr.send();
+    }
+    function setLocationButton() {
+      setLocation = true;
+      setNavTarget = false;
+      document.getElementById("setLocation").style = "border-style:inset;";
+    }
+
+    function setNavTargetButton() {
+      setLocation = false;
+      setNavTarget = true;
+      document.getElementById("setNavTarget").style = "border-style:inset;";
+    }
+
+    // Get the "true" mouse location, compensting for scroll, zoom, etc.
+    function getMouseLocation(event, element) {
+      var posx = 0;
+      var posy = 0;
+      if (!event) var event = window.event;
+      if (event.pageX || event.pageY) {
+        posx = event.pageX;
+        posy = event.pageY;
+      } else if (event.clientX || event.clientY) {
+        posx = event.clientX + document.body.scrollLeft
+          + document.documentElement.scrollLeft;
+        posy = event.clientY + document.body.scrollTop
+          + document.documentElement.scrollTop;
+      }
+      if (element != undefined &&
+        isFinite(element.offsetLeft) &&
+        isFinite(element.offsetTop)) {
+        posx -= element.offsetLeft;
+        posy -= element.offsetTop;
+      }
+      return ({ x: posx, y: posy });
+    }
+
+    function canvasToWorld(p) {
+      return {
+        x: (p.x - origin.x) / scale,
+        y: (origin.y - p.y) / scale
+      };
+    }
+
+    function worldToCanvas(p) {
+      return {
+        x: p.x * scale + origin.x,
+        y: origin.y - p.y * scale
+      };
+    }
+
+    function onMouseMove(event) {
+      loc = getMouseLocation(event, canvas);
+      w = canvasToWorld(loc);
+      const x_str = w.x.toFixed(3);
+      const y_str = w.y.toFixed(3);
+      coords.innerHTML = `x=${x_str}, y=${y_str}`;
+      if (!mouseDown) return;
+      if (setLocation || setNavTarget) return;
+      origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
+      origin.y = prev_origin.y + loc.y - mouseDownLoc.y;
+    };
+
+    function onMouseDown(event) {
+      mouseDownLoc = getMouseLocation(event, canvas);
+      mouseDown = true;
+      prev_origin = { x: origin.x, y: origin.y };
+      if (event.ctrlKey) {
+        setNavTarget = true;
+      } else if (event.shiftKey) {
+        setLocation = true;
+      }
+    };
+
+    function onMouseUp(event) {
+      let loc = getMouseLocation(event, canvas);
+      let w = canvasToWorld(loc);
+      if (setNavTarget) {
+        // Set nav target here.
+        navTargetMsg.header.seq++;
+        navTargetMsg.pose.position.x = w.x;
+        navTargetMsg.pose.position.y = w.y;
+        let a = Math.atan2(mouseDownLoc.y - loc.y, loc.x - mouseDownLoc.x);
+        navTargetMsg.pose.orientation.w = Math.cos(0.5 * a);
+        navTargetMsg.pose.orientation.z = Math.sin(0.5 * a);
+        navTargetPublisher.publish(navTargetMsg);
+      } else if (setLocation) {
+        // Set localization here.
+        let w0 = canvasToWorld(mouseDownLoc);
+        initialPose.header.seq++;
+        initialPose.pose.pose.position.x = w0.x;
+        initialPose.pose.pose.position.y = w0.y;
+        let a = Math.atan2(mouseDownLoc.y - loc.y, loc.x - mouseDownLoc.x);
+        initialPose.pose.pose.orientation.w = Math.cos(0.5 * a);
+        initialPose.pose.pose.orientation.z = Math.sin(0.5 * a);
+        initialposePublisher.publish(initialPose);
+      } else {
+        // Pan.
+        origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
+        origin.y = prev_origin.y + loc.y - mouseDownLoc.y;
+        prev_origin = origin;
+      }
+      setNavTarget = false;
+      setLocation = false;
+      mouseDown = false;
+      document.getElementById("setLocation").style = "";
+      document.getElementById("setNavTarget").style = "";
+    }
+
+    function onMouseScroll(event) {
+      let loc = getMouseLocation(event, canvas);
+      let s1 = scale;
+      if (event.deltaY > 0) {
+        scale *= 0.95;
+
+      } else if (event.deltaY < 0) {
+        scale *= 1.05;
+      }
+      let s2 = scale;
+      origin.x = loc.x * (s1 - s2) / s1 + s2 / s1 * origin.x;
+      origin.y = loc.y * (s1 - s2) / s1 + s2 / s1 * origin.y;
+      event.preventDefault();
+      return false;
+    }
+
+
+    function onKeyPress(event) {
+      // console.log("Pressed: " + event.which);
+    };
+
+    function drawPoint(color, x, y) {
+      ctx.fillStyle = color;
+      const p = worldToCanvas({ x: x, y: y });
+      ctx.fillRect(p.x, p.y, 2, 2);
+    }
+
+    function drawLine(color, x1, y1, x2, y2) {
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      const p1 = worldToCanvas({ x: x1, y: y1 });
+      const p2 = worldToCanvas({ x: x2, y: y2 });
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+
+    function updateStatus(str) {
+      let s = document.getElementById("status");
+      s.innerHTML = str;
+    }
+
+    function main(ipaddr) {
+      try {
+        ros = new ROSLIB.Ros({
+          url: 'ws://' + ipaddr + ':9090'
+        });
+      } catch (e) {
+        updateStatus('ERROR: ' + e.toString());
+        return;
+      }
+
+      ros.on('connection', function () {
+        updateStatus('Connected to websocket server.');
+        window.localStorage.setItem('ipaddr', ipaddr);
+        initialposePublisher = new ROSLIB.Topic({
+          ros: ros,
+          name: '/initialpose',
+          messageType: 'geometry_msgs/PoseWithCovarianceStamped'
+        });
+        navTargetPublisher = new ROSLIB.Topic({
+          ros: ros,
+          name: '/move_base_simple/goal',
+          messageType: 'geometry_msgs/PoseStamped'
+        });
+      });
+
+      ros.on('error', function (error) {
+        updateStatus('Error connecting to websocket server: ', error);
+      });
+
+      ros.on('close', function () {
+        updateStatus('Connection to websocket server closed.');
+      });
+
+      subscribe('/scan', 'sensor_msgs/LaserScan', laserCallback);
+      // subscribe('/visualization', 'visualization_msgs/Marker', markerCallback);
+      subscribe('/visualization', 'f1tenth_course/VisualizationMsg', visualizationMsgCallback);
+      subscribe('/particles', 'geometry_msgs/PoseArray', particlesCallback);
+    }
+
+    function visualizationMsgCallback(msg) {
+      console.log(Date.now() / 1000 - msg.header.stamp);
+    }
+
+    function particlesCallback(msg) {
+      particles = msg;
+    }
+
+    function markerCallback(msg) {
+      for (let i = 0; i < markers.length; ++i) {
+        if (markers[i].ns === msg.ns && markers[i].id === msg.id) {
+          markers[i] = msg;
+          return;
+        }
+      }
+      markers.push(msg);
+    }
+
+    function laserCallback(msg) {
+      lastLaserScan = msg;
+    }
+
+    // DRAW LOOP
+    window.requestAnimationFrame = window.requestAnimationFrame ||
+      window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame ||
+      window.msRequestAnimationFrame;
+    var updateCanvas = true;
+
+    function drawLoop() {
+      requestAnimationFrame(drawLoop);
+      draw();
+    }
+
+    window.onload = function () {
+      drawLoop();
+    };
+
+    function subscribe(topic, type, callback) {
+      let listener = new ROSLIB.Topic({
+        ros: ros,
+        name: topic,
+        messageType: type,
+        queue_size: 1,
+        throttle_rate: 10
+      });
+
+      listener.subscribe(callback);
+    }
+
+    function connect() {
+      let ipaddr = document.getElementById('ipaddr').value;
+      main(ipaddr)
+    }
+
+    function drawMap() {
+      ctx.lineWidth = 1;
+      map.forEach(function (l) {
+        drawLine("#319bd4", l.p0.x, l.p0.y, l.p1.x, l.p1.y);
+      });
+    }
+
+    function drawPose(p) {
+      const l = 0.5;
+      const h = 0.1;
+      const a = 2.0 * Math.atan2(p.orientation.z, p.orientation.w);
+      const dir = { x: Math.cos(a), y: Math.sin(a) };
+      const perp = { x: -dir.y, y: dir.x };
+      const p0 = p.position;
+      const p1 = { x: p0.x + l * dir.x, y: p0.y + l * dir.y };
+      const p2 = {
+        x: p1.x + h * (-dir.x + perp.x),
+        y: p1.y + h * (-dir.y + perp.y)
+      };
+      const p3 = {
+        x: p1.x + h * (-dir.x - perp.x),
+        y: p1.y + h * (-dir.y - perp.y)
+      };
+      drawLine("#AF0000", p0.x, p0.y, p1.x, p1.y);
+      drawLine("#AF0000", p2.x, p2.y, p1.x, p1.y);
+      drawLine("#AF0000", p3.x, p3.y, p1.x, p1.y);
+    }
+
+    function drawParticles() {
+      if (particles === undefined) return;
+      ctx.lineWidth = 1;
+      particles.poses.forEach(drawPose);
+    }
+
+    function draw() {
+      const kDrawInterval = 0.03;
+      const tNow = window.performance.now();
+      if (tNow - tLastDraw < kDrawInterval) return;
+      tLastDraw = tNow;
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (lastLaserScan) drawScan(lastLaserScan);
+      drawGrid();
+      drawMap();
+      markers.forEach(drawMarker);
+      drawParticles();
+    }
+
+    function setColor(c) {
+      ctx.fillStyle = `rgb(${c.r * 255},${c.g * 255},${c.b * 255})`;
+    }
+
+    function drawMarkerPoints(m) {
+      setColor(m.color);
+      m.points.forEach(function (p) {
+        const pw = worldToCanvas(p);
+        ctx.fillRect(pw.x, pw.y, 2, 2);
+      });
+    }
+
+    function drawMarkerLineList(m) {
+      let individualColors = false;
+      if (m.points.length === m.colors.length) {
+        individualColors = true;
+      } else {
+        setColor(m.color);
+      }
+      let c = `rgb(${m.color.r * 255},${m.color.g * 255},${m.color.b * 255})`;
+      for (let i = 0; i < m.points.length; i += 2) {
+        let p0 = m.points[i];
+        let p1 = m.points[i + 1];
+        if (individualColors) {
+          c = `rgb(${m.colors[i].r * 255},${m.colors[i].g * 255},${m.colors[i].b * 255})`;
+        }
+        drawLine(c, p0.x, p0.y, p1.x, p1.y);
+      }
+    }
+
+    function drawMarkerLineStrip(m) {
+    }
+
+    function drawMarker(msg) {
+      switch (msg.type) {
+        case 8: {
+          // POINTS
+          drawMarkerPoints(msg);
+        } break;
+        case 4: {
+          // LINE_STRIP
+          drawMarkerLineStrip(msg);
+        } break;
+        case 5: {
+          // LINE_LIST
+          drawMarkerLineList(msg);
+        } break;
+      }
+    }
+
+    function drawScan(msg) {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Update map and draw line being made.
+      // ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
+      // ctx.lineWidth = 2;
+      for (let i = 0; i < msg.ranges.length; ++i) {
+        const r = msg.ranges[i];
+        if (r >= msg.range_max || r <= msg.range_min) continue;
+        const a = msg.angle_min + i * msg.angle_increment;
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r;
+        drawPoint("#eb8334", x, y);
+      }
+      drawGrid();
+      drawMap();
+    }
+
+    function drawGrid() {
+      const D = 50 * scale;
+      const d = 2 * scale;
+      ctx.strokeStyle = "#d1d1d1";
+      ctx.beginPath();
+      ctx.lineWidth = 1;
+      for (let i = -D; i < D; i += d) {
+        ctx.moveTo(i + origin.x, -D + origin.y);
+        ctx.lineTo(i + origin.x, D + origin.y);
+        ctx.moveTo(-D + origin.x, i + origin.y);
+        ctx.lineTo(D + origin.x, i + origin.y);
+      }
+      ctx.stroke();
+
+      ctx.lineWidth = 4;
+      drawLine("#EF0000", 0, 0, 1.5, 0);
+      drawLine("#00AF00", 0, 0, 0, 1.5);
+    }
+  </script>
+</body>
+
+</html>
