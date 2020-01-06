@@ -65,7 +65,7 @@
 
   <script type="text/javascript" type="text/javascript">
     var canvas = document.getElementById("canvas");
-    var scale = 10;
+    var scale = 20;
     var origin = { x: 0.5 * canvas.width, y: 0.5 * canvas.height };
     var prev_origin = { x: 0, y: 0 };
     var ctx = canvas.getContext("2d");
@@ -88,6 +88,7 @@
     }
     canvas.width = window.innerWidth;
     canvas.height = Math.max(600, window.innerHeight - 175);
+    origin = { x: 0.5 * canvas.width, y: 0.5 * canvas.height };
     canvas.addEventListener('wheel', onMouseScroll, false);
     window.addEventListener("keypress", onKeyPress, false);
     canvas.onmouseup = onMouseUp;
