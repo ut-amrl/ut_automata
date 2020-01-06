@@ -65,6 +65,7 @@
 
   <script type="text/javascript" type="text/javascript">
     var canvas = document.getElementById("canvas");
+    var visMsg = undefined;
     var scale = 20;
     var origin = { x: 0.5 * canvas.width, y: 0.5 * canvas.height };
     var prev_origin = { x: 0, y: 0 };
@@ -326,6 +327,7 @@
         }
         if (this.callbacks.onclose) this.callbacks.onclose(e);
         this.socket = null;
+        close();
       }
 
       onerror(error) {
@@ -550,6 +552,7 @@
 
     function receiveData(d) {
       // console.log(d.header);
+      visMsg = d;
       lastLaserScan = d.laser;
       particles = d.particles;
       robotPose = d.robotPose;
@@ -663,6 +666,9 @@
       drawGrid();
       drawMap();
       // TODO: Draw all visualizations
+      drawPoints();
+      drawLines();
+      drawPathOptions();
       drawParticles();
     }
 
@@ -670,13 +676,62 @@
       ctx.fillStyle = `rgb(${c.r * 255},${c.g * 255},${c.b * 255})`;
     }
 
-    function drawMarkerPoints(m) {
-      setColor(m.color);
-      m.points.forEach(function (p) {
+    function drawPoints() {
+      if (visMsg === undefined) return;
+      visMsg.points.forEach(function (p) {
+        setColor(p.color);
         const pw = worldToCanvas(p);
         ctx.fillRect(pw.x, pw.y, 2, 2);
       });
     }
+
+    function drawLines() {
+      if (visMsg === undefined) return;
+      // console.log(visMsg.lines);
+      visMsg.lines.forEach(function (l) {
+        drawLine(l.color, l.p0.x, l.p0.y, l.p1.x, l.p1.y);
+      });
+    }
+
+    function drawArc(color, x, y, r, a0, a1) {
+      ctx.strokeStyle = color;
+      const p = worldToCanvas({ x: x, y: y });
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * scale, a0, a1);
+      ctx.stroke();
+    }
+
+    function drawPathOptions() {
+      if (visMsg === undefined) return;
+      // console.log(visMsg.lines);
+      visMsg.path_options.forEach(function (o) {
+        if (Math.abs(o.curvature) < 1e-4) {
+          // Straight line.
+          return;
+        }
+        let r = 1 / o.curvature;
+        let center = {
+          x: 0,
+          y: r
+        };
+        let a1 = (r > 0) ?
+          (Math.PI / 2) :
+          (-Math.PI / 2 - o.distance * o.curvature);
+        let a0 = (r > 0) ?
+          (a1 - o.distance * o.curvature) :
+          (-Math.PI / 2);
+        if (false && robotPose) {
+          center = {
+            x: -Math.sin(robotPose.theta) * r,
+            y: Math.cos(robotPose.theta) * r
+          };
+          a0 += robotPose.theta;
+          a1 += robotPose.theta;
+        }
+        drawArc("#c0c0c0", center.x, center.y, Math.abs(r), a0, a1);
+      });
+    }
+
 
     function drawMarkerLineList(m) {
       let individualColors = false;

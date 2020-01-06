@@ -131,7 +131,6 @@ void SendUpdate() {
       MergeMessage(m, &local_msgs);
     }
   }
-  // std::cout << global_msgs << std::endl;
   server_->Send(local_msgs, global_msgs, laser_scan_);
 }
 
