@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
     if (multiple) {
       printf(",\n");
     } 
-    printf("{'p0':{'x':%10f, 'y':%10f}, 'p1':{'x':%10f, 'y':%10f}}",
+    printf("{\"p0\":{\"x\":%10f, \"y\":%10f}, \"p1\":{\"x\":%10f, \"y\":%10f}}",
            x1, y1, x2, y2);
     multiple++;
   }
