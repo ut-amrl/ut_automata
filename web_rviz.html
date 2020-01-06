@@ -15,8 +15,6 @@
     }
 
     #canvas {
-      width: 800px;
-      height: 600px;
       background: #fff;
       user-select: none;
       -webkit-user-select: none;
@@ -87,6 +85,8 @@
       document.getElementById('ipaddr').value =
         window.localStorage.getItem('ipaddr');
     }
+    canvas.width = window.innerWidth;
+    canvas.height = Math.max(600, window.innerHeight - 175);
     canvas.addEventListener('wheel', onMouseScroll, false);
     window.addEventListener("keypress", onKeyPress, false);
     canvas.onmouseup = onMouseUp;
@@ -242,15 +242,15 @@
 
       computeRobotPose(particles) {
         if (particles.length < 1) return undefined;
-        let total  = particles.reduce(
-          function(cur_total, v) {
+        let total = particles.reduce(
+          function (cur_total, v) {
             cur_total.x += v.x / particles.length;
             cur_total.y += v.y / particles.length;
             cur_total.c += Math.cos(v.theta) / particles.length;
             cur_total.s += Math.sin(v.theta) / particles.length;
             return cur_total;
           },
-          { x: 0, y: 0, c: 0, s: 0}
+          { x: 0, y: 0, c: 0, s: 0 }
         )
         let pose = {
           x: total.x,
@@ -301,16 +301,16 @@
       }
 
       onmessage(event) {
-        if (typeof(event.data) === "string" &&
-            this.callbacks.onReceiveJSON) {
+        if (typeof (event.data) === "string" &&
+          this.callbacks.onReceiveJSON) {
           this.callbacks.onReceiveJSON(JSON.parse(event.data));
-        } else if (typeof(event.data) === "object" &&
-            this.callbacks.onReceiveRobotData) {
+        } else if (typeof (event.data) === "object" &&
+          this.callbacks.onReceiveRobotData) {
           new Response(event.data).arrayBuffer().then(
             (data) => this.onReceiveRobotData(data)
           );
         } else {
-          console.error(`Unknown data type: ${typeof(event.data)}`);
+          console.error(`Unknown data type: ${typeof (event.data)}`);
         }
       }
 
@@ -341,7 +341,7 @@
         }
         try {
           this.socket = new WebSocket("ws://" + hostname + ":10272");
-        } catch(error) {
+        } catch (error) {
           this.onerror(error);
           return;
         }
@@ -696,13 +696,13 @@
 
     function drawLaserScan() {
       if (!lastLaserScan) return;
-      let offset = { x:0, y:0, theta:0 };
+      let offset = { x: 0, y: 0, theta: 0 };
       if (robotPose) offset = robotPose;
       // Update map and draw line being made.
       // ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
       // ctx.lineWidth = 2;
       const da = (lastLaserScan.angle_max - lastLaserScan.angle_min) /
-          lastLaserScan.ranges.length;
+        lastLaserScan.ranges.length;
       for (let i = 0; i < lastLaserScan.ranges.length; ++i) {
         const r = lastLaserScan.ranges[i];
         // if (r >= msg.range_max || r <= msg.range_min) continue;
