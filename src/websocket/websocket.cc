@@ -188,7 +188,8 @@ QByteArray DataMessage::ToByteArray() const {
 
 DataMessage DataMessage::FromRosMessages(
       const LaserScan& laser_msg,
-      const VisualizationMsg& vis_msg) {
+      const VisualizationMsg& local_msg,
+      const VisualizationMsg& global_msg) {
   DataMessage msg;
   msg.header.laser_min_angle = laser_msg.angle_min;
   msg.header.laser_max_angle = laser_msg.angle_max;
@@ -197,11 +198,27 @@ DataMessage DataMessage::FromRosMessages(
   for (size_t i = 0; i < laser_msg.ranges.size(); ++i) {
     msg.laser_scan[i] = static_cast<uint16_t>(laser_msg.ranges[i] * 1000.0);
   }
-  msg.particles = vis_msg.particles;
-  msg.path_options = vis_msg.path_options;
-  msg.points = vis_msg.points;
-  msg.lines = vis_msg.lines;
-  msg.arcs = vis_msg.arcs;
+  msg.particles = global_msg.particles;
+  msg.path_options = local_msg.path_options;
+
+  msg.points = local_msg.points;
+  msg.header.num_local_points = local_msg.points.size();
+  msg.points.insert(msg.points.end(), 
+                    global_msg.points.begin(), 
+                    global_msg.points.end());
+  
+  msg.lines = local_msg.lines;
+  msg.header.num_local_lines = local_msg.lines.size();
+  msg.lines.insert(msg.lines.end(), 
+                   global_msg.lines.begin(), 
+                   global_msg.lines.end());
+
+  msg.arcs = local_msg.arcs;
+  msg.header.num_local_arcs = local_msg.arcs.size();
+  msg.arcs.insert(msg.arcs.end(), 
+                  global_msg.arcs.begin(), 
+                  global_msg.arcs.end());
+
   msg.header.num_particles = msg.particles.size();
   msg.header.num_path_options = msg.path_options.size();
   msg.header.num_points = msg.points.size();
@@ -305,14 +322,10 @@ void RobotWebSocket::SendDataSlot() {
   if (client_ == nullptr) return;
   data_mutex_.lock();
   const auto data =
-      DataMessage::FromRosMessages(laser_scan_, global_vis_);
+      DataMessage::FromRosMessages(laser_scan_, local_vis_, global_vis_);
   const auto buffer = data.ToByteArray();
   CHECK_EQ(data.header.GetByteLength(), buffer.size());
-  if (false) {
-    client_->sendBinaryMessage(buffer);
-  }
-  client_->sendBinaryMessage(
-      DataMessage::FromRosMessages(laser_scan_, local_vis_).ToByteArray());
+  client_->sendBinaryMessage(buffer);
   data_mutex_.unlock();
 }
 

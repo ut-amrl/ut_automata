@@ -106,6 +106,9 @@
           num_lines: 0,
           num_arcs: 0,
           num_laser_rays: 0,
+          num_local_points: 0,
+          num_local_lines: 0,
+          num_local_arcs: 0,
           laser_min_angle: 0,
           laser_max_angle: 0
         };
@@ -158,6 +161,9 @@
         this.header.num_lines = this.readUint32();
         this.header.num_arcs = this.readUint32();
         this.header.num_laser_rays = this.readUint32();
+        this.header.num_local_points = this.readUint32();
+        this.header.num_local_lines = this.readUint32();
+        this.header.num_local_arcs = this.readUint32();
         this.header.laser_min_angle = this.readFloat32();
         this.header.laser_max_angle = this.readFloat32();
         return this.header;
@@ -697,8 +703,13 @@
       ctx.strokeStyle = color;
       const p = worldToCanvas({ x: x, y: y });
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r * scale, a0, a1);
+      ctx.arc(p.x, p.y, r * scale, a0, a1, true);
       ctx.stroke();
+    }
+
+    function angleMod(angle) {
+      angle -= 2 * Math.PI * Math.round(angle / (2 * Math.PI));
+      return angle;
     }
 
     function drawPathOptions() {
@@ -714,21 +725,22 @@
           x: 0,
           y: r
         };
-        let a1 = (r > 0) ?
-          (Math.PI / 2) :
-          (-Math.PI / 2 - o.distance * o.curvature);
         let a0 = (r > 0) ?
-          (a1 - o.distance * o.curvature) :
-          (-Math.PI / 2);
-        if (false && robotPose) {
+          (-Math.PI / 2) :
+          (Math.PI / 2 + o.distance * o.curvature);
+        let a1 = (r > 0) ?
+          (-Math.PI / 2 + o.distance * o.curvature) :
+          (Math.PI / 2);
+        if (robotPose) {
           center = {
-            x: -Math.sin(robotPose.theta) * r,
-            y: Math.cos(robotPose.theta) * r
+            x: robotPose.x - r * Math.sin(robotPose.theta),
+            y: robotPose.y + r * Math.cos(robotPose.theta)
           };
-          a0 += robotPose.theta;
-          a1 += robotPose.theta;
+          a0 = angleMod(a0 + robotPose.theta);
+          a1 = angleMod(a1 + robotPose.theta);
         }
-        drawArc("#c0c0c0", center.x, center.y, Math.abs(r), a0, a1);
+        // console.log(`${a0}, ${a1}`);
+        drawArc("#c0c0c0", center.x, center.y, Math.abs(r), -a0, -a1);
       });
     }
 

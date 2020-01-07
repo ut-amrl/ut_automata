@@ -43,17 +43,20 @@ class QWebSocket;
 
 struct MessageHeader {
   MessageHeader() : nonce(42) {}
-  uint32_t nonce;
-  uint32_t num_particles;
-  uint32_t num_path_options;
-  uint32_t num_points;
-  uint32_t num_lines;
-  uint32_t num_arcs;
-  uint32_t num_laser_rays;
-  float laser_min_angle;
-  float laser_max_angle;
+  uint32_t nonce;                 // 1
+  uint32_t num_particles;         // 2
+  uint32_t num_path_options;      // 3
+  uint32_t num_points;            // 4
+  uint32_t num_lines;             // 5
+  uint32_t num_arcs;              // 6
+  uint32_t num_laser_rays;        // 7
+  uint32_t num_local_points;      // 8
+  uint32_t num_local_lines;       // 9
+  uint32_t num_local_arcs;        // 10
+  float laser_min_angle;          // 11
+  float laser_max_angle;          // 12
   size_t GetByteLength() const {
-    const size_t len = 9 * 4 +
+    const size_t len = 12 * 4 +
         num_particles * 3 * 4 +     // x, y, theta
         num_path_options * 3 * 4 +  // curvature, distance, clearance
         num_points * 3 * 4 +        // x, y, color
@@ -75,7 +78,8 @@ struct DataMessage {
   QByteArray ToByteArray() const;
   static DataMessage FromRosMessages(
       const sensor_msgs::LaserScan& laser_msg,
-      const f1tenth_course::VisualizationMsg& vis_msg);
+      const f1tenth_course::VisualizationMsg& local_msg,
+      const f1tenth_course::VisualizationMsg& global_msg);
 };
 
 class RobotWebSocket : public QObject {
