@@ -519,7 +519,7 @@
       let s1 = scale;
       if (event.deltaY > 0) {
         scale *= 0.95;
-
+//
       } else if (event.deltaY < 0) {
         scale *= 1.05;
       }
@@ -650,15 +650,17 @@
         x: p1.x + h * (-dir.x - perp.x),
         y: p1.y + h * (-dir.y - perp.y)
       };
-      drawLine("#AF0000", p0.x, p0.y, p1.x, p1.y);
-      drawLine("#AF0000", p2.x, p2.y, p1.x, p1.y);
-      drawLine("#AF0000", p3.x, p3.y, p1.x, p1.y);
+      const kPoseColor = 'rgba(200, 0, 0, 0.2)';
+      drawLine(kPoseColor, p0.x, p0.y, p1.x, p1.y);
+      drawLine(kPoseColor, p2.x, p2.y, p1.x, p1.y);
+      drawLine(kPoseColor, p3.x, p3.y, p1.x, p1.y);
     }
 
     function drawParticles() {
       if (particles === undefined) return;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 2;
       particles.forEach(drawPose);
+      ctx.lineWidth = 1;
     }
 
     function draw() {
@@ -712,36 +714,53 @@
       return angle;
     }
 
+    function drawPathOption(color, o) {
+      if (Math.abs(o.curvature) < 1e-4) {
+        // Straight line.
+        let p0 = { x: 0, y: 0 };
+        let p1 = { x: o.distance, y: 0 };
+        if (robotPose !== undefined) {
+          p0 = robotPose;
+          let c = Math.cos(robotPose.theta);
+          let s = Math.sin(robotPose.theta);
+          let d = o.distance;
+          p1 = { x: robotPose.x + d * c, y: robotPose.y + d * s };
+        }
+        drawLine(color, p0.x, p0.y, p1.x, p1.y);
+        return;
+      }
+      let r = 1 / o.curvature;
+      let center = {
+        x: 0,
+        y: r
+      };
+      let a0 = (r > 0) ?
+        (-Math.PI / 2) :
+        (Math.PI / 2 + o.distance * o.curvature);
+      let a1 = (r > 0) ?
+        (-Math.PI / 2 + o.distance * o.curvature) :
+        (Math.PI / 2);
+      if (robotPose) {
+        center = {
+          x: robotPose.x - r * Math.sin(robotPose.theta),
+          y: robotPose.y + r * Math.cos(robotPose.theta)
+        };
+        a0 = angleMod(a0 + robotPose.theta);
+        a1 = angleMod(a1 + robotPose.theta);
+      }
+      // console.log(`${a0}, ${a1}`);
+      drawArc(color, center.x, center.y, Math.abs(r), -a0, -a1);
+    }
+
     function drawPathOptions() {
       if (visMsg === undefined) return;
-      // console.log(visMsg.lines);
       visMsg.path_options.forEach(function (o) {
-        if (Math.abs(o.curvature) < 1e-4) {
-          // Straight line.
-          return;
-        }
-        let r = 1 / o.curvature;
-        let center = {
-          x: 0,
-          y: r
-        };
-        let a0 = (r > 0) ?
-          (-Math.PI / 2) :
-          (Math.PI / 2 + o.distance * o.curvature);
-        let a1 = (r > 0) ?
-          (-Math.PI / 2 + o.distance * o.curvature) :
-          (Math.PI / 2);
-        if (robotPose) {
-          center = {
-            x: robotPose.x - r * Math.sin(robotPose.theta),
-            y: robotPose.y + r * Math.cos(robotPose.theta)
-          };
-          a0 = angleMod(a0 + robotPose.theta);
-          a1 = angleMod(a1 + robotPose.theta);
-        }
-        // console.log(`${a0}, ${a1}`);
-        drawArc("#c0c0c0", center.x, center.y, Math.abs(r), -a0, -a1);
+        drawPathOption("#c0c0c0", o);
       });
+      if (visMsg.path_options.length > 0) {
+        let bestOption = visMsg.path_options[visMsg.path_options.length - 1];
+        drawPathOption("#1000FF", bestOption);
+      }
     }
 
 
