@@ -24,6 +24,9 @@
 
 #include <string>
 #include <vector>
+#include <QBrush>
+#include <QFrame>
+#include <QPainter>
 #include <QWidget>
 
 class QLabel;
@@ -39,6 +42,63 @@ namespace f1tenth_gui {
 class TouchVectorDisplay;
 class AdminPassword;
 class HumanInteraction;
+
+class Led : public QWidget {
+  Q_OBJECT
+  
+ public:
+  Led() {}
+  void SetStatus(bool value) { status_on_ = value; }
+
+ protected:
+  void paintEvent(QPaintEvent *event) override {
+    static const QBrush kGreenBrush = QBrush(QColor(0, 225, 0));
+    static const QBrush kRedBrush = QBrush(QColor(255, 0, 0));
+    QPainter painter;
+    painter.begin(this);
+    if (status_on_) {
+      painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+    } else {
+      painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+    }
+    painter.end();
+  }
+
+ private:
+  bool status_on_;
+  QWidget* led_;
+};
+
+class StatusLed : public QFrame {
+  Q_OBJECT
+  
+ public:
+  explicit StatusLed(QString name);
+  void SetStatus(bool value);
+
+ private:
+  bool status_on_;
+  Led* led_;
+};
+
+class RealStatus : public QFrame {
+  Q_OBJECT
+
+ public:
+  explicit RealStatus(bool horizontal);
+
+  void SetValue(float v) { 
+    value_ = v; 
+    update(); 
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override;
+
+private:
+  bool horizontal_;
+  float value_;
+};
 
 class MainWindow : public QWidget {
   Q_OBJECT

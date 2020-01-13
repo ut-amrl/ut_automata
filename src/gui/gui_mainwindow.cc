@@ -33,9 +33,12 @@
 #include <string>
 #include <vector>
 
+#include <QApplication>
+#include <QDesktopWidget>
 #include <QPushButton>
 #include <QBoxLayout>
 #include <QLabel>
+#include <QPainter>
 #include <QString>
 #include <QTime>
 #include <QTimer>
@@ -88,6 +91,90 @@ vector<string> GetIPAddresses(bool ignore_lo) {
 
 namespace f1tenth_gui {
 
+StatusLed::StatusLed(QString name) : led_(nullptr) {
+  QFont font("Arial");
+  font.setPointSize(20);
+  QLabel* label = new QLabel(name);
+  label->setFont(font);
+  led_ = new Led();
+  led_->setFixedSize(40, 40);
+  QHBoxLayout* layout = new QHBoxLayout();
+  layout->addWidget(label);
+  layout->addWidget(led_);
+  layout->addSpacing(60);
+  setLayout(layout);
+  setFixedHeight(100);
+  setFixedWidth(400);
+}
+
+void StatusLed::SetStatus(bool value) {
+  led_->SetStatus(value);
+}
+
+RealStatus::RealStatus(bool horizontal) : horizontal_(horizontal), value_(0) {
+  if (horizontal) {
+    setFixedHeight(48);
+  } else {
+    setFixedWidth(48);
+  }
+  setFrameStyle(QFrame::Box | QFrame::Plain);
+  setLineWidth(2);
+  setMidLineWidth(1);
+}
+
+
+void RealStatus::paintEvent(QPaintEvent *event) {
+  static const QBrush kWhiteBrush = QBrush(QColor(255, 255, 255));
+  static const QBrush kGreenBrush = QBrush(QColor(0, 225, 0));
+  static const QBrush kRedBrush = QBrush(QColor(255, 0, 0));
+  QPainter painter;
+  painter.begin(this);
+  painter.fillRect(QRectF(0, 0, width(), height()), kWhiteBrush);
+  static QPen black_pen_(Qt::black);
+  black_pen_.setWidth(4);
+  painter.setPen(black_pen_);
+  if (horizontal_) {
+    if (value_ > 0.0) {
+      painter.fillRect(QRectF(
+          width() / 2.0,
+          0,
+          value_ * 0.5 * width(),
+          height()), 
+          kGreenBrush);
+    } else {
+      painter.fillRect(QRectF(
+          width() / 2.0 + value_ * 0.5 * width(),
+          0,
+          -value_ * 0.5 * width(),
+          height()),
+          kRedBrush);
+    }
+    painter.drawLine(width() / 2, 0, width() / 2, height());
+  } else {
+    if (value_ > 0.0) {
+      painter.fillRect(QRectF(
+          0, 
+          height() / 2 - value_ * 0.5 * height(),
+          width(), 
+          value_ * 0.5 * height()),
+          kGreenBrush);
+    } else {
+      painter.fillRect(QRectF(
+          0,
+          height() / 2, 
+          width(),
+          -value_ * 0.5 * height()), 
+          kRedBrush);
+    }
+    painter.drawLine(0, height() / 2, width(), height() / 2);
+  }
+  painter.drawLine(0, 0, 0, height());
+  painter.drawLine(width(), height(), 0, height());
+  painter.drawLine(width(), height(), width(), 0);
+  painter.drawLine(0, 0, width(), 0);
+  painter.end();
+}
+
 MainWindow::MainWindow(QWidget* parent) :
     ipaddr_label_(nullptr),
     tab_widget_(nullptr),
@@ -95,12 +182,14 @@ MainWindow::MainWindow(QWidget* parent) :
     main_layout_(nullptr),
     display_(nullptr),
     status_label_(nullptr) {
+  const QRect desktop_size = QApplication::desktop()->screenGeometry();
   this->setWindowTitle("F1/10 GUI");
   robot_label_ = new QLabel("F1/10");
   QFont font("Arial");
   font.setPointSize(60);
   robot_label_->setFont(font);
   robot_label_->setAlignment(Qt::AlignCenter);
+  robot_label_->setFixedHeight(0.8 * desktop_size.height());
 
   QPushButton* close_button = new QPushButton("Close");
   close_button->setFocusPolicy(Qt::NoFocus);
@@ -146,10 +235,38 @@ MainWindow::MainWindow(QWidget* parent) :
     vbox->addWidget(start_car);
     vbox->addWidget(stop_all);
     ros_group->setLayout(vbox);
-    display_ = new VectorDisplay();
-    tab_widget_->addTab(robot_label_, "Main");
+    // display_ = new vector_display::VectorDisplay();
+    // Grid layout
+    QWidget* main_widget = new QWidget();
+    auto ros = new StatusLed("ROS");
+    auto drive = new StatusLed("Drive");
+    auto lidar = new StatusLed("LIDAR");
+    auto camera = new StatusLed("Camera");
+    ros->SetStatus(true);
+    drive->SetStatus(true);
+    lidar->SetStatus(true);
+    camera->SetStatus(true);
+    RealStatus* throttle = new RealStatus(false);
+    // throttle->setFixedHeight(0.6 * desktop_size.height());
+    RealStatus* steering = new RealStatus(true);
+    throttle->SetValue(0.95);
+    steering->SetValue(-0.8);
+
+    QGridLayout* main_layout = new QGridLayout();
+    // main_layout->setSpacing(0.2 * desktop_size.height());
+    const float margin = 0.05 * desktop_size.height();
+    main_layout->setContentsMargins(margin, margin, margin, margin);
+    main_layout->addWidget(robot_label_, 0, 0, 2, 2);
+    main_layout->addWidget(ros, 0, 1, 1, 1);
+    main_layout->addWidget(drive, 0, 2, 1, 1);
+    main_layout->addWidget(lidar, 1, 1, 1, 1);
+    main_layout->addWidget(camera, 1, 2, 1, 1);
+    main_layout->addWidget(throttle, 0, 3, 3, 1);
+    main_layout->addWidget(steering, 3, 1, 1, 3);
+    main_widget->setLayout(main_layout);
+
+    tab_widget_->addTab(main_widget, "Main");
     tab_widget_->addTab(ros_group, tr("Startup / Shutdown"));
-    tab_widget_->addTab(display_, tr("Visualizations"));
   }
 
   main_layout_ = new QVBoxLayout(this);
@@ -169,59 +286,58 @@ MainWindow::MainWindow(QWidget* parent) :
           SLOT(UpdateStatusSlot(int, float)));
 }
 
-void Execute(const string& cmd) {
-  if (false) {
-    const string path = ros::package::getPath("f1tenth_course");
-
-    // const string exec_cmd = "/bin/echo $ROS_MASTER_URI && /bin/pwd";
-    const string exec_cmd =
-        "-mdS roscore " + path + "/scripts/start_ros.sh";
-    const int pid = fork();
-    if (pid == 0) {
-      printf("%s\n", exec_cmd.c_str());
-      if (chdir(path.c_str()) == -1) {
-        perror("Error changing directory");
-        exit(1);
-      }
-      if (execl("/usr/bin/screen", "-mdS top top", nullptr) == -1) {
-        perror("Error executing command");
-        exit(1);
-      }
-      // Should never get here, since exec never returns.
-      exit(0);
+std::vector<std::string> Split(const std::string& s) {
+  std::vector<std::string> words;
+  std::string str;
+  for (const char c : s) {
+    if (c == ' ' && !str.empty()) {
+      words.push_back(str);
+      str = "";
     } else {
-      printf("Launched process with PID %d\n", pid);
+      str += c;
     }
-
-    return;
   }
-  if (system(cmd.c_str()) != 0) {
-    printf("Error running '%s'\n", cmd.c_str());
-  } else {
-    printf("Ran '%s'\n", cmd.c_str());
+  if (!str.empty()) words.push_back(str);
+  return words;
+}
+
+void Exec(const string& cmd) {
+  auto params = Split(cmd);
+  if (params.empty()) return;
+  vector<const char*> param_ptrs;
+  for (string& s : params) {
+    param_ptrs.push_back(s.c_str());
+    printf("'%s',", s.c_str());
+  }
+  param_ptrs.push_back(NULL);
+  printf("\n");
+  const int pid = fork();
+  if (pid == 0) {
+    if (execv(param_ptrs[0], 
+              const_cast<char* const*>( param_ptrs.data())) == -1) {
+      perror("Error executing command");
+      exit(1);
+    }
+    fprintf(stderr, "ERROR: Reached unreachable statement\n");
   }
 }
 
 void MainWindow::StartCar() {
   const string path = ros::package::getPath("f1tenth_course");
-  Execute("screen -mdS start_car " +
-          path +
-          "/start_car.sh");
+  Exec("/usr/bin/screen -mdS start_car " + path + "/start_car.sh");
 }
 
 void MainWindow::StartRos() {
   const string path = ros::package::getPath("f1tenth_course");
-  Execute("screen -mdS roscore " +
-          path +
-          "/scripts/start_ros.sh");
+  Exec("/usr/bin/screen -mdS roscore roscore");
 }
 
 void MainWindow::StopRos() {
-  Execute("killall roscore");
+  Exec("/usr/bin/killall roscore");
 }
 
 void MainWindow::StopAll() {
-  Execute("rosnode kill -a");
+  Exec("/opt/ros/melodic/bin/rosnode kill -a");
 }
 
 void MainWindow::closeWindow() {
