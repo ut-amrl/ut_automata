@@ -250,9 +250,6 @@ MainWindow::MainWindow(QWidget* parent) :
     drive_led_ = new StatusLed("Drive");
     lidar_led_ = new StatusLed("LIDAR");
     camera_led_ = new StatusLed("Camera");
-    drive_led_->SetStatus(true);
-    lidar_led_->SetStatus(true);
-    camera_led_->SetStatus(true);
     throttle_status_ = new RealStatus(false);
     steering_status_ = new RealStatus(true);
 
@@ -394,7 +391,10 @@ void MainWindow::UpdateStatusSlot(int mode,
   lidar_led_->SetStatus(lidar_okay);
   camera_led_->SetStatus(camera_okay);
   throttle_status_->SetValue(throttle);
-  steering_status_->SetValue(steering);
+  steering_status_->SetValue(-steering);
+  // drive_led_->update();
+  // lidar_led_->update();
+  // camera_led_->update();
 }
 
 
