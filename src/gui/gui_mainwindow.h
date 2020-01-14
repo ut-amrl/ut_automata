@@ -48,8 +48,10 @@ class Led : public QWidget {
   
  public:
   Led() : status_on_(false) {}
-  void SetStatus(bool value) { 
-    status_on_ = value; 
+  void SetStatus(bool value) {
+    if (status_on_ == value) return;
+    status_on_ = value;
+    update();
   }
 
  protected:
