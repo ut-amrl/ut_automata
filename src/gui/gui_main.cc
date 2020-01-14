@@ -31,10 +31,12 @@
 #include "ros/ros.h"
 #include "sensor_msgs/LaserScan.h"
 
+#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
 #include "f1tenth_course/CarStatusMsg.h"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
+using f1tenth_course::AckermannCurvatureDriveMsg;
 using f1tenth_course::CarStatusMsg;
 
 namespace {
@@ -45,6 +47,8 @@ bool camera_okay_ = false;
 bool vesc_okay_ = false;
 float battery_voltage_ = 0.0;
 int drive_mode_ = 0;
+float throttle_ = 0;
+float steering_ = 0;
 }  // namespace
 
 void StatusCallback(const CarStatusMsg& msg) {
@@ -58,6 +62,11 @@ void LidarCallback(const sensor_msgs::LaserScan& msg) {
   lidar_okay_  = true;
 }
 
+void DriveCallback(const AckermannCurvatureDriveMsg& msg) {
+  throttle_ = msg.velocity;
+  steering_ = msg.curvature;
+}
+
 void* RosThread(void* arg) {
   pthread_detach(pthread_self());
 
@@ -66,16 +75,21 @@ void* RosThread(void* arg) {
       n.subscribe("car_status", 1, &StatusCallback);
   ros::Subscriber lidar_sub = 
       n.subscribe("scan", 1, &LidarCallback);
+  ros::Subscriber drive_sub = 
+      n.subscribe("ackermann_curvature_drive", 1, &DriveCallback);
 
   RateLoop loop(5.0);
   while(ros::ok() && run_) {
+    throttle_ = steering_ = 0;
     vesc_okay_ = lidar_okay_ = camera_okay_ = false;
     ros::spinOnce();
     main_window_->UpdateStatus(drive_mode_, 
                                battery_voltage_,
                                vesc_okay_,
                                lidar_okay_,
-                               camera_okay_);
+                               camera_okay_,
+                               throttle_,
+                               steering_);
     loop.Sleep();
   }
 

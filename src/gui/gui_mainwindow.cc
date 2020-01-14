@@ -63,6 +63,8 @@ f1tenth_gui::StatusLed* ros_led_ = nullptr;
 f1tenth_gui::StatusLed* drive_led_ = nullptr;
 f1tenth_gui::StatusLed* camera_led_ = nullptr;
 f1tenth_gui::StatusLed* lidar_led_ = nullptr;
+f1tenth_gui::RealStatus* throttle_status_ = nullptr;
+f1tenth_gui::RealStatus* steering_status_ = nullptr;
 
 vector<string> GetIPAddresses(bool ignore_lo) {
   static const bool kGetIPV6 = false;
@@ -241,7 +243,7 @@ MainWindow::MainWindow(QWidget* parent) :
     vbox->addWidget(start_car);
     vbox->addWidget(stop_all);
     ros_group->setLayout(vbox);
-    // display_ = new vector_display::VectorDisplay();
+    
     // Grid layout
     QWidget* main_widget = new QWidget();
     ros_led_ = new StatusLed("ROS");
@@ -251,21 +253,17 @@ MainWindow::MainWindow(QWidget* parent) :
     drive_led_->SetStatus(true);
     lidar_led_->SetStatus(true);
     camera_led_->SetStatus(true);
-    RealStatus* throttle = new RealStatus(false);
-    // throttle->setFixedHeight(0.6 * desktop_size.height());
-    RealStatus* steering = new RealStatus(true);
-    throttle->SetValue(0.95);
-    steering->SetValue(-0.8);
+    throttle_status_ = new RealStatus(false);
+    steering_status_ = new RealStatus(true);
 
     QGridLayout* main_layout = new QGridLayout();
-    // main_layout->setSpacing(0.2 * desktop_size.height());
     main_layout->addWidget(robot_label_, 0, 0, 4, 4);
     main_layout->addWidget(ros_led_, 0, 5, 1, 1);
     main_layout->addWidget(drive_led_, 0, 6, 1, 1);
     main_layout->addWidget(lidar_led_, 1, 5, 1, 1);
     main_layout->addWidget(camera_led_, 1, 6, 1, 1);
-    main_layout->addWidget(throttle, 0, 7, 3, 1);
-    main_layout->addWidget(steering, 3, 5, 1, 3);
+    main_layout->addWidget(throttle_status_, 0, 7, 3, 1);
+    main_layout->addWidget(steering_status_, 3, 5, 1, 3);
     main_widget->setLayout(main_layout);
 
     tab_widget_->addTab(main_widget, "Main");
@@ -285,8 +283,8 @@ MainWindow::MainWindow(QWidget* parent) :
   UpdateIP();
 
   connect(this,
-          SIGNAL(UpdateStatusSignal(int, float, bool, bool, bool)),
-          SLOT(UpdateStatusSlot(int, float, bool, bool, bool)));
+          SIGNAL(UpdateStatusSignal(int, float, bool, bool, bool, float, float)),
+          SLOT(UpdateStatusSlot(int, float, bool, bool, bool, float, float)));
 }
 
 std::vector<std::string> Split(const std::string& s) {
@@ -361,15 +359,20 @@ void MainWindow::UpdateStatus(int mode,
                               float battery,
                               bool drive_okay,
                               bool lidar_okay,
-                              bool camera_okay) {
-  UpdateStatusSignal(mode, battery, drive_okay, lidar_okay, camera_okay);
+                              bool camera_okay,
+                              float throttle,
+                              float steering) {
+  UpdateStatusSignal(
+      mode, battery, drive_okay, lidar_okay, camera_okay, throttle, steering);
 }
 
 void MainWindow::UpdateStatusSlot(int mode,
                                   float battery,
-                                  bool vesc_okay_,
-                                  bool lidar_okay_,
-                                  bool camera_okay_) {
+                                  bool vesc_okay,
+                                  bool lidar_okay,
+                                  bool camera_okay,
+                                  float throttle,
+                                  float steering) {
   QString status("Status: ");
   switch (mode) {
     case 0: {
@@ -387,9 +390,11 @@ void MainWindow::UpdateStatusSlot(int mode,
   }
   status += "Battery: " + QString::number(battery, 'g', 4) + "V";
   status_label_->setText(status);
-  drive_led_->SetStatus(vesc_okay_);
-  lidar_led_->SetStatus(lidar_okay_);
-  camera_led_->SetStatus(camera_okay_);
+  drive_led_->SetStatus(vesc_okay);
+  lidar_led_->SetStatus(lidar_okay);
+  camera_led_->SetStatus(camera_okay);
+  throttle_status_->SetValue(throttle);
+  steering_status_->SetValue(steering);
 }
 
 

@@ -112,7 +112,9 @@ public:
                     float battery,
                     bool drive_okay,
                     bool lidar_okay,
-                    bool camera_okay);
+                    bool camera_okay,
+                    float throttle,
+                    float steering);
 
 public slots:
   void closeWindow();
@@ -125,7 +127,9 @@ public slots:
                         float battery,
                         bool drive_okay,
                         bool lidar_okay,
-                        bool camera_okay);
+                        bool camera_okay,
+                        float throttle,
+                        float steering);
 
 signals:
   void UpdateQuestion(std::string question,
@@ -135,7 +139,9 @@ signals:
                           float battery,
                           bool drive_okay,
                           bool lidar_okay,
-                          bool camera_okay);
+                          bool camera_okay,
+                          float throttle,
+                          float steering);
 
 private:
 
