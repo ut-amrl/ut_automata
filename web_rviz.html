@@ -519,7 +519,7 @@
       let s1 = scale;
       if (event.deltaY > 0) {
         scale *= 0.95;
-//
+        //
       } else if (event.deltaY < 0) {
         scale *= 1.05;
       }
@@ -714,19 +714,32 @@
       return angle;
     }
 
-    function drawPathOption(color, o) {
+    function drawPathOption(color, o, drawClearance) {
       if (Math.abs(o.curvature) < 1e-4) {
         // Straight line.
         let p0 = { x: 0, y: 0 };
         let p1 = { x: o.distance, y: 0 };
+        let a = 0;
         if (robotPose !== undefined) {
           p0 = robotPose;
+          a = robotPose.theta;
           let c = Math.cos(robotPose.theta);
           let s = Math.sin(robotPose.theta);
           let d = o.distance;
           p1 = { x: robotPose.x + d * c, y: robotPose.y + d * s };
         }
         drawLine(color, p0.x, p0.y, p1.x, p1.y);
+        if (drawClearance) {
+          let c = Math.cos(a);
+          let s = Math.sin(a);
+          let d = o.clearance;
+          drawLine(color,
+            p0.x - s * d, p0.y + c * d,
+            p1.x - s * d, p1.y + c * d);
+          drawLine(color,
+            p0.x + s * d, p0.y - c * d,
+            p1.x + s * d, p1.y - c * d);
+        }
         return;
       }
       let r = 1 / o.curvature;
@@ -750,16 +763,22 @@
       }
       // console.log(`${a0}, ${a1}`);
       drawArc(color, center.x, center.y, Math.abs(r), -a0, -a1);
+      if (drawClearance) {
+        if (Math.abs(r) - o.clearance > 0) {
+          drawArc(color, center.x, center.y, Math.abs(r) - o.clearance, -a0, -a1);
+        }
+        drawArc(color, center.x, center.y, Math.abs(r) + o.clearance, -a0, -a1);
+      }
     }
 
     function drawPathOptions() {
       if (visMsg === undefined) return;
       visMsg.path_options.forEach(function (o) {
-        drawPathOption("#c0c0c0", o);
+        drawPathOption("#c0c0c0", o, false);
       });
       if (visMsg.path_options.length > 0) {
         let bestOption = visMsg.path_options[visMsg.path_options.length - 1];
-        drawPathOption("#1000FF", bestOption);
+        drawPathOption("#1000FF", bestOption, true);
       }
     }
 
