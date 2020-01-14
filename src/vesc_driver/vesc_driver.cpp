@@ -305,7 +305,10 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
 
   // Calcuate linear velocity
   float lin_vel = (rpm - speed_to_erpm_offset_) / speed_to_erpm_gain_;
-
+  // Clamp velocity to zero for minuscule values - a VESC drift issue.
+  if (fabs(lin_vel) < 0.01) {
+    lin_vel = 0.0;
+  }
   // Calculate angular velocity
   float turn_radius = 0;
   float rot_vel = 0;

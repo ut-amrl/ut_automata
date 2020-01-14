@@ -10,8 +10,8 @@ speed_to_erpm_offset = 160.0;
 steering_angle_to_servo_gain = -0.9015;
 steering_angle_to_servo_offset = 0.5054; -- 0.5304
 erpm_speed_limit = 14000; -- 3250
-servo_min = 0.15;
-servo_max = 0.85;
+servo_min = 0.05;
+servo_max = 0.95;
 
 -- car wheelbase is about 25cm
 wheelbase = 0.324;
