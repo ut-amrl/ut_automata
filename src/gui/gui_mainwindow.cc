@@ -46,6 +46,7 @@
 #include <QGroupBox>
 #include <QTabWidget>
 
+#include <ros/master.h>
 #include <ros/package.h>
 
 #include "std_msgs/String.h"
@@ -55,6 +56,10 @@
 using std::string;
 using std::vector;
 using vector_display::VectorDisplay;
+
+namespace {
+
+f1tenth_gui::StatusLed* ros_led_ = nullptr;
 
 vector<string> GetIPAddresses(bool ignore_lo) {
   static const bool kGetIPV6 = false;
@@ -88,6 +93,7 @@ vector<string> GetIPAddresses(bool ignore_lo) {
   return ips;
 }
 
+}  // namespace
 
 namespace f1tenth_gui {
 
@@ -233,11 +239,10 @@ MainWindow::MainWindow(QWidget* parent) :
     // display_ = new vector_display::VectorDisplay();
     // Grid layout
     QWidget* main_widget = new QWidget();
-    auto ros = new StatusLed("ROS");
+    ros_led_ = new StatusLed("ROS");
     auto drive = new StatusLed("Drive");
     auto lidar = new StatusLed("LIDAR");
     auto camera = new StatusLed("Camera");
-    ros->SetStatus(true);
     drive->SetStatus(true);
     lidar->SetStatus(true);
     camera->SetStatus(true);
@@ -250,7 +255,7 @@ MainWindow::MainWindow(QWidget* parent) :
     QGridLayout* main_layout = new QGridLayout();
     // main_layout->setSpacing(0.2 * desktop_size.height());
     main_layout->addWidget(robot_label_, 0, 0, 4, 4);
-    main_layout->addWidget(ros, 0, 5, 1, 1);
+    main_layout->addWidget(ros_led_, 0, 5, 1, 1);
     main_layout->addWidget(drive, 0, 6, 1, 1);
     main_layout->addWidget(lidar, 1, 5, 1, 1);
     main_layout->addWidget(camera, 1, 6, 1, 1);
@@ -317,7 +322,7 @@ void Exec(const string& cmd) {
 
 void MainWindow::StartCar() {
   const string path = ros::package::getPath("f1tenth_course");
-  Exec("/usr/bin/screen -mdS start_car " + path + "/start_car.sh");
+  Exec(path + "/start_car.sh");
 }
 
 void MainWindow::StartRos() {
@@ -344,7 +349,7 @@ void MainWindow::UpdateIP() {
     s = s + ip + "\n";
   }
   ipaddr_label_->setText(QString::fromUtf8(s.c_str()));
-  // ipaddr_label_->setText(QTime::currentTime().toString("hh:mm AP"));
+  ros_led_->SetStatus(ros::master::check());
 }
 
 void MainWindow::UpdateStatus(int mode, float battery) {

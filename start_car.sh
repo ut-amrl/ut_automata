@@ -18,6 +18,8 @@ fi
 # Print the commands being executed, and exit if any command fails.
 set -x -e
 
+roscd f1tenth_course
+
 # Run VESC driver 
 ./bin/vesc_driver > /dev/null &
 
