@@ -60,6 +60,9 @@ using vector_display::VectorDisplay;
 namespace {
 
 f1tenth_gui::StatusLed* ros_led_ = nullptr;
+f1tenth_gui::StatusLed* drive_led_ = nullptr;
+f1tenth_gui::StatusLed* camera_led_ = nullptr;
+f1tenth_gui::StatusLed* lidar_led_ = nullptr;
 
 vector<string> GetIPAddresses(bool ignore_lo) {
   static const bool kGetIPV6 = false;
@@ -209,6 +212,8 @@ MainWindow::MainWindow(QWidget* parent) :
   top_bar->addWidget(close_button);
 
   tab_widget_ = new QTabWidget();
+  font.setPointSize(20);
+  tab_widget_->setFont(font);
   {
     QWidget* ros_group = new QWidget();
     QSizePolicy expanding_policy;
@@ -240,12 +245,12 @@ MainWindow::MainWindow(QWidget* parent) :
     // Grid layout
     QWidget* main_widget = new QWidget();
     ros_led_ = new StatusLed("ROS");
-    auto drive = new StatusLed("Drive");
-    auto lidar = new StatusLed("LIDAR");
-    auto camera = new StatusLed("Camera");
-    drive->SetStatus(true);
-    lidar->SetStatus(true);
-    camera->SetStatus(true);
+    drive_led_ = new StatusLed("Drive");
+    lidar_led_ = new StatusLed("LIDAR");
+    camera_led_ = new StatusLed("Camera");
+    drive_led_->SetStatus(true);
+    lidar_led_->SetStatus(true);
+    camera_led_->SetStatus(true);
     RealStatus* throttle = new RealStatus(false);
     // throttle->setFixedHeight(0.6 * desktop_size.height());
     RealStatus* steering = new RealStatus(true);
@@ -256,9 +261,9 @@ MainWindow::MainWindow(QWidget* parent) :
     // main_layout->setSpacing(0.2 * desktop_size.height());
     main_layout->addWidget(robot_label_, 0, 0, 4, 4);
     main_layout->addWidget(ros_led_, 0, 5, 1, 1);
-    main_layout->addWidget(drive, 0, 6, 1, 1);
-    main_layout->addWidget(lidar, 1, 5, 1, 1);
-    main_layout->addWidget(camera, 1, 6, 1, 1);
+    main_layout->addWidget(drive_led_, 0, 6, 1, 1);
+    main_layout->addWidget(lidar_led_, 1, 5, 1, 1);
+    main_layout->addWidget(camera_led_, 1, 6, 1, 1);
     main_layout->addWidget(throttle, 0, 7, 3, 1);
     main_layout->addWidget(steering, 3, 5, 1, 3);
     main_widget->setLayout(main_layout);
@@ -280,8 +285,8 @@ MainWindow::MainWindow(QWidget* parent) :
   UpdateIP();
 
   connect(this,
-          SIGNAL(UpdateStatusSignal(int, float)),
-          SLOT(UpdateStatusSlot(int, float)));
+          SIGNAL(UpdateStatusSignal(int, float, bool, bool, bool)),
+          SLOT(UpdateStatusSlot(int, float, bool, bool, bool)));
 }
 
 std::vector<std::string> Split(const std::string& s) {
@@ -352,11 +357,19 @@ void MainWindow::UpdateIP() {
   ros_led_->SetStatus(ros::master::check());
 }
 
-void MainWindow::UpdateStatus(int mode, float battery) {
-  UpdateStatusSignal(mode, battery);
+void MainWindow::UpdateStatus(int mode, 
+                              float battery,
+                              bool drive_okay,
+                              bool lidar_okay,
+                              bool camera_okay) {
+  UpdateStatusSignal(mode, battery, drive_okay, lidar_okay, camera_okay);
 }
 
-void MainWindow::UpdateStatusSlot(int mode, float battery) {
+void MainWindow::UpdateStatusSlot(int mode,
+                                  float battery,
+                                  bool vesc_okay_,
+                                  bool lidar_okay_,
+                                  bool camera_okay_) {
   QString status("Status: ");
   switch (mode) {
     case 0: {
@@ -374,6 +387,9 @@ void MainWindow::UpdateStatusSlot(int mode, float battery) {
   }
   status += "Battery: " + QString::number(battery, 'g', 4) + "V";
   status_label_->setText(status);
+  drive_led_->SetStatus(vesc_okay_);
+  lidar_led_->SetStatus(lidar_okay_);
+  camera_led_->SetStatus(camera_okay_);
 }
 
 

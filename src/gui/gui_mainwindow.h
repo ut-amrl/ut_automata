@@ -48,7 +48,10 @@ class Led : public QWidget {
   
  public:
   Led() {}
-  void SetStatus(bool value) { status_on_ = value; }
+  void SetStatus(bool value) { 
+    status_on_ = value; 
+    update();
+  }
 
  protected:
   void paintEvent(QPaintEvent *event) override {
@@ -105,7 +108,11 @@ class MainWindow : public QWidget {
 
 public:
   MainWindow(QWidget *parent = 0);
-  void UpdateStatus(int mode, float battery);
+  void UpdateStatus(int mode, 
+                    float battery,
+                    bool drive_okay,
+                    bool lidar_okay,
+                    bool camera_okay);
 
 public slots:
   void closeWindow();
@@ -114,13 +121,21 @@ public slots:
   void StartCar();
   void StopRos();
   void StopAll();
-  void UpdateStatusSlot(int mode, float battery);
+  void UpdateStatusSlot(int mode, 
+                        float battery,
+                        bool drive_okay,
+                        bool lidar_okay,
+                        bool camera_okay);
 
 signals:
   void UpdateQuestion(std::string question,
                       std::vector<std::string> responses);
   void UpdateSignal();
-  void UpdateStatusSignal(int mode, float battery);
+  void UpdateStatusSignal(int mode, 
+                          float battery,
+                          bool drive_okay,
+                          bool lidar_okay,
+                          bool camera_okay);
 
 private:
 

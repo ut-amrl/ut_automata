@@ -29,6 +29,7 @@
 #include <QMetaType>
 
 #include "ros/ros.h"
+#include "sensor_msgs/LaserScan.h"
 
 #include "f1tenth_course/CarStatusMsg.h"
 #include "gui_mainwindow.h"
@@ -39,11 +40,22 @@ using f1tenth_course::CarStatusMsg;
 namespace {
 f1tenth_gui::MainWindow* main_window_ = nullptr;
 bool run_ = true;
+bool lidar_okay_ = false;
+bool camera_okay_ = false;
+bool vesc_okay_ = false;
+float battery_voltage_ = 0.0;
+int drive_mode_ = 0;
 }  // namespace
 
 void StatusCallback(const CarStatusMsg& msg) {
   if (!run_ || main_window_ == nullptr) return;
-  main_window_->UpdateStatus(msg.status, msg.battery_voltage);
+  drive_mode_ = msg.status;
+  battery_voltage_ = msg.battery_voltage;
+  vesc_okay_ = true;
+}
+
+void LidarCallback(const sensor_msgs::LaserScan& msg) {
+  lidar_okay_  = true;
 }
 
 void* RosThread(void* arg) {
@@ -52,10 +64,18 @@ void* RosThread(void* arg) {
   ros::NodeHandle n;
   ros::Subscriber status_sub =
       n.subscribe("car_status", 1, &StatusCallback);
+  ros::Subscriber lidar_sub = 
+      n.subscribe("scan", 1, &LidarCallback);
 
   RateLoop loop(5.0);
   while(ros::ok() && run_) {
+    vesc_okay_ = lidar_okay_ = camera_okay_ = false;
     ros::spinOnce();
+    main_window_->UpdateStatus(drive_mode_, 
+                               battery_voltage_,
+                               vesc_okay_,
+                               lidar_okay_,
+                               camera_okay_);
     loop.Sleep();
   }
 
