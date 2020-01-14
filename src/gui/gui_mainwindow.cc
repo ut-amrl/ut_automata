@@ -93,18 +93,15 @@ namespace f1tenth_gui {
 
 StatusLed::StatusLed(QString name) : led_(nullptr) {
   QFont font("Arial");
-  font.setPointSize(20);
+  font.setPointSize(15);
   QLabel* label = new QLabel(name);
   label->setFont(font);
   led_ = new Led();
-  led_->setFixedSize(40, 40);
+  led_->setFixedSize(30, 30);
   QHBoxLayout* layout = new QHBoxLayout();
   layout->addWidget(label);
   layout->addWidget(led_);
-  layout->addSpacing(60);
   setLayout(layout);
-  setFixedHeight(100);
-  setFixedWidth(400);
 }
 
 void StatusLed::SetStatus(bool value) {
@@ -182,14 +179,12 @@ MainWindow::MainWindow(QWidget* parent) :
     main_layout_(nullptr),
     display_(nullptr),
     status_label_(nullptr) {
-  const QRect desktop_size = QApplication::desktop()->screenGeometry();
-  this->setWindowTitle("F1/10 GUI");
-  robot_label_ = new QLabel("F1/10");
+  this->setWindowTitle("UT AUTOmataGUI");
+  robot_label_ = new QLabel("UT AUTOmata");
   QFont font("Arial");
-  font.setPointSize(60);
+  font.setPointSize(50);
   robot_label_->setFont(font);
   robot_label_->setAlignment(Qt::AlignCenter);
-  robot_label_->setFixedHeight(0.8 * desktop_size.height());
 
   QPushButton* close_button = new QPushButton("Close");
   close_button->setFocusPolicy(Qt::NoFocus);
@@ -254,15 +249,13 @@ MainWindow::MainWindow(QWidget* parent) :
 
     QGridLayout* main_layout = new QGridLayout();
     // main_layout->setSpacing(0.2 * desktop_size.height());
-    const float margin = 0.05 * desktop_size.height();
-    main_layout->setContentsMargins(margin, margin, margin, margin);
-    main_layout->addWidget(robot_label_, 0, 0, 2, 2);
-    main_layout->addWidget(ros, 0, 1, 1, 1);
-    main_layout->addWidget(drive, 0, 2, 1, 1);
-    main_layout->addWidget(lidar, 1, 1, 1, 1);
-    main_layout->addWidget(camera, 1, 2, 1, 1);
-    main_layout->addWidget(throttle, 0, 3, 3, 1);
-    main_layout->addWidget(steering, 3, 1, 1, 3);
+    main_layout->addWidget(robot_label_, 0, 0, 4, 4);
+    main_layout->addWidget(ros, 0, 5, 1, 1);
+    main_layout->addWidget(drive, 0, 6, 1, 1);
+    main_layout->addWidget(lidar, 1, 5, 1, 1);
+    main_layout->addWidget(camera, 1, 6, 1, 1);
+    main_layout->addWidget(throttle, 0, 7, 3, 1);
+    main_layout->addWidget(steering, 3, 5, 1, 3);
     main_widget->setLayout(main_layout);
 
     tab_widget_->addTab(main_widget, "Main");
