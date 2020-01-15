@@ -804,7 +804,14 @@
     function drawLaserScan() {
       if (!lastLaserScan) return;
       let offset = { x: 0, y: 0, theta: 0 };
-      if (robotPose) offset = robotPose;
+      if (robotPose) {
+        // Note: Assumes the laser is at (0.2, 0) on the robot.
+        offset = {
+          x: robotPose.x + 0.2 * Math.cos(robotPose.theta),
+          y: robotPose.y + 0.2 * Math.sin(robotPose.theta),
+          theta: robotPose.theta
+        };
+      }
       // Update map and draw line being made.
       // ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
       // ctx.lineWidth = 2;
