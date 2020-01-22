@@ -56,7 +56,10 @@ RobotWebSocket::RobotWebSocket(uint16_t port) :
     QObject(nullptr),
     ws_server_(new QWebSocketServer(("Echo Server"),
         QWebSocketServer::NonSecureMode, this)),
-    client_(nullptr) {
+    client_(nullptr),
+    sim_loc_x_(NAN),
+    sim_loc_y_(NAN),
+    sim_loc_r_(NAN) {
   connect(this,
           &RobotWebSocket::SendDataSignal,
           this,
@@ -189,8 +192,14 @@ QByteArray DataMessage::ToByteArray() const {
 DataMessage DataMessage::FromRosMessages(
       const LaserScan& laser_msg,
       const VisualizationMsg& local_msg,
-      const VisualizationMsg& global_msg) {
+      const VisualizationMsg& global_msg,
+      float sim_loc_x,
+      float sim_loc_y,
+      float sim_loc_r) {
   DataMessage msg;
+  msg.header.sim_loc_x = sim_loc_x;
+  msg.header.sim_loc_y = sim_loc_y;
+  msg.header.sim_loc_r = sim_loc_r;
   msg.header.laser_min_angle = laser_msg.angle_min;
   msg.header.laser_max_angle = laser_msg.angle_max;
   msg.header.num_laser_rays = laser_msg.ranges.size();
@@ -321,8 +330,8 @@ void RobotWebSocket::socketDisconnected() {
 void RobotWebSocket::SendDataSlot() {
   if (client_ == nullptr) return;
   data_mutex_.lock();
-  const auto data =
-      DataMessage::FromRosMessages(laser_scan_, local_vis_, global_vis_);
+  const auto data = DataMessage::FromRosMessages(
+      laser_scan_, local_vis_, global_vis_, sim_loc_x_, sim_loc_y_, sim_loc_r_);
   const auto buffer = data.ToByteArray();
   CHECK_EQ(data.header.GetByteLength(), buffer.size());
   client_->sendBinaryMessage(buffer);
@@ -331,11 +340,17 @@ void RobotWebSocket::SendDataSlot() {
 
 void RobotWebSocket::Send(const VisualizationMsg& local_vis,
                           const VisualizationMsg& global_vis,
-                          const LaserScan& laser_scan) {
+                          const LaserScan& laser_scan,
+                          float sim_loc_x,
+                          float sim_loc_y,
+                          float sim_loc_r) {
   data_mutex_.lock();
   local_vis_ = local_vis;
   global_vis_ = global_vis;
   laser_scan_ = laser_scan;
+  sim_loc_x_ = sim_loc_x;
+  sim_loc_y_ = sim_loc_y;
+  sim_loc_r_ = sim_loc_r;
   data_mutex_.unlock();
   SendDataSignal();
 }

@@ -50,6 +50,9 @@ ros::Publisher init_loc_pub_;
 ros::Publisher nav_goal_pub_;
 bool updates_pending_ = false;
 RobotWebSocket *server_ = nullptr;
+float sim_loc_x_ = NAN;
+float sim_loc_y_ = NAN;
+float sim_loc_r_ = NAN;
 }  // namespace
 
 void LaserCallback(const LaserScan &msg) {
@@ -131,7 +134,12 @@ void SendUpdate() {
       MergeMessage(m, &local_msgs);
     }
   }
-  server_->Send(local_msgs, global_msgs, laser_scan_);
+  server_->Send(local_msgs, 
+                global_msgs, 
+                laser_scan_, 
+                sim_loc_x_,
+                sim_loc_y_,
+                sim_loc_r_);
 }
 
 void SetInitialPose(float x, float y, float theta) {
@@ -152,6 +160,12 @@ void SetNavGoal(float x, float y, float theta) {
   nav_goal_pub_.publish(nav_goal_msg_);
 }
 
+void SimulatorPoseCallback(const geometry_msgs::PoseStamped& msg) {
+  sim_loc_x_ = msg.pose.position.x;
+  sim_loc_y_ = msg.pose.position.y;
+  sim_loc_r_ = 2.0 * std::atan2(msg.pose.orientation.z, msg.pose.orientation.w);
+}
+
 void *RosThread(void *arg) {
   pthread_detach(pthread_self());
   CHECK_NOTNULL(server_);
@@ -165,6 +179,8 @@ void *RosThread(void *arg) {
       n.subscribe("/scan", 5, &LaserCallback);
   ros::Subscriber vis_sub =
       n.subscribe("/visualization", 10, &VisualizationCallback);
+  ros::Subscriber simulator_sub = 
+      n.subscribe("/simulator_true_pose", 10, &SimulatorPoseCallback);
   init_loc_pub_ =
       n.advertise<geometry_msgs::PoseWithCovarianceStamped>("/initialpose", 10);
   nav_goal_pub_ =

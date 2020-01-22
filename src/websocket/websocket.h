@@ -55,8 +55,11 @@ struct MessageHeader {
   uint32_t num_local_arcs;        // 10
   float laser_min_angle;          // 11
   float laser_max_angle;          // 12
+  float sim_loc_x;                // 13
+  float sim_loc_y;                // 14
+  float sim_loc_r;                // 15
   size_t GetByteLength() const {
-    const size_t len = 12 * 4 +
+    const size_t len = 15 * 4 +
         num_particles * 3 * 4 +     // x, y, theta
         num_path_options * 3 * 4 +  // curvature, distance, clearance
         num_points * 3 * 4 +        // x, y, color
@@ -79,7 +82,10 @@ struct DataMessage {
   static DataMessage FromRosMessages(
       const sensor_msgs::LaserScan& laser_msg,
       const f1tenth_course::VisualizationMsg& local_msg,
-      const f1tenth_course::VisualizationMsg& global_msg);
+      const f1tenth_course::VisualizationMsg& global_msg,
+      float sim_loc_x,
+      float sim_loc_y,
+      float sim_loc_r);
 };
 
 class RobotWebSocket : public QObject {
@@ -89,7 +95,10 @@ public:
   ~RobotWebSocket();
   void Send(const f1tenth_course::VisualizationMsg& local_vis,
             const f1tenth_course::VisualizationMsg& global_vis,
-            const sensor_msgs::LaserScan& laser_scan);
+            const sensor_msgs::LaserScan& laser_scan,
+            float sim_loc_x,
+            float sim_loc_y,
+            float sim_loc_r);
 
 Q_SIGNALS:
   void closed();
@@ -116,6 +125,9 @@ private:
   f1tenth_course::VisualizationMsg local_vis_;
   f1tenth_course::VisualizationMsg global_vis_;
   sensor_msgs::LaserScan laser_scan_;
+  float sim_loc_x_;
+  float sim_loc_y_;
+  float sim_loc_r_;
 };
 
 #endif //ECHOSERVER_H

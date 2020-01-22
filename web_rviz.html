@@ -110,7 +110,8 @@
           num_local_lines: 0,
           num_local_arcs: 0,
           laser_min_angle: 0,
-          laser_max_angle: 0
+          laser_max_angle: 0,
+          simulator_pose: {x: NaN, y: NaN, theta: NaN}
         };
         this.length = arrayBuffer.byteLength;
         this.remainingBytes = this.length;
@@ -166,6 +167,11 @@
         this.header.num_local_arcs = this.readUint32();
         this.header.laser_min_angle = this.readFloat32();
         this.header.laser_max_angle = this.readFloat32();
+        this.header.simulator_pose = {
+          x: this.readFloat32(),
+          y: this.readFloat32(),
+          theta: this.readFloat32()
+        };
         return this.header;
       }
 
@@ -634,7 +640,7 @@
       });
     }
 
-    function drawPose(p) {
+    function drawPose(p, color) {
       const l = 0.5;
       const h = 0.1;
       const a = p.theta;
@@ -650,7 +656,7 @@
         x: p1.x + h * (-dir.x - perp.x),
         y: p1.y + h * (-dir.y - perp.y)
       };
-      const kPoseColor = 'rgba(200, 0, 0, 0.2)';
+      const kPoseColor = color;
       drawLine(kPoseColor, p0.x, p0.y, p1.x, p1.y);
       drawLine(kPoseColor, p2.x, p2.y, p1.x, p1.y);
       drawLine(kPoseColor, p3.x, p3.y, p1.x, p1.y);
@@ -659,7 +665,7 @@
     function drawParticles() {
       if (particles === undefined) return;
       ctx.lineWidth = 2;
-      particles.forEach(drawPose);
+      particles.forEach(p => drawPose(p, 'rgba(200, 0, 0, 0.2)'));
       ctx.lineWidth = 1;
     }
 
@@ -673,7 +679,7 @@
       drawLaserScan();
       drawGrid();
       drawMap();
-      // TODO: Draw all visualizations
+      if (visMsg) drawPose(visMsg.header.simulator_pose, 'rgb(0, 150, 0)');
       drawPoints();
       drawLines();
       drawPathOptions();
@@ -811,6 +817,15 @@
           y: robotPose.y + 0.2 * Math.sin(robotPose.theta),
           theta: robotPose.theta
         };
+      } else if (isFinite(visMsg.header.simulator_pose.x) &&
+                 isFinite(visMsg.header.simulator_pose.y) &&
+                 isFinite(visMsg.header.simulator_pose.theta)) {
+        let theta = visMsg.header.simulator_pose.theta;
+        offset = {
+          x: visMsg.header.simulator_pose.x + 0.2 * Math.cos(theta),
+          y: visMsg.header.simulator_pose.y + 0.2 * Math.sin(theta),
+          theta: theta
+        };
       }
       // Update map and draw line being made.
       // ctx.strokeStyle = 'rgba(82, 125, 232, 1)';
@@ -819,7 +834,7 @@
         lastLaserScan.ranges.length;
       for (let i = 0; i < lastLaserScan.ranges.length; ++i) {
         const r = lastLaserScan.ranges[i];
-        // if (r >= msg.range_max || r <= msg.range_min) continue;
+        if (r >= 9.9) continue;
         const a = lastLaserScan.angle_min + i * da + offset.theta;
         const x = Math.cos(a) * r + offset.x;
         const y = Math.sin(a) * r + offset.y;
