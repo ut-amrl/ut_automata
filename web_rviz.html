@@ -111,7 +111,7 @@
           num_local_arcs: 0,
           laser_min_angle: 0,
           laser_max_angle: 0,
-          simulator_pose: {x: NaN, y: NaN, theta: NaN}
+          simulator_pose: { x: NaN, y: NaN, theta: NaN }
         };
         this.length = arrayBuffer.byteLength;
         this.remainingBytes = this.length;
@@ -286,6 +286,12 @@
           robotPose: undefined
         }
         message.robotPose = this.computeRobotPose(message.particles);
+        if (message.robotPose === undefined &&
+          isFinite(message.header.simulator_pose.x) &&
+          isFinite(message.header.simulator_pose.y) &&
+          isFinite(message.header.simulator_pose.theta)) {
+          message.robotPose = message.header.simulator_pose;
+        }
         return message;
       }
     };
@@ -676,14 +682,14 @@
       tLastDraw = tNow;
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawLaserScan();
       drawGrid();
       drawMap();
-      if (visMsg) drawPose(visMsg.header.simulator_pose, 'rgb(0, 150, 0)');
+      drawLaserScan();
       drawPoints();
       drawLines();
       drawPathOptions();
       drawParticles();
+      if (visMsg) drawPose(visMsg.header.simulator_pose, 'rgb(0, 150, 0)');
     }
 
     function setColor(c) {
@@ -816,15 +822,6 @@
           x: robotPose.x + 0.2 * Math.cos(robotPose.theta),
           y: robotPose.y + 0.2 * Math.sin(robotPose.theta),
           theta: robotPose.theta
-        };
-      } else if (isFinite(visMsg.header.simulator_pose.x) &&
-                 isFinite(visMsg.header.simulator_pose.y) &&
-                 isFinite(visMsg.header.simulator_pose.theta)) {
-        let theta = visMsg.header.simulator_pose.theta;
-        offset = {
-          x: visMsg.header.simulator_pose.x + 0.2 * Math.cos(theta),
-          y: visMsg.header.simulator_pose.y + 0.2 * Math.sin(theta),
-          theta: theta
         };
       }
       // Update map and draw line being made.
