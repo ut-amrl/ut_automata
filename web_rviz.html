@@ -47,7 +47,7 @@
 
   Car IP Address: <input type="text" id="ipaddr" value="localhost">
   <input type="button" id="connect" onclick="connect()" value="Connect"><br>
-  Status: <label id="status">Unknown</label><br>
+  Status: <label id="status">Disconnected</label><br>
   <input type="button" id="setLocation" onclick="setLocationButton()" value="Set Pose">
   <input type="button" id="setNavGoal" onclick="setNavGoalButton()" value="Set Nav Target">
   Map:
@@ -83,9 +83,13 @@
     var particles = undefined;
     var robot_interface = undefined;
 
-    if (window.localStorage.getItem('ipaddr')) {
-      document.getElementById('ipaddr').value =
-        window.localStorage.getItem('ipaddr');
+    try {
+      if (window.localStorage.getItem('ipaddr')) {
+        document.getElementById('ipaddr').value =
+          window.localStorage.getItem('ipaddr');
+      }
+    } catch (e) {
+      updateStatus('Unable to access localstorage, IP will not be saved');
     }
     canvas.width = window.innerWidth;
     canvas.height = Math.max(600, window.innerHeight - 175);
@@ -579,12 +583,18 @@
       console.log('Robot interface closed.');
       robot_interface = undefined;
       document.getElementById("connect").value = "Connect";
+      updateStatus(`Disconnected`);
     }
 
     function onopen(event) {
       let ipaddr = document.getElementById('ipaddr').value;
-      window.localStorage.setItem('ipaddr', ipaddr)
+      try {
+        window.localStorage.setItem('ipaddr', ipaddr)
+      } catch(e) {
+        console.log('Localstorage denied');
+      }
       document.getElementById("connect").value = "Disconnect";
+      updateStatus(`Connected to ${ipaddr}`);
     }
 
     function connect() {
