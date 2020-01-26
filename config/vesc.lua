@@ -13,7 +13,8 @@ erpm_speed_limit = 14000; -- 3250
 servo_min = 0.05;
 servo_max = 0.95;
 
--- car wheelbase is about 25cm
+-- Taken from the manufacturer: 
+-- https://traxxas.com/products/models/electric/ford-fiesta-st-rally?t=specs
 wheelbase = 0.324;
 
 if (car_name == "car1")
