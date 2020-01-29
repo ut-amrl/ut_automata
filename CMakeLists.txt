@@ -53,7 +53,7 @@ ROSBUILD_GENMSG()
 ADD_SUBDIRECTORY(src/shared)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/shared)
 
-SET(libs roslib roscpp popt glog gflags amrl-shared-lib
+SET(libs roslib roscpp glog gflags amrl-shared-lib
     ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1 boost_system)
 
 # node executable
