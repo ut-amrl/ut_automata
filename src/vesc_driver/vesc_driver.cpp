@@ -189,10 +189,14 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
       if (any_other_button > 0) {
         if(kDebug) printf("Stopped\n");
         drive_mode_ = kStoppedDrive;
+        mux_drive_speed_ = 0;
+        mux_steering_angle_ = 0;
       }
     } else {
       if(kDebug) printf("Stopped\n");
       drive_mode_ = kStoppedDrive;
+      mux_drive_speed_ = 0;
+      mux_steering_angle_ = 0;
     }
   }
   if (drive_mode_ == kJoystickDrive) {
