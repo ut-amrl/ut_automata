@@ -152,20 +152,48 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
   static const float kNormalSpeed = 1.0;
   static const size_t kManualDriveButton = 4;
   static const size_t kAutonomousDriveButton = 5;
+  
+  // kAutonomousDriveEnableButton switches the mode to kAutonomousDrive upon
+  // being pressed and does not need to be held as opposed to 
+  // kAutonomousDriveButton
+  static const size_t kAutonomousDriveEnableButton = 7;
 
   if (msg.buttons.size() < 6) return;
   t_last_joystick_ = ros::WallTime::now().toSec();
-  if (msg.buttons[kManualDriveButton] == 1) {
-    if(kDebug) printf("Joystick\n");
-    drive_mode_ = kJoystickDrive;
-  } else if (msg.buttons[kAutonomousDriveButton] == 1) {
-    if(kDebug) printf("Autonomous\n");
-    drive_mode_ = kAutonomousDrive;
+  
+  if (kUseDeadmanButton_) {
+    if (msg.buttons[kManualDriveButton] == 1) {
+      if(kDebug) printf("Joystick\n");
+      drive_mode_ = kJoystickDrive;
+    } else if (msg.buttons[kAutonomousDriveButton] == 1) {
+      if(kDebug) printf("Autonomous\n");
+      drive_mode_ = kAutonomousDrive;
+    } else {
+      if(kDebug) printf("Stopped\n");
+      drive_mode_ = kStoppedDrive;
+      mux_drive_speed_ = 0;
+      mux_steering_angle_ = 0;
+    }
   } else {
-    if(kDebug) printf("Stopped\n");
-    drive_mode_ = kStoppedDrive;
-    mux_drive_speed_ = 0;
-    mux_steering_angle_ = 0;
+    if (msg.buttons[kAutonomousDriveEnableButton] == 1) {
+      if(kDebug) printf("Enabled Autonomous Drive\n");
+      drive_mode_ = kAutonomousDrive;
+    } else if (msg.buttons[kManualDriveButton] == 1) {
+      if(kDebug) printf("Joystick\n");
+      drive_mode_ = kJoystickDrive;
+    } else if (drive_mode_ == kAutonomousDrive) {
+      int any_other_button = 0;
+      for (size_t i = 0; i < kAutonomousDriveEnableButton; i++) {
+        any_other_button += msg.buttons[i];
+      }
+      if (any_other_button > 0) {
+        if(kDebug) printf("Stopped\n");
+        drive_mode_ = kStoppedDrive;
+      }
+    } else {
+      if(kDebug) printf("Stopped\n");
+      drive_mode_ = kStoppedDrive;
+    }
   }
   if (drive_mode_ == kJoystickDrive) {
     if (msg.axes.size() < 5) return;

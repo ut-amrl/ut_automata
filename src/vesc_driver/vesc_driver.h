@@ -73,6 +73,11 @@ private:
 
   // Create an odometry message
   nav_msgs::Odometry odom_msg_;
+  
+  // If set to false, the the AutonomousDriveEnable button will
+  // be used to switch to autonomous driving mode upon being 
+  // pressed and it does not need to be held.
+  const bool kUseDeadmanButton_ = false;
 
   // Convert curvature commands to steering angle.
   float CalculateSteeringAngle(float lin_vel, float rot_vel);
