@@ -224,7 +224,11 @@
       }
 
       readColor() {
-        return '#' + (this.readUint32()).toString(16);
+        const c = this.readUint32();
+        const r = (c & 0xFF0000) >> 16;
+        const g = (c & 0xFF00) >> 8;
+        const b = c & 0xFF;
+        return `rgb(${r},${g},${b})`;
       }
 
       readPoint2D() {
@@ -596,7 +600,7 @@
       let ipaddr = document.getElementById('ipaddr').value;
       try {
         window.localStorage.setItem('ipaddr', ipaddr)
-      } catch(e) {
+      } catch (e) {
         console.log('Localstorage denied');
       }
       document.getElementById("connect").value = "Disconnect";
@@ -709,9 +713,7 @@
     function drawPoints() {
       if (visMsg === undefined) return;
       visMsg.points.forEach(function (p) {
-        setColor(p.color);
-        const pw = worldToCanvas(p);
-        ctx.fillRect(pw.x, pw.y, 2, 2);
+        drawPoint(p.color, p.point.x, p.point.y);
       });
     }
 
