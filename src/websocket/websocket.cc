@@ -21,10 +21,13 @@
 //========================================================================
 #include "websocket.h"
 
+#include <algorithm>
 #include <iostream>
 #include <vector>
 
 #include "glog/logging.h"
+#include "gflags/gflags.h"
+
 #include <QtWebSockets/qwebsocketserver.h>
 #include <QtWebSockets/qwebsocket.h>
 #include <QtCore/QDebug>
@@ -50,13 +53,14 @@ using f1tenth_course::PathVisualization;
 using sensor_msgs::LaserScan;
 using std::vector;
 
+DEFINE_uint64(max_connections, 3, "Maximum number of websocket connections");
+
 QT_USE_NAMESPACE
 
 RobotWebSocket::RobotWebSocket(uint16_t port) :
     QObject(nullptr),
     ws_server_(new QWebSocketServer(("Echo Server"),
         QWebSocketServer::NonSecureMode, this)),
-    client_(nullptr),
     sim_loc_x_(NAN),
     sim_loc_y_(NAN),
     sim_loc_r_(NAN) {
@@ -76,34 +80,37 @@ RobotWebSocket::RobotWebSocket(uint16_t port) :
 
 RobotWebSocket::~RobotWebSocket() {
   ws_server_->close();
-  if(client_) {
-    delete client_;
-    client_ = nullptr;
+  if(clients_.size() > 0) {
+    for (auto c : clients_) {
+      delete c;
+    }
   }
+  clients_.clear();
 }
+
 
 void RobotWebSocket::onNewConnection() {
   QWebSocket *new_client = ws_server_->nextPendingConnection();
-  if (client_ != nullptr) {
-    // We already have a client.
+  if (clients_.size() >= FLAGS_max_connections) {
+    // We already have the max number of clients
     new_client->sendTextMessage(
         "{ \"error\": \"Too many clients\" }");
     qInfo() << "Ignoring new client" << new_client
-            << ", we already have one:" << client_;
+            << ", too manu existing clients:" << clients_.size();
     delete new_client;
     return;
   }
-  client_ = new_client;
-  qInfo() << "New client: " << client_;
-  connect(client_,
+  clients_.push_back(new_client);
+  qInfo() << "New client: " << new_client;
+  connect(new_client,
           &QWebSocket::textMessageReceived,
           this,
           &RobotWebSocket::processTextMessage);
-  connect(client_,
+  connect(new_client,
           &QWebSocket::binaryMessageReceived,
           this,
           &RobotWebSocket::processBinaryMessage);
-  connect(client_,
+  connect(new_client,
           &QWebSocket::disconnected,
           this,
           &RobotWebSocket::socketDisconnected);
@@ -237,9 +244,10 @@ DataMessage DataMessage::FromRosMessages(
 }
 
 void RobotWebSocket::SendError(const QString& error_val) {
-  CHECK_NOTNULL(client_);
-  client_->sendTextMessage(
-        "{ \"error\": \"" + error_val + "\" }");
+  for (auto c: clients_) {
+    CHECK_NOTNULL(c);
+    c->sendTextMessage("{ \"error\": \"" + error_val + "\" }");
+  }
 }
 
 bool AllNumericalKeysPresent(const QStringList& expected,
@@ -284,8 +292,7 @@ void RobotWebSocket::ProcessCallback(const QJsonObject& json) {
 void RobotWebSocket::processTextMessage(QString message) {
   static const bool kSendTestMessage = false;
   QWebSocket *client = qobject_cast<QWebSocket *>(sender());
-  CHECK_EQ(client, client_);
-  CHECK_NOTNULL(client_);
+  CHECK_NOTNULL(client);
   QJsonDocument doc = QJsonDocument::fromJson(message.toLocal8Bit());
   QJsonObject json = doc.object();
   ProcessCallback(json);
@@ -302,7 +309,7 @@ void RobotWebSocket::processTextMessage(QString message) {
     header.laser_max_angle = 135;
     printf("Test message data size: %lu\n", header.GetByteLength());
     const DataMessage data_msg = GenerateTestData(header);
-    client_->sendBinaryMessage(data_msg.ToByteArray());
+    client->sendBinaryMessage(data_msg.ToByteArray());
   }
 }
 
@@ -316,25 +323,28 @@ void RobotWebSocket::processBinaryMessage(QByteArray message) {
 
 
 void RobotWebSocket::socketDisconnected() {
-  QWebSocket *client = qobject_cast<QWebSocket *>(sender());
-  if (client == client_) {
-    qDebug() << "socketDisconnected:" << client;
+  QWebSocket* client = qobject_cast<QWebSocket *>(sender());
+  auto client_iter = std::find(clients_.begin(), clients_.end(), client);
+  if (client_iter == clients_.end()) {
+    fprintf(stderr, "ERROR: unknown socket disconnected!\n");
     delete client;
-    client_ = nullptr;
-  } else {
-    // Should never happen!
-    CHECK(false);
+    return;
   }
+  qDebug() << "socketDisconnected:" << client;
+  delete client;
+  clients_.erase(client_iter);
 }
 
 void RobotWebSocket::SendDataSlot() {
-  if (client_ == nullptr) return;
+  if (clients_.empty()) return;
   data_mutex_.lock();
   const auto data = DataMessage::FromRosMessages(
       laser_scan_, local_vis_, global_vis_, sim_loc_x_, sim_loc_y_, sim_loc_r_);
   const auto buffer = data.ToByteArray();
   CHECK_EQ(data.header.GetByteLength(), buffer.size());
-  client_->sendBinaryMessage(buffer);
+  for (auto c : clients_) {
+    c->sendBinaryMessage(buffer);
+  }
   data_mutex_.unlock();
 }
 

@@ -119,7 +119,7 @@ private:
 
 private:
   QWebSocketServer* ws_server_;
-  QWebSocket* client_;
+  std::vector<QWebSocket*> clients_;
 
   QMutex data_mutex_;
   f1tenth_course::VisualizationMsg local_vis_;

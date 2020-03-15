@@ -252,8 +252,8 @@ void Simulator::publishOdometry() {
   odometryTwistMsg.twist.twist.angular.x = 0.0;
   odometryTwistMsg.twist.twist.angular.y = 0.0;
   odometryTwistMsg.twist.twist.angular.z = angVel;
-  odometryTwistMsg.twist.twist.linear.x = vel * cos(curAngle);
-  odometryTwistMsg.twist.twist.linear.y = vel * sin(curAngle);
+  odometryTwistMsg.twist.twist.linear.x = vel;
+  odometryTwistMsg.twist.twist.linear.y = 0;
   odometryTwistMsg.twist.twist.linear.z = 0.0;
 
   odometryTwistPublisher.publish(odometryTwistMsg);
