@@ -96,12 +96,13 @@ void RobotWebSocket::onNewConnection() {
     new_client->sendTextMessage(
         "{ \"error\": \"Too many clients\" }");
     qInfo() << "Ignoring new client" << new_client
-            << ", too manu existing clients:" << clients_.size();
+            << ", too many existing clients:" << clients_.size();
     delete new_client;
     return;
   }
   clients_.push_back(new_client);
-  qInfo() << "New client: " << new_client;
+  qInfo() << "New client: " << new_client << ", " 
+          << clients_.size() << "/" << FLAGS_max_connections;
   connect(new_client,
           &QWebSocket::textMessageReceived,
           this,
