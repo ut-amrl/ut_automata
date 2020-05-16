@@ -14,14 +14,14 @@ if(CMAKE_VERSION VERSION_LESS "3.7.0")
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
 endif()
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g -rdynamic")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")
   SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fopenmp -O3 -DNDEBUG")
 ELSEIF(${CMAKE_BUILD_TYPE} MATCHES "Debug")
   MESSAGE(STATUS "Additional Flags for Debug mode")
-  SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -g -rdynamic")
+  SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -g")
   SET(BUILD_SPECIFIC_LIBRARIES "")
 ENDIF()
 

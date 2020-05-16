@@ -38,6 +38,8 @@ using f1tenth_course::VisualizationMsg;
 using sensor_msgs::LaserScan;
 using std::vector;
 
+DECLARE_int32(v);
+
 DEFINE_double(max_age, 2.0, "Maximum age of a message before it gets dropped.");
 
 namespace {
@@ -56,6 +58,9 @@ float sim_loc_r_ = NAN;
 }  // namespace
 
 void LaserCallback(const LaserScan &msg) {
+  if (FLAGS_v > 1) {
+    printf("Laser msg, t=%f\n", msg.header.stamp.toSec());
+  }
   laser_scan_ = msg;
   updates_pending_ = true;
 }
@@ -72,6 +77,9 @@ void VisualizationCallback(const VisualizationMsg &msg) {
       warning_showed_ = true;
     }
     return;
+  }
+  if (FLAGS_v > 1) {
+    printf("Visualization msg, t=%f\n", msg.header.stamp.toSec());
   }
   auto prev_msg =
       std::find_if(vis_msgs_.begin(),
@@ -134,9 +142,9 @@ void SendUpdate() {
       MergeMessage(m, &local_msgs);
     }
   }
-  server_->Send(local_msgs, 
-                global_msgs, 
-                laser_scan_, 
+  server_->Send(local_msgs,
+                global_msgs,
+                laser_scan_,
                 sim_loc_x_,
                 sim_loc_y_,
                 sim_loc_r_);
@@ -179,7 +187,7 @@ void *RosThread(void *arg) {
       n.subscribe("/scan", 5, &LaserCallback);
   ros::Subscriber vis_sub =
       n.subscribe("/visualization", 10, &VisualizationCallback);
-  ros::Subscriber simulator_sub = 
+  ros::Subscriber simulator_sub =
       n.subscribe("/simulator_true_pose", 10, &SimulatorPoseCallback);
   init_loc_pub_ =
       n.advertise<geometry_msgs::PoseWithCovarianceStamped>("/initialpose", 10);
@@ -231,6 +239,7 @@ void InitMessage() {
 }
 
 int main(int argc, char *argv[]) {
+  google::ParseCommandLineFlags(&argc, &argv, false);
   ros::init(argc, argv, "websocket", ros::init_options::NoSigintHandler);
 
   QCoreApplication a(argc, argv);

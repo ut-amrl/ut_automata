@@ -40,8 +40,8 @@ struct Line {
   Vector2T p0;
   Vector2T p1;
   Line() {}
-  Line(const Vector2T& p0,
-       const Vector2T& p1) : p0(p0), p1(p1) {}
+  Line(const Vector2T p0,
+       const Vector2T p1) : p0(p0), p1(p1) {}
   Line(const T& x0, const T& y0, const T& x1, const T& y1) :
       p0(x0, y0), p1(x1, y1) {}
 
