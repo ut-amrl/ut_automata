@@ -26,12 +26,13 @@
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
-#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
+#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "geometry_msgs/Pose2D.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "gflags/gflags.h"
 
 #include "simulator.h"
+#include "amrl_msgs/Localization2DMsg.h"
 #include "config_reader/config_reader.h"
 #include "shared/math/geometry.h"
 #include "shared/math/line2d.h"
@@ -44,9 +45,9 @@ DEFINE_bool(localize, false, "Publish localization");
 
 using Eigen::Rotation2Df;
 using Eigen::Vector2f;
-using f1tenth_course::AckermannCurvatureDriveMsg;
+using amrl_msgs::AckermannCurvatureDriveMsg;
 using geometry::Heading;
-using geometry::line2f;
+using geometry::Line2f;
 using geometry_msgs::PoseWithCovarianceStamped;
 using math_util::AngleMod;
 using math_util::DegToRad;
@@ -122,8 +123,12 @@ void Simulator::init(ros::NodeHandle& n) {
       "/simulator_visualization", 6);
   truePosePublisher = n.advertise<geometry_msgs::PoseStamped>(
       "/simulator_true_pose", 1);
-  localizationPublisher = n.advertise<geometry_msgs::Pose2D>(
-      "/localization", 1);
+  if (FLAGS_localize) {
+    localizationPublisher = n.advertise<amrl_msgs::Localization2DMsg>(
+        "/localization", 1);
+    localization_msg_.header.seq = 0;
+    localization_msg_.header.frame_id = "map";
+  }
   br = new tf::TransformBroadcaster();
 }
 
@@ -233,7 +238,7 @@ color);
 
 void Simulator::drawMap() {
   ros_helpers::ClearMarker(&lineListMarker);
-  for (const line2f& l : map_.lines) {
+  for (const Line2f& l : map_.lines) {
     ros_helpers::DrawEigen2DLine(l.p0, l.p1, &lineListMarker);
   }
 }
@@ -415,10 +420,11 @@ void Simulator::Run() {
   publishTransform();
 
   if (FLAGS_localize) {
-    geometry_msgs::Pose2D localization_msg;
-    localization_msg.x = curLoc.x();
-    localization_msg.y = curLoc.y();
-    localization_msg.theta = curAngle;
-    localizationPublisher.publish(localization_msg);
+    localization_msg_.pose.x = curLoc.x();
+    localization_msg_.pose.y = curLoc.y();
+    localization_msg_.pose.theta = curAngle;
+    localization_msg_.map = map_.file_name;
+    localization_msg_.header.stamp = ros::Time::now();
+    localizationPublisher.publish(localization_msg_);
   }
 }

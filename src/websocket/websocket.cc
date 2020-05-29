@@ -21,7 +21,10 @@
 //========================================================================
 #include "websocket.h"
 
+#include <string.h>
+
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -34,22 +37,20 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
 
-#include "f1tenth_course/Pose2Df.h"
-#include "f1tenth_course/Point2D.h"
-#include "f1tenth_course/ColoredPoint2D.h"
-#include "f1tenth_course/ColoredLine2D.h"
-#include "f1tenth_course/ColoredArc2D.h"
-#include "f1tenth_course/PathVisualization.h"
-#include "f1tenth_course/VisualizationMsg.h"
+#include "amrl_msgs/Localization2DMsg.h"
+#include "amrl_msgs/Point2D.h"
+#include "amrl_msgs/ColoredPoint2D.h"
+#include "amrl_msgs/ColoredLine2D.h"
+#include "amrl_msgs/ColoredArc2D.h"
+#include "amrl_msgs/VisualizationMsg.h"
 #include "sensor_msgs/LaserScan.h"
 
-using f1tenth_course::Pose2Df;
-using f1tenth_course::Point2D;
-using f1tenth_course::ColoredArc2D;
-using f1tenth_course::ColoredLine2D;
-using f1tenth_course::ColoredPoint2D;
-using f1tenth_course::VisualizationMsg;
-using f1tenth_course::PathVisualization;
+using amrl_msgs::Localization2DMsg;
+using amrl_msgs::Point2D;
+using amrl_msgs::ColoredArc2D;
+using amrl_msgs::ColoredLine2D;
+using amrl_msgs::ColoredPoint2D;
+using amrl_msgs::VisualizationMsg;
 using sensor_msgs::LaserScan;
 using std::vector;
 
@@ -59,11 +60,13 @@ QT_USE_NAMESPACE
 
 RobotWebSocket::RobotWebSocket(uint16_t port) :
     QObject(nullptr),
-    ws_server_(new QWebSocketServer(("Echo Server"),
-        QWebSocketServer::NonSecureMode, this)),
-    sim_loc_x_(NAN),
-    sim_loc_y_(NAN),
-    sim_loc_r_(NAN) {
+    ws_server_(new QWebSocketServer(("Robot Websocket Server"),
+        QWebSocketServer::NonSecureMode, this)) {
+  localization_.header.stamp = ros::Time(0);
+  localization_.header.seq = 0;
+  localization_.pose.x = 0;
+  localization_.pose.y = 0;
+  localization_.pose.theta = 0;
   connect(this,
           &RobotWebSocket::SendDataSignal,
           this,
@@ -101,7 +104,7 @@ void RobotWebSocket::onNewConnection() {
     return;
   }
   clients_.push_back(new_client);
-  qInfo() << "New client: " << new_client << ", " 
+  qInfo() << "New client: " << new_client << ", "
           << clients_.size() << "/" << FLAGS_max_connections;
   connect(new_client,
           &QWebSocket::textMessageReceived,
@@ -134,23 +137,11 @@ DataMessage GenerateTestData(const MessageHeader& h) {
   DataMessage msg;
   msg.header = h;
   msg.laser_scan.resize(h.num_laser_rays);
-  msg.particles.resize(h.num_particles);
-  msg.path_options.resize(h.num_path_options);
   msg.points.resize(h.num_points);
   msg.lines.resize(h.num_lines);
   msg.arcs.resize(h.num_arcs);
   for (size_t i = 0; i < msg.laser_scan.size(); ++i) {
     msg.laser_scan[i] = 10 * i;
-  }
-  for (size_t i = 0; i < msg.particles.size(); ++i) {
-    msg.particles[i].x = 1.0 * static_cast<float>(i) + 0.1;
-    msg.particles[i].y = 2.0 * static_cast<float>(i) + 0.2;
-    msg.particles[i].theta = 3.0 * static_cast<float>(i) + 0.3;
-  }
-  for (size_t i = 0; i < msg.path_options.size(); ++i) {
-    msg.path_options[i].curvature = 1.0 * static_cast<float>(i) + 0.1;
-    msg.path_options[i].distance = 2.0 * static_cast<float>(i) + 0.2;
-    msg.path_options[i].clearance = 3.0 * static_cast<float>(i) + 0.3;
   }
   for (size_t i = 0; i < msg.points.size(); ++i) {
     msg.points[i].point.x = 1.0 * static_cast<float>(i) + 0.1;
@@ -189,8 +180,6 @@ QByteArray DataMessage::ToByteArray() const {
   char* buf = data.data();
   buf = WriteElement(header, buf);
   buf = WriteElementVector(laser_scan, buf);
-  buf = WriteElementVector(particles, buf);
-  buf = WriteElementVector(path_options, buf);
   buf = WriteElementVector(points, buf);
   buf = WriteElementVector(lines, buf);
   buf = WriteElementVector(arcs, buf);
@@ -201,43 +190,43 @@ DataMessage DataMessage::FromRosMessages(
       const LaserScan& laser_msg,
       const VisualizationMsg& local_msg,
       const VisualizationMsg& global_msg,
-      float sim_loc_x,
-      float sim_loc_y,
-      float sim_loc_r) {
+      const Localization2DMsg& localization_msg) {
   DataMessage msg;
-  msg.header.sim_loc_x = sim_loc_x;
-  msg.header.sim_loc_y = sim_loc_y;
-  msg.header.sim_loc_r = sim_loc_r;
+  for (size_t i = 0; i < sizeof(msg.header.map); ++i) {
+    msg.header.map[i] = 0;
+  }
+  msg.header.loc_x = localization_msg.pose.x;
+  msg.header.loc_y = localization_msg.pose.y;
+  msg.header.loc_r = localization_msg.pose.theta;
+  strncpy(msg.header.map,
+          localization_msg.map.data(),
+          std::min(sizeof(msg.header.map) - 1, localization_msg.map.size()));
   msg.header.laser_min_angle = laser_msg.angle_min;
   msg.header.laser_max_angle = laser_msg.angle_max;
   msg.header.num_laser_rays = laser_msg.ranges.size();
   msg.laser_scan.resize(laser_msg.ranges.size());
   for (size_t i = 0; i < laser_msg.ranges.size(); ++i) {
-    msg.laser_scan[i] = static_cast<uint16_t>(laser_msg.ranges[i] * 1000.0);
+    msg.laser_scan[i] = static_cast<uint32_t>(laser_msg.ranges[i] * 1000.0);
   }
-  msg.particles = global_msg.particles;
-  msg.path_options = local_msg.path_options;
 
   msg.points = local_msg.points;
   msg.header.num_local_points = local_msg.points.size();
-  msg.points.insert(msg.points.end(), 
-                    global_msg.points.begin(), 
+  msg.points.insert(msg.points.end(),
+                    global_msg.points.begin(),
                     global_msg.points.end());
-  
+
   msg.lines = local_msg.lines;
   msg.header.num_local_lines = local_msg.lines.size();
-  msg.lines.insert(msg.lines.end(), 
-                   global_msg.lines.begin(), 
+  msg.lines.insert(msg.lines.end(),
+                   global_msg.lines.begin(),
                    global_msg.lines.end());
 
   msg.arcs = local_msg.arcs;
   msg.header.num_local_arcs = local_msg.arcs.size();
-  msg.arcs.insert(msg.arcs.end(), 
-                  global_msg.arcs.begin(), 
+  msg.arcs.insert(msg.arcs.end(),
+                  global_msg.arcs.begin(),
                   global_msg.arcs.end());
 
-  msg.header.num_particles = msg.particles.size();
-  msg.header.num_path_options = msg.path_options.size();
   msg.header.num_points = msg.points.size();
   msg.header.num_lines = msg.lines.size();
   msg.header.num_arcs = msg.arcs.size();
@@ -300,8 +289,6 @@ void RobotWebSocket::processTextMessage(QString message) {
 
   if (kSendTestMessage) {
     MessageHeader header;
-    header.num_particles = 100;
-    header.num_path_options = 20;
     header.num_points = 40;
     header.num_lines = 100;
     header.num_arcs = 100;
@@ -340,7 +327,7 @@ void RobotWebSocket::SendDataSlot() {
   if (clients_.empty()) return;
   data_mutex_.lock();
   const auto data = DataMessage::FromRosMessages(
-      laser_scan_, local_vis_, global_vis_, sim_loc_x_, sim_loc_y_, sim_loc_r_);
+      laser_scan_, local_vis_, global_vis_, localization_);
   const auto buffer = data.ToByteArray();
   CHECK_EQ(data.header.GetByteLength(), buffer.size());
   for (auto c : clients_) {
@@ -352,16 +339,12 @@ void RobotWebSocket::SendDataSlot() {
 void RobotWebSocket::Send(const VisualizationMsg& local_vis,
                           const VisualizationMsg& global_vis,
                           const LaserScan& laser_scan,
-                          float sim_loc_x,
-                          float sim_loc_y,
-                          float sim_loc_r) {
+                          const Localization2DMsg& localization) {
   data_mutex_.lock();
+  localization_ = localization;
   local_vis_ = local_vis;
   global_vis_ = global_vis;
   laser_scan_ = laser_scan;
-  sim_loc_x_ = sim_loc_x;
-  sim_loc_y_ = sim_loc_y;
-  sim_loc_r_ = sim_loc_r;
   data_mutex_.unlock();
   SendDataSignal();
 }

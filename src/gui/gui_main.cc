@@ -31,12 +31,12 @@
 #include "ros/ros.h"
 #include "sensor_msgs/LaserScan.h"
 
-#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
+#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "f1tenth_course/CarStatusMsg.h"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
-using f1tenth_course::AckermannCurvatureDriveMsg;
+using amrl_msgs::AckermannCurvatureDriveMsg;
 using f1tenth_course::CarStatusMsg;
 
 namespace {
@@ -73,9 +73,9 @@ void* RosThread(void* arg) {
   ros::NodeHandle n;
   ros::Subscriber status_sub =
       n.subscribe("car_status", 1, &StatusCallback);
-  ros::Subscriber lidar_sub = 
+  ros::Subscriber lidar_sub =
       n.subscribe("scan", 1, &LidarCallback);
-  ros::Subscriber drive_sub = 
+  ros::Subscriber drive_sub =
       n.subscribe("ackermann_curvature_drive", 1, &DriveCallback);
 
   RateLoop loop(5.0);
@@ -83,7 +83,7 @@ void* RosThread(void* arg) {
     throttle_ = steering_ = 0;
     vesc_okay_ = lidar_okay_ = camera_okay_ = false;
     ros::spinOnce();
-    main_window_->UpdateStatus(drive_mode_, 
+    main_window_->UpdateStatus(drive_mode_,
                                battery_voltage_,
                                vesc_okay_,
                                lidar_okay_,

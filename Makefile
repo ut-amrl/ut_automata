@@ -11,7 +11,7 @@ all: build build/CMakeLists.txt.copy
 	$(MAKE) --no-print-directory -C build
 
 clean:
-	rm -rf bin lib msg_gen src/f1tenth_simulator
+	rm -rf build bin lib msg_gen src/f1tenth_course
 
 build/CMakeLists.txt.copy: build CMakeLists.txt Makefile
 	cd build && cmake -DCMAKE_BUILD_TYPE=$(build_type) ..
@@ -19,9 +19,6 @@ build/CMakeLists.txt.copy: build CMakeLists.txt Makefile
 
 build:
 	mkdir -p build
-
-cleanup_cache:
-	rm -rf build
 
 purge: clean cleanup_cache
 	rm -rf src/f1tenth_course

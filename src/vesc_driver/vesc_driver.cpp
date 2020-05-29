@@ -10,7 +10,7 @@
 #include "boost/bind.hpp"
 #include "f1tenth_course/CarStatusMsg.h"
 #include "f1tenth_course/VescStateStamped.h"
-#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
+#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "nav_msgs/Odometry.h"
 
 #include "config_reader/config_reader.h"
@@ -226,7 +226,7 @@ void VescDriver::sendDriveCommands() {
     ((last_speed_ > 0.0) ? kMaxAcceleration : kMaxDeceleration);
   const float max_decel =
     ((last_speed_ > 0.0) ? kMaxDeceleration : kMaxAcceleration);
-  const float smooth_speed = Bound<float>(
+  const float smooth_speed = math_util::Clamp<float>(
       last_speed_ - kCommandInterval * max_decel,
       last_speed_ + kCommandInterval * max_accel,
       mux_drive_speed_);
@@ -407,7 +407,7 @@ float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
 }
 
 void VescDriver::ackermannCurvatureCallback(
-    const f1tenth_course::AckermannCurvatureDriveMsg& cmd) {
+    const amrl_msgs::AckermannCurvatureDriveMsg& cmd) {
   t_last_command_ = ros::WallTime::now().toSec();
   if (drive_mode_ == kAutonomousDrive) {
     mux_drive_speed_ = cmd.velocity;
