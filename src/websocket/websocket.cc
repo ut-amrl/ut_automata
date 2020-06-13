@@ -250,6 +250,13 @@ bool AllNumericalKeysPresent(const QStringList& expected,
   return true;
 }
 
+bool StringKeyPresent(const QString& key,
+                      const QJsonObject& json) {
+  if (!json.contains(key)) return false;
+  const QJsonValue val = json.value(key);
+  return val.isString();
+}
+
 void RobotWebSocket::ProcessCallback(const QJsonObject& json) {
   static const bool kDebug = true;
   if (kDebug) {
@@ -261,19 +268,23 @@ void RobotWebSocket::ProcessCallback(const QJsonObject& json) {
   }
   const auto type = json.value("type");
   if (type == "set_initial_pose") {
-    if (!AllNumericalKeysPresent({"x", "y", "theta"}, json)) {
+    if (!AllNumericalKeysPresent({"x", "y", "theta"}, json) ||
+        !StringKeyPresent("map", json)) {
       SendError("Invalid set_initial_pose parameters");
     }
     SetInitialPoseSignal(json.value("x").toDouble(),
                          json.value("y").toDouble(),
-                         json.value("theta").toDouble());
+                         json.value("theta").toDouble(),
+                         json.value("map").toString());
    } else if (type == "set_nav_goal") {
-    if (!AllNumericalKeysPresent({"x", "y", "theta"}, json)) {
+    if (!AllNumericalKeysPresent({"x", "y", "theta"}, json) ||
+        !StringKeyPresent("map", json)) {
       SendError("Invalid set_nav_goal parameters");
     }
     SetNavGoalSignal(json.value("x").toDouble(),
                      json.value("y").toDouble(),
-                     json.value("theta").toDouble());
+                     json.value("theta").toDouble(),
+                     json.value("map").toString());
   } else {
     SendError("Unrecognized request type");
   }

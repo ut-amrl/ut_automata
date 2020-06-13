@@ -10,7 +10,8 @@ function DegToRad(d)
   return math.pi * d / 180
 end
 
-map_name =  "maps/GDC1.txt"
+-- map_name =  "maps/Joydeepb-Driveway/Joydeepb-Driveway.vectormap.txt";
+map_name =  "maps/Joydeepb-Home/Joydeepb-Home.vectormap.txt";
 -- Simulator starting location.
 start_x = -21
 start_y = 9.0

@@ -12,5 +12,4 @@
   <depend package="serial"/>
   <depend package="tf"/>
   <depend package="amrl_msgs"/>
-
 </package>

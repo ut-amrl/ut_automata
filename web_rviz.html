@@ -43,9 +43,9 @@
 </head>
 
 <body>
-  <h1>F1/10 Web Interface</h1>
+  <h1>Robot Web Interface</h1>
 
-  Car IP Address: <input type="text" id="ipaddr" value="localhost">
+  Robot IP Address: <input type="text" id="ipaddr" value="localhost">
   <input type="button" id="connect" onclick="connect()" value="Connect"><br>
   Status: <label id="status">Disconnected</label><br>
   <input type="button" id="setLocation" onclick="setLocationButton()" value="Set Pose">
@@ -55,7 +55,10 @@
     <option value="GDC1">GDC1</option>
     <option value="GDC2">GDC2</option>
     <option value="GDC3">GDC3</option>
-    <option value="TestMap">TestMap</option>
+    <option value="EmptyMap">EmptyMap</option>
+    <option value="UT_Campus">UT_Campus</option>
+    <option value="Joydeepb-Home">Joydeepb-Home</option>
+    <option value="Joydeepb-Driveway">Joydeepb-Driveway</option>
   </select>
   <br>
   <canvas id="canvas" width="800" height="600" tabindex="0"> </canvas>
@@ -80,8 +83,8 @@
     var tLastDraw = 0;
     var map = [];
     var lastLaserScan = undefined;
-    var particles = undefined;
     var robot_interface = undefined;
+    var currentMapName = '';
 
     try {
       if (window.localStorage.getItem('ipaddr')) {
@@ -104,8 +107,6 @@
     class DataParser {
       constructor(arrayBuffer) {
         this.header = {
-          num_particles: 0,
-          num_path_options: 0,
           num_points: 0,
           num_lines: 0,
           num_arcs: 0,
@@ -115,8 +116,10 @@
           num_local_arcs: 0,
           laser_min_angle: 0,
           laser_max_angle: 0,
-          simulator_pose: { x: NaN, y: NaN, theta: NaN }
+          robot_pose: { x: NaN, y: NaN, theta: NaN },
+          map: ''
         };
+
         this.length = arrayBuffer.byteLength;
         this.remainingBytes = this.length;
         this.dataView = new DataView(arrayBuffer, 0);
@@ -160,8 +163,6 @@
       }
 
       readHeader() {
-        this.header.num_particles = this.readUint32();
-        this.header.num_path_options = this.readUint32();
         this.header.num_points = this.readUint32();
         this.header.num_lines = this.readUint32();
         this.header.num_arcs = this.readUint32();
@@ -171,11 +172,14 @@
         this.header.num_local_arcs = this.readUint32();
         this.header.laser_min_angle = this.readFloat32();
         this.header.laser_max_angle = this.readFloat32();
-        this.header.simulator_pose = {
-          x: this.readFloat32(),
-          y: this.readFloat32(),
-          theta: this.readFloat32()
-        };
+        this.header.robot_pose = this.readPose();
+        this.header.map = '';
+        for (let i = 0; i < 16; ++i) {
+          const c = this.readUint8();
+          if (c > 0) {
+            this.header.map += String.fromCharCode(c);
+          }
+        }
         return this.header;
       }
 
@@ -191,18 +195,6 @@
         return pose;
       }
 
-      readPathVisualization() {
-        let path = {
-          curvature: 0,
-          distance: 0,
-          clearance: 0
-        };
-        path.curvature = this.readFloat32();
-        path.distance = this.readFloat32();
-        path.clearance = this.readFloat32();
-        return path;
-      }
-
       readMultiple(n, reader) {
         let arr = [];
         for (let i = 0; i < n; ++i) {
@@ -215,7 +207,7 @@
         let laser = {
           angle_min: this.header.laser_min_angle,
           angle_max: this.header.laser_max_angle,
-          ranges: this.readMultiple(this.header.num_laser_rays, () => this.readUint16())
+          ranges: this.readMultiple(this.header.num_laser_rays, () => this.readUint32())
         }
         for (let i = 0; i < laser.ranges.length; ++i) {
           laser.ranges[i] = 0.001 * laser.ranges[i];
@@ -263,43 +255,16 @@
         };
       }
 
-      computeRobotPose(particles) {
-        if (particles.length < 1) return undefined;
-        let total = particles.reduce(
-          function (cur_total, v) {
-            cur_total.x += v.x / particles.length;
-            cur_total.y += v.y / particles.length;
-            cur_total.c += Math.cos(v.theta) / particles.length;
-            cur_total.s += Math.sin(v.theta) / particles.length;
-            return cur_total;
-          },
-          { x: 0, y: 0, c: 0, s: 0 }
-        )
-        let pose = {
-          x: total.x,
-          y: total.y,
-          theta: Math.atan2(total.s, total.c)
-        }
-        return pose;
-      }
       readMessage() {
         let message = {
           header: this.readHeader(),
           laser: this.readLaser(),
-          particles: this.readMultiple(this.header.num_particles, () => this.readPose()),
-          path_options: this.readMultiple(this.header.num_path_options, () => this.readPathVisualization()),
           points: this.readMultiple(this.header.num_points, () => this.readPoint()),
           lines: this.readMultiple(this.header.num_lines, () => this.readLine()),
           arcs: this.readMultiple(this.header.num_arcs, () => this.readArc()),
           robotPose: undefined
         }
-        message.robotPose = this.computeRobotPose(message.particles);
-        if (message.robotPose === undefined &&
-          isFinite(message.header.simulator_pose.x) &&
-          isFinite(message.header.simulator_pose.y) &&
-          isFinite(message.header.simulator_pose.theta)) {
-          message.robotPose = message.header.simulator_pose;
-        }
+        message.robotPose = message.header.robot_pose;
         return message;
       }
     };
@@ -391,7 +356,8 @@
           type: "set_initial_pose",
           x: x,
           y: y,
-          theta: theta
+          theta: theta,
+          map: currentMapName
         }));
       }
 
@@ -405,7 +371,8 @@
           type: "set_nav_goal",
           x: x,
           y: y,
-          theta: theta
+          theta: theta,
+          map: currentMapName
         }));
       }
 
@@ -417,18 +384,40 @@
     };
 
     function changeMap() {
-      let url = `http://amrl.cs.utexas.edu/f1tenth_course/maps/${mapList.value}.json`;
+      currentMapName = mapList.value;
+      loadMap(currentMapName);
+    }
+
+    function loadMap(mapName) {
+      let found = false;
+      for (var opt, j = 0; opt = mapList.options[j]; j++) {
+        if (opt.value == mapName) {
+          mapList.selectedIndex = j;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        let opt = document.createElement('option');
+        opt.appendChild(document.createTextNode(mapName));
+        opt.value = mapName;
+        mapList.appendChild(mapName);
+        mapList.selectedIndex = mapList.options.length - 1;
+      }
+      let url = `https://amrl.cs.utexas.edu/amrl_maps/${mapName}/${mapName}.vectormap.json`;
+      console.log(`Loading "${url}"`);
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
       // xhr.responseType = 'json';
       xhr.onload = function () {
         var status = xhr.status;
         if (status === 200) {
           map = JSON.parse(xhr.response);
+          console.log(`Loaded map "${mapName}"`);
         } else {
-          console.log("XHR ERROR");
+          console.log(`Error loading map "${mapName}"`);
         }
       };
+      xhr.open('GET', url, true);
       xhr.send();
     }
 
@@ -580,7 +569,6 @@
       // console.log(d.header);
       visMsg = d;
       lastLaserScan = d.laser;
-      particles = d.particles;
       robotPose = d.robotPose;
     }
 
@@ -682,13 +670,6 @@
       drawLine(kPoseColor, p3.x, p3.y, p1.x, p1.y);
     }
 
-    function drawParticles() {
-      if (particles === undefined) return;
-      ctx.lineWidth = 2;
-      particles.forEach(p => drawPose(p, 'rgba(200, 0, 0, 0.2)'));
-      ctx.lineWidth = 1;
-    }
-
     function draw() {
       const kDrawInterval = 0.03;
       const tNow = window.performance.now();
@@ -696,14 +677,17 @@
       tLastDraw = tNow;
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (visMsg && currentMapName !== visMsg.header.map) {
+        currentMapName = visMsg.header.map;
+        loadMap(visMsg.header.map);
+      }
       drawGrid();
       drawMap();
       drawLaserScan();
       drawPoints();
       drawLines();
-      drawPathOptions();
-      drawParticles();
-      if (visMsg) drawPose(visMsg.header.simulator_pose, 'rgb(0, 150, 0)');
+      drawArcs();
+      if (visMsg) drawPose(visMsg.header.robot_pose, 'rgb(0, 150, 0)');
     }
 
     function setColor(c) {
@@ -712,16 +696,57 @@
 
     function drawPoints() {
       if (visMsg === undefined) return;
-      visMsg.points.forEach(function (p) {
-        drawPoint(p.color, p.point.x, p.point.y);
+      visMsg.points.forEach(function (p, i) {
+        point = p.point;
+        if (i < visMsg.header.num_local_points) {
+          point = robotToMap(point);
+        }
+        drawPoint(p.color, point.x, point.y);
       });
+    }
+
+    function robotToMap(p) {
+      if (visMsg === undefined ||
+        visMsg.header === undefined ||
+        visMsg.header.robot_pose === undefined) {
+        return p;
+      }
+      let a = visMsg.header.robot_pose.theta;
+      let c = Math.cos(a);
+      let s = Math.sin(a);
+      return {
+        x: c * p.x - s * p.y + visMsg.header.robot_pose.x,
+        y: s * p.x + c * p.y + visMsg.header.robot_pose.y
+      };
     }
 
     function drawLines() {
       if (visMsg === undefined) return;
       // console.log(visMsg.lines);
-      visMsg.lines.forEach(function (l) {
-        drawLine(l.color, l.p0.x, l.p0.y, l.p1.x, l.p1.y);
+      visMsg.lines.forEach(function (l, i) {
+        let p0 = l.p0;
+        let p1 = l.p1;
+        if (i < visMsg.header.num_local_lines) {
+          p0 = robotToMap(p0);
+          p1 = robotToMap(p1);
+        }
+        drawLine(l.color, p0.x, p0.y, p1.x, p1.y);
+      });
+    }
+
+    function drawArcs() {
+      if (visMsg === undefined) return;
+      // console.log(visMsg.arcs);
+      visMsg.arcs.forEach(function (a, i) {
+        let center = a.center;
+        let theta0 = a.start_angle;
+        let theta1 = a.end_angle;
+        if (i < visMsg.header.num_local_arcs) {
+          center = robotToMap(center);
+          theta0 += visMsg.header.robot_pose.theta;
+          theta1 += visMsg.header.robot_pose.theta;
+        }
+        drawArc(a.color, center.x, center.y, a.radius, theta0, theta1);
       });
     }
 
@@ -729,7 +754,7 @@
       ctx.strokeStyle = color;
       const p = worldToCanvas({ x: x, y: y });
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r * scale, a0, a1, true);
+      ctx.arc(p.x, p.y, r * scale, -a0, -a1, true);
       ctx.stroke();
     }
 
@@ -786,12 +811,12 @@
         a1 = angleMod(a1 + robotPose.theta);
       }
       // console.log(`${a0}, ${a1}`);
-      drawArc(color, center.x, center.y, Math.abs(r), -a0, -a1);
+      drawArc(color, center.x, center.y, Math.abs(r), a0, a1);
       if (drawClearance) {
         if (Math.abs(r) - o.clearance > 0) {
-          drawArc(color, center.x, center.y, Math.abs(r) - o.clearance, -a0, -a1);
+          drawArc(color, center.x, center.y, Math.abs(r) - o.clearance, a0, a1);
         }
-        drawArc(color, center.x, center.y, Math.abs(r) + o.clearance, -a0, -a1);
+        drawArc(color, center.x, center.y, Math.abs(r) + o.clearance, a0, a1);
       }
     }
 
@@ -830,9 +855,10 @@
       let offset = { x: 0, y: 0, theta: 0 };
       if (robotPose) {
         // Note: Assumes the laser is at (0.2, 0) on the robot.
+        const laserOffset = 0.07;
         offset = {
-          x: robotPose.x + 0.2 * Math.cos(robotPose.theta),
-          y: robotPose.y + 0.2 * Math.sin(robotPose.theta),
+          x: robotPose.x + laserOffset * Math.cos(robotPose.theta),
+          y: robotPose.y + laserOffset * Math.sin(robotPose.theta),
           theta: robotPose.theta
         };
       }
@@ -843,7 +869,6 @@
         lastLaserScan.ranges.length;
       for (let i = 0; i < lastLaserScan.ranges.length; ++i) {
         const r = lastLaserScan.ranges[i];
-        if (r >= 9.9) continue;
         const a = lastLaserScan.angle_min + i * da + offset.theta;
         const x = Math.cos(a) * r + offset.x;
         const y = Math.sin(a) * r + offset.y;

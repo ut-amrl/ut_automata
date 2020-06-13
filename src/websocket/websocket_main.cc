@@ -41,16 +41,21 @@ using sensor_msgs::LaserScan;
 using std::vector;
 
 DEFINE_double(max_age, 2.0, "Maximum age of a message before it gets dropped.");
+DECLARE_int32(v);
 
 namespace {
 bool run_ = true;
 vector<VisualizationMsg> vis_msgs_;
 geometry_msgs::PoseWithCovarianceStamped initial_pose_msg_;
 geometry_msgs::PoseStamped nav_goal_msg_;
+amrl_msgs::Localization2DMsg amrl_initial_pose_msg_;
+amrl_msgs::Localization2DMsg amrl_nav_goal_msg_;
 Localization2DMsg localization_msg_;
 LaserScan laser_scan_;
 ros::Publisher init_loc_pub_;
+ros::Publisher amrl_init_loc_pub_;
 ros::Publisher nav_goal_pub_;
+ros::Publisher amrl_nav_goal_pub_;
 bool updates_pending_ = false;
 RobotWebSocket *server_ = nullptr;
 }  // namespace
@@ -143,22 +148,42 @@ void SendUpdate() {
                 localization_msg_);
 }
 
-void SetInitialPose(float x, float y, float theta) {
+void SetInitialPose(float x, float y, float theta, QString map) {
+  if (FLAGS_v > 0) {
+    printf("Set initial pose: %s %f,%f, %f\n",
+        map.toStdString().c_str(), x, y, math_util::RadToDeg(theta));
+  }
   initial_pose_msg_.header.stamp = ros::Time::now();
   initial_pose_msg_.pose.pose.position.x = x;
   initial_pose_msg_.pose.pose.position.y = y;
   initial_pose_msg_.pose.pose.orientation.w = cos(0.5 * theta);
   initial_pose_msg_.pose.pose.orientation.z = sin(0.5 * theta);
   init_loc_pub_.publish(initial_pose_msg_);
+  amrl_initial_pose_msg_.header.stamp = ros::Time::now();
+  amrl_initial_pose_msg_.map = map.toStdString();
+  amrl_initial_pose_msg_.pose.x = x;
+  amrl_initial_pose_msg_.pose.y = y;
+  amrl_initial_pose_msg_.pose.theta = theta;
+  amrl_init_loc_pub_.publish(amrl_initial_pose_msg_);
 }
 
-void SetNavGoal(float x, float y, float theta) {
+void SetNavGoal(float x, float y, float theta, QString map) {
+  if (FLAGS_v > 0) {
+    printf("Set nav goal: %s %f,%f, %f\n",
+        map.toStdString().c_str(), x, y, math_util::RadToDeg(theta));
+  }
   nav_goal_msg_.header.stamp = ros::Time::now();
   nav_goal_msg_.pose.position.x = x;
   nav_goal_msg_.pose.position.y = y;
   nav_goal_msg_.pose.orientation.w = cos(0.5 * theta);
   nav_goal_msg_.pose.orientation.z = sin(0.5 * theta);
   nav_goal_pub_.publish(nav_goal_msg_);
+  amrl_nav_goal_msg_.header.stamp = ros::Time::now();
+  amrl_nav_goal_msg_.map = map.toStdString();
+  amrl_nav_goal_msg_.pose.x = x;
+  amrl_nav_goal_msg_.pose.y = y;
+  amrl_nav_goal_msg_.pose.theta = theta;
+  amrl_nav_goal_pub_.publish(amrl_nav_goal_msg_);
 }
 
 void *RosThread(void *arg) {
@@ -180,6 +205,10 @@ void *RosThread(void *arg) {
       n.advertise<geometry_msgs::PoseWithCovarianceStamped>("/initialpose", 10);
   nav_goal_pub_ =
       n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10);
+  amrl_init_loc_pub_ = 
+      n.advertise<amrl_msgs::Localization2DMsg>("/set_pose", 10);
+  amrl_nav_goal_pub_ = 
+      n.advertise<amrl_msgs::Localization2DMsg>("/set_nav_target", 10);
 
   RateLoop loop(10.0);
   while (ros::ok() && run_) {
@@ -228,7 +257,7 @@ void InitMessage() {
 
 int main(int argc, char *argv[]) {
   ros::init(argc, argv, "websocket", ros::init_options::NoSigintHandler);
-
+  google::ParseCommandLineFlags(&argc, &argv, false);
   QCoreApplication a(argc, argv);
   server_ = new RobotWebSocket(10272);
   QObject::connect(
