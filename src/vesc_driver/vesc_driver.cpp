@@ -227,9 +227,9 @@ void VescDriver::sendDriveCommands() {
   const float max_decel =
     ((last_speed_ > 0.0) ? kMaxDeceleration : kMaxAcceleration);
   const float smooth_speed = math_util::Clamp<float>(
+      mux_drive_speed_,
       last_speed_ - kCommandInterval * max_decel,
-      last_speed_ + kCommandInterval * max_accel,
-      mux_drive_speed_);
+      last_speed_ + kCommandInterval * max_accel);
   last_speed_ = smooth_speed;
   if (kDebug) {
     printf("%7.2f %7.2f %.1f\u00b0\n",
@@ -245,7 +245,6 @@ void VescDriver::sendDriveCommands() {
   // Set speed command.
   const float erpm_clipped = Clip(erpm, -erpm_speed_limit_, erpm_speed_limit_, "erpm");
   vesc_.setSpeed(erpm_clipped);
-  // vesc_.setSpeed(0);
 
   // Set servo position command.
   vesc_.setServo(Clip(servo, servo_min_, servo_max_, "servo"));
