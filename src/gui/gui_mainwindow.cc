@@ -59,12 +59,12 @@ using vector_display::VectorDisplay;
 
 namespace {
 
-f1tenth_gui::StatusLed* ros_led_ = nullptr;
-f1tenth_gui::StatusLed* drive_led_ = nullptr;
-f1tenth_gui::StatusLed* camera_led_ = nullptr;
-f1tenth_gui::StatusLed* lidar_led_ = nullptr;
-f1tenth_gui::RealStatus* throttle_status_ = nullptr;
-f1tenth_gui::RealStatus* steering_status_ = nullptr;
+ut_automata_gui::StatusLed* ros_led_ = nullptr;
+ut_automata_gui::StatusLed* drive_led_ = nullptr;
+ut_automata_gui::StatusLed* camera_led_ = nullptr;
+ut_automata_gui::StatusLed* lidar_led_ = nullptr;
+ut_automata_gui::RealStatus* throttle_status_ = nullptr;
+ut_automata_gui::RealStatus* steering_status_ = nullptr;
 
 vector<string> GetIPAddresses(bool ignore_lo) {
   static const bool kGetIPV6 = false;
@@ -100,7 +100,7 @@ vector<string> GetIPAddresses(bool ignore_lo) {
 
 }  // namespace
 
-namespace f1tenth_gui {
+namespace ut_automata_gui {
 
 StatusLed::StatusLed(QString name) : led_(nullptr) {
   QFont font("Arial");
@@ -321,12 +321,12 @@ void Exec(const string& cmd) {
 }
 
 void MainWindow::StartCar() {
-  const string path = ros::package::getPath("f1tenth_course");
+  const string path = ros::package::getPath("ut_automata");
   Exec(path + "/start_car.sh");
 }
 
 void MainWindow::StartRos() {
-  const string path = ros::package::getPath("f1tenth_course");
+  const string path = ros::package::getPath("ut_automata");
   Exec("/usr/bin/screen -mdS roscore roscore");
 }
 
@@ -381,6 +381,9 @@ void MainWindow::UpdateStatusSlot(int mode,
     case 2: {
       status += "Autonomous\n";
     } break;
+    case 3: {
+      status += "Autonomous\n";
+    } break;
     default: {
       status += "UNKNOWN\n";
     } break;
@@ -399,4 +402,4 @@ void MainWindow::UpdateStatusSlot(int mode,
 
 
 
-}  // namespace f1tenth_gui
+}  // namespace ut_automata_gui

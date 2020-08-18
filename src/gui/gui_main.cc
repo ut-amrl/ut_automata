@@ -32,15 +32,15 @@
 #include "sensor_msgs/LaserScan.h"
 
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
-#include "f1tenth_course/CarStatusMsg.h"
+#include "ut_automata/CarStatusMsg.h"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
 using amrl_msgs::AckermannCurvatureDriveMsg;
-using f1tenth_course::CarStatusMsg;
+using ut_automata::CarStatusMsg;
 
 namespace {
-f1tenth_gui::MainWindow* main_window_ = nullptr;
+ut_automata_gui::MainWindow* main_window_ = nullptr;
 bool run_ = true;
 bool lidar_okay_ = false;
 bool camera_okay_ = false;
@@ -107,12 +107,12 @@ void SignalHandler(int num) {
 }
 
 int main(int argc, char *argv[]) {
-  ros::init(argc, argv, "f1tenth_gui", ros::init_options::NoSigintHandler);
+  ros::init(argc, argv, "ut_automata_gui", ros::init_options::NoSigintHandler);
   signal(SIGINT, &SignalHandler);
   qRegisterMetaType<std::vector<std::string> >("std::vector<std::string>");
 
   QApplication app(argc, argv);
-  main_window_ = new f1tenth_gui::MainWindow();
+  main_window_ = new ut_automata_gui::MainWindow();
   main_window_->showFullScreen();
 
   pthread_t ptid = 0;

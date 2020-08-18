@@ -8,8 +8,8 @@
 #include <sstream>
 
 #include "boost/bind.hpp"
-#include "f1tenth_course/CarStatusMsg.h"
-#include "f1tenth_course/VescStateStamped.h"
+#include "ut_automata/CarStatusMsg.h"
+#include "ut_automata/VescStateStamped.h"
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "nav_msgs/Odometry.h"
 
@@ -39,8 +39,8 @@ config_reader::ConfigReader reader({
   "config/vesc.lua"
 });
 
-using f1tenth_course::CarStatusMsg;
-using f1tenth_course::VescStateStamped;
+using ut_automata::CarStatusMsg;
+using ut_automata::VescStateStamped;
 
 namespace {
 
@@ -138,7 +138,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
 void VescDriver::checkCommandTimeout() {
   static const double kTimeout = 0.5;
   const double t_now = ros::WallTime::now().toSec();
-  if ((t_now > t_last_command_ + kTimeout && drive_mode_ == kAutonomousDrive) ||
+  if ((t_now > t_last_command_ + kTimeout && isAutonomous()) ||
       t_now > t_last_joystick_ + kTimeout) {
     mux_drive_speed_ = 0;
     mux_steering_angle_ = 0;
@@ -150,15 +150,50 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
   static const float kMaxTurnRate = 0.25;
   static const float kTurboSpeed = 2.0;
   static const float kNormalSpeed = 1.0;
+  static const float kAxesEps = 0.2;
   static const size_t kManualDriveButton = 4;
   static const size_t kAutonomousDriveButton = 5;
-
+  static const size_t kAutonomousDriveToggleButton = 7;
   if (msg.buttons.size() < 6) return;
   t_last_joystick_ = ros::WallTime::now().toSec();
-  if (msg.buttons[kManualDriveButton] == 1) {
+  int toggle = toggleState(msg.buttons[kAutonomousDriveToggleButton]);
+
+  // determine if any button/axes is pressed.
+  bool pressed = (drive_mode_ == kAutonomousContinuousDrive 
+    && toggle == kToggleOn);
+  for(size_t i = 0; i < msg.buttons.size(); i++){
+    if(i != kAutonomousDriveToggleButton && msg.buttons[i]){
+      pressed = true;
+    }
+  }
+  for(size_t i = 0; i < msg.axes.size(); i++){
+    float axes_value = msg.axes[i];
+    if(i == 2 || i == 5){
+      // axes 2, 5's initial value is around -1.0
+      axes_value += 1.0;
+    }
+    if(std::abs(axes_value) > kAxesEps){
+      pressed = true;    
+    }
+  }
+  if (drive_mode_ == kAutonomousContinuousDrive && pressed){
+    // stop the car if any button is pressed
+    drive_mode_ = kStoppedDrive;
+    mux_drive_speed_ = 0;
+    mux_steering_angle_ = 0;
+  }
+  else if (msg.buttons[kManualDriveButton] == 1) {
+    // joystick mode
     if(kDebug) printf("Joystick\n");
     drive_mode_ = kJoystickDrive;
-  } else if (msg.buttons[kAutonomousDriveButton] == 1) {
+  } 
+  else if ((toggle == kToggleOn) ||
+    (drive_mode_ == kAutonomousContinuousDrive && 
+    toggle != kToggleOn)){
+    if(kDebug) printf("ContAutonomous\n");
+    drive_mode_ = kAutonomousContinuousDrive;
+  }
+  else if (msg.buttons[kAutonomousDriveButton] == 1) {
     if(kDebug) printf("Autonomous\n");
     drive_mode_ = kAutonomousDrive;
   } else {
@@ -408,11 +443,27 @@ float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
 void VescDriver::ackermannCurvatureCallback(
     const amrl_msgs::AckermannCurvatureDriveMsg& cmd) {
   t_last_command_ = ros::WallTime::now().toSec();
-  if (drive_mode_ == kAutonomousDrive) {
+  if (isAutonomous()) {
     mux_drive_speed_ = cmd.velocity;
     const float rot_vel = cmd.velocity * cmd.curvature;
     mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
   }
 }
 
+bool VescDriver::isAutonomous(){
+  return drive_mode_ == kAutonomousDrive || drive_mode_ == kAutonomousContinuousDrive;
+}
+int VescDriver::toggleState(int curToggleState){
+  int prevToggleState = prevToggleState_;
+  prevToggleState_ = curToggleState;
+  if(prevToggleState == 0 && curToggleState == 1){
+    return kToggleOn;
+  }
+  else if(prevToggleState == 1 && curToggleState == 0){
+    return kToggleOff;
+  }
+  else{
+    return kNoToggle;
+  }
+}
 } // namespace vesc_driver
