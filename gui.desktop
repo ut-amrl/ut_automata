@@ -1,9 +1,9 @@
 [Desktop Entry]
 Comment=Start F1/10 GUI
 Encoding=UTF-8
-Exec=/home/amrl_user/f1tenth_course/bin/gui
+Exec=/home/amrl_user/ut_automata/bin/gui
 GenericName=Start F1/10 GUI
-Icon=/home/amrl_user/f1tenth_course/gui_icon.png
+Icon=/home/amrl_user/ut_automata/gui_icon.png
 Name=Start F1/10 GUI
 StartupNotify=false
 Type=Application

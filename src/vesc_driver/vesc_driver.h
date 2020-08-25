@@ -51,9 +51,16 @@ private:
   enum DriveMode {
     kStoppedDrive = 0,
     kJoystickDrive = 1,
-    kAutonomousDrive = 2
+    kAutonomousDrive = 2,
+    kAutonomousContinuousDrive = 3
   };
 
+  // treat as keypress event
+  enum JoyPress {
+    kNoToggle = 0,
+    kToggleOn = 1,
+    kToggleOff = 2
+  };
 
   // driver state machine mode (state)
   driver_mode_t driver_mode_;
@@ -63,6 +70,9 @@ private:
   int fw_version_major_;
   // firmware minor version reported by vesc
   int fw_version_minor_;
+
+  // status of previous toggle button;
+  int prevToggleState_;
 
   // Time of last command, for safety motion profiling
   std::atomic<double> t_last_command_;
@@ -89,6 +99,11 @@ private:
   void joystickCallback(const sensor_msgs::Joy& msg);
 
   void updateOdometry(float rpm, float steering_angle);
+  
+  // true if car is running autonomously, false otherwise 
+  bool isAutonomous();
+  // report current state of the autonomy toggle button
+  int toggleState(int curToggleState);
 };
 
 } // namespace vesc_driver
