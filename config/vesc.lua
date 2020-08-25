@@ -9,7 +9,8 @@ speed_to_erpm_offset = 160.0;
 --    (radians) + steering_angle_to_servo_offset
 steering_angle_to_servo_gain = -0.9015;
 steering_angle_to_servo_offset = 0.5054; -- 0.5304
-erpm_speed_limit = 14000; -- 3250
+-- erpm_speed_limit = 14000; -- 3250
+erpm_speed_limit = 22000; -- 3250
 servo_min = 0.05;
 servo_max = 0.95;
 

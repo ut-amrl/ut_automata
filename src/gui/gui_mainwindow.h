@@ -37,7 +37,7 @@ namespace vector_display {
 class VectorDisplay;
 }  // namespace vector_display
 
-namespace f1tenth_gui {
+namespace ut_automata_gui {
 
 class TouchVectorDisplay;
 class AdminPassword;
@@ -169,6 +169,6 @@ private:
 };
 
 
-}  // namespace f1tenth_gui
+}  // namespace ut_automata_gui
 
 #endif  // GUI_MAINWINDOW_H

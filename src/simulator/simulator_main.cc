@@ -27,7 +27,7 @@
 #include "ros/ros.h"
 
 #include "shared/util/timer.h"
-#include "simulator.h"
+#include "simulator/simulator.h"
 
 
 int main(int argc, char **argv) {

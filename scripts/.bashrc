@@ -4,18 +4,11 @@
 
 source /opt/ros/melodic/setup.bash
 source /home/amrl_user/astra/devel/setup.sh
-export ROS_PACKAGE_PATH=~/f1tenth_course:$ROS_PACKAGE_PATH
+export ROS_PACKAGE_PATH=~/ut_automata:$ROS_PACKAGE_PATH
 
 ########################################################
 # Set ROS IP if possible
-IPADDR="$(ip addr show wlan0 | grep -Po 'inet \K[\d.]+')"
-echo "wlan0 IP address is $IPADDR"
-if [[ "$IPADDR" == "10.147."* ]]; then
-  echo "Setting ROS_IP to $IPADDR"
-  echo "Setting ROS_MASTER_URI to http://$IPADDR:11311"
-  export ROS_IP=$IPADDR
-  export ROS_MASTER_URI=http://$IPADDR:11311
-fi
+
 ########################################################
 
 

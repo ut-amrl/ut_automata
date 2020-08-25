@@ -31,16 +31,16 @@
 #include "ros/ros.h"
 #include "sensor_msgs/LaserScan.h"
 
-#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
-#include "f1tenth_course/CarStatusMsg.h"
+#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
+#include "ut_automata/CarStatusMsg.h"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
-using f1tenth_course::AckermannCurvatureDriveMsg;
-using f1tenth_course::CarStatusMsg;
+using amrl_msgs::AckermannCurvatureDriveMsg;
+using ut_automata::CarStatusMsg;
 
 namespace {
-f1tenth_gui::MainWindow* main_window_ = nullptr;
+ut_automata_gui::MainWindow* main_window_ = nullptr;
 bool run_ = true;
 bool lidar_okay_ = false;
 bool camera_okay_ = false;
@@ -73,9 +73,9 @@ void* RosThread(void* arg) {
   ros::NodeHandle n;
   ros::Subscriber status_sub =
       n.subscribe("car_status", 1, &StatusCallback);
-  ros::Subscriber lidar_sub = 
+  ros::Subscriber lidar_sub =
       n.subscribe("scan", 1, &LidarCallback);
-  ros::Subscriber drive_sub = 
+  ros::Subscriber drive_sub =
       n.subscribe("ackermann_curvature_drive", 1, &DriveCallback);
 
   RateLoop loop(5.0);
@@ -83,7 +83,7 @@ void* RosThread(void* arg) {
     throttle_ = steering_ = 0;
     vesc_okay_ = lidar_okay_ = camera_okay_ = false;
     ros::spinOnce();
-    main_window_->UpdateStatus(drive_mode_, 
+    main_window_->UpdateStatus(drive_mode_,
                                battery_voltage_,
                                vesc_okay_,
                                lidar_okay_,
@@ -107,12 +107,12 @@ void SignalHandler(int num) {
 }
 
 int main(int argc, char *argv[]) {
-  ros::init(argc, argv, "f1tenth_gui", ros::init_options::NoSigintHandler);
+  ros::init(argc, argv, "ut_automata_gui", ros::init_options::NoSigintHandler);
   signal(SIGINT, &SignalHandler);
   qRegisterMetaType<std::vector<std::string> >("std::vector<std::string>");
 
   QApplication app(argc, argv);
-  main_window_ = new f1tenth_gui::MainWindow();
+  main_window_ = new ut_automata_gui::MainWindow();
   main_window_->showFullScreen();
 
   pthread_t ptid = 0;

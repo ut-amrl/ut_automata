@@ -1,9 +1,9 @@
 <package>
-  <description brief="f1tenth_course">F1/10 Course Infrastructure</description>
+  <description brief="ut_automata">UT Automata Course Infrastructure</description>
   <author>Maintained by Joydeep Biswas</author>
   <license>LGPLv3.0</license>
   <review status="unreviewed" notes=""/>
-  <url>https://github.com/ut-amrl/f1tenth_course</url>
+  <url>https://github.com/ut-amrl/ut_automata</url>
   <depend package="roscpp"/>
   <depend package="std_msgs"/>
   <depend package="geometry_msgs"/>
@@ -11,5 +11,5 @@
   <depend package="sensor_msgs"/>
   <depend package="serial"/>
   <depend package="tf"/>
-
+  <depend package="amrl_msgs"/>
 </package>

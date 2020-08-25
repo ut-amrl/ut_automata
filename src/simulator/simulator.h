@@ -36,7 +36,8 @@
 #include "tf/transform_datatypes.h"
 #include "visualization_msgs/Marker.h"
 
-#include "f1tenth_course/AckermannCurvatureDriveMsg.h"
+#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
+#include "amrl_msgs/Localization2DMsg.h"
 
 #include "shared/util/timer.h"
 #include "shared/math/geometry.h"
@@ -106,11 +107,13 @@ class Simulator{
   static const float kMinR;
   geometry_msgs::PoseStamped truePoseMsg;
 
-  f1tenth_course::AckermannCurvatureDriveMsg last_cmd_;
+  amrl_msgs::AckermannCurvatureDriveMsg last_cmd_;
 
   std::default_random_engine rng_;
   std::normal_distribution<float> laser_noise_;
   std::normal_distribution<float> angular_error_;
+
+  amrl_msgs::Localization2DMsg localization_msg_;
 
 private:
   void initVizMarker(visualization_msgs::Marker& vizMarker,
@@ -125,7 +128,7 @@ private:
   void drawMap();
   void InitalLocationCallback(
       const geometry_msgs::PoseWithCovarianceStamped& msg);
-  void DriveCallback(const f1tenth_course::AckermannCurvatureDriveMsg& msg);
+  void DriveCallback(const amrl_msgs::AckermannCurvatureDriveMsg& msg);
   void publishOdometry();
   void publishLaser();
   void publishVisualizationMarkers();
