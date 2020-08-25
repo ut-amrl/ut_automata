@@ -108,7 +108,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   try {
     if (kDebug) printf("CONNECT\n");
     vesc_.connect(serial_port_);
-  } catch (SerialException e) {
+  } catch (SerialException& e) {
     fprintf(stderr, "Failed to connect to the VESC, %s.", e.what());
     ros::shutdown();
     exit(1);
