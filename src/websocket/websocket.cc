@@ -54,7 +54,7 @@ using amrl_msgs::VisualizationMsg;
 using sensor_msgs::LaserScan;
 using std::vector;
 
-DEFINE_uint64(max_connections, 3, "Maximum number of websocket connections");
+DEFINE_uint64(max_connections, 4, "Maximum number of websocket connections");
 
 QT_USE_NAMESPACE
 
