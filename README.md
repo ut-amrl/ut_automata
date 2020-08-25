@@ -1,5 +1,5 @@
 # ut_automata
-Repository for ut_automata courses  
+Repository for UT AUTOmata courses  
 
 ### Overview
 These instructions are tailored to the computer setup in the GDC1.310 lab. If you are setting this up on your own personal computer, you will need to modify the instructions for your own setup, including perhaps saving the setup script entries to `.bashrc` instead of `.profile`
