@@ -108,6 +108,7 @@ void MergeMessage(const VisualizationMsg &m1,
   MergeVector(m1.points, &m2.points);
   MergeVector(m1.lines, &m2.lines);
   MergeVector(m1.arcs, &m2.arcs);
+  MergeVector(m1.path_options, &m2.path_options);
 }
 
 void DropOldMessages() {

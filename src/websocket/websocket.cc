@@ -140,6 +140,7 @@ DataMessage GenerateTestData(const MessageHeader& h) {
   msg.points.resize(h.num_points);
   msg.lines.resize(h.num_lines);
   msg.arcs.resize(h.num_arcs);
+  msg.path_options.resize(h.num_path_options);
   for (size_t i = 0; i < msg.laser_scan.size(); ++i) {
     msg.laser_scan[i] = 10 * i;
   }
@@ -171,6 +172,11 @@ DataMessage GenerateTestData(const MessageHeader& h) {
     const uint8_t x = static_cast<uint8_t>(i);
     msg.arcs[i].color = (x << 16) | (x << 8) | x;
   }
+  for (size_t i = 0; i < msg.path_options.size(); ++i) {
+      msg.path_options[i].curvature = 0.02 * i;
+      msg.path_options[i].distance = 0.1 * i;
+      msg.path_options[i].clearance = 0.01 * i;
+  }
   return msg;
 }
 
@@ -183,6 +189,7 @@ QByteArray DataMessage::ToByteArray() const {
   buf = WriteElementVector(points, buf);
   buf = WriteElementVector(lines, buf);
   buf = WriteElementVector(arcs, buf);
+  buf = WriteElementVector(path_options, buf);
   return data;
 }
 
@@ -227,9 +234,17 @@ DataMessage DataMessage::FromRosMessages(
                   global_msg.arcs.begin(),
                   global_msg.arcs.end());
 
+  msg.path_options = local_msg.path_options;
+  msg.header.num_local_path_options = local_msg.path_options.size();
+  msg.path_options.insert(msg.path_options.end(),
+                          global_msg.path_options.begin(),
+                          global_msg.path_options.end());
+
   msg.header.num_points = msg.points.size();
   msg.header.num_lines = msg.lines.size();
   msg.header.num_arcs = msg.arcs.size();
+  msg.header.num_path_options = msg.path_options.size();
+
   return msg;
 }
 
@@ -303,6 +318,7 @@ void RobotWebSocket::processTextMessage(QString message) {
     header.num_points = 40;
     header.num_lines = 100;
     header.num_arcs = 100;
+    header.num_path_options = 20;
     header.num_laser_rays = 270 * 4;
     header.laser_min_angle = -135;
     header.laser_max_angle = 135;
