@@ -137,11 +137,23 @@ DataMessage GenerateTestData(const MessageHeader& h) {
   DataMessage msg;
   msg.header = h;
   msg.laser_scan.resize(h.num_laser_rays);
+  msg.particles.resize(h.num_particles);
+  msg.path_options.resize(h.num_path_options);
   msg.points.resize(h.num_points);
   msg.lines.resize(h.num_lines);
   msg.arcs.resize(h.num_arcs);
   for (size_t i = 0; i < msg.laser_scan.size(); ++i) {
     msg.laser_scan[i] = 10 * i;
+  }
+  for (size_t i = 0; i < msg.particles.size(); ++i) {
+    msg.particles[i].x = 1.0 * static_cast<float>(i) + 0.1;
+    msg.particles[i].y = 2.0 * static_cast<float>(i) + 0.2;
+    msg.particles[i].theta = 3.0 * static_cast<float>(i) + 0.3;
+  }
+  for (size_t i = 0; i < msg.path_options.size(); ++i) {
+    msg.path_options[i].curvature = 1.0 * static_cast<float>(i) + 0.1;
+    msg.path_options[i].distance = 2.0 * static_cast<float>(i) + 0.2;
+    msg.path_options[i].clearance = 3.0 * static_cast<float>(i) + 0.3;
   }
   for (size_t i = 0; i < msg.points.size(); ++i) {
     msg.points[i].point.x = 1.0 * static_cast<float>(i) + 0.1;
@@ -180,6 +192,8 @@ QByteArray DataMessage::ToByteArray() const {
   char* buf = data.data();
   buf = WriteElement(header, buf);
   buf = WriteElementVector(laser_scan, buf);
+  buf = WriteElementVector(particles, buf);
+  buf = WriteElementVector(path_options, buf);
   buf = WriteElementVector(points, buf);
   buf = WriteElementVector(lines, buf);
   buf = WriteElementVector(arcs, buf);
@@ -209,6 +223,9 @@ DataMessage DataMessage::FromRosMessages(
     msg.laser_scan[i] = static_cast<uint32_t>(laser_msg.ranges[i] * 1000.0);
   }
 
+  msg.particles = global_msg.particles;
+  msg.path_options = local_msg.path_options;
+
   msg.points = local_msg.points;
   msg.header.num_local_points = local_msg.points.size();
   msg.points.insert(msg.points.end(),
@@ -227,9 +244,12 @@ DataMessage DataMessage::FromRosMessages(
                   global_msg.arcs.begin(),
                   global_msg.arcs.end());
 
+  msg.header.num_particles = msg.particles.size();
+  msg.header.num_path_options = msg.path_options.size();
   msg.header.num_points = msg.points.size();
   msg.header.num_lines = msg.lines.size();
   msg.header.num_arcs = msg.arcs.size();
+  
   return msg;
 }
 
@@ -300,6 +320,8 @@ void RobotWebSocket::processTextMessage(QString message) {
 
   if (kSendTestMessage) {
     MessageHeader header;
+    header.num_particles = 100;
+    header.num_path_options = 20;
     header.num_points = 40;
     header.num_lines = 100;
     header.num_arcs = 100;

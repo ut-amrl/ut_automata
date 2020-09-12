@@ -105,6 +105,8 @@ void MergeVector(const std::vector<T> &v1, std::vector<T> *v2) {
 void MergeMessage(const VisualizationMsg &m1,
                   VisualizationMsg *m2_ptr) {
   VisualizationMsg &m2 = *m2_ptr;
+  MergeVector(m1.particles, &m2.particles);
+  MergeVector(m1.path_options, &m2.path_options);
   MergeVector(m1.points, &m2.points);
   MergeVector(m1.lines, &m2.lines);
   MergeVector(m1.arcs, &m2.arcs);

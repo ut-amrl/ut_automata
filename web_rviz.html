@@ -84,6 +84,7 @@
     var tLastDraw = 0;
     var map = [];
     var lastLaserScan = undefined;
+    var particles = undefined;
     var robot_interface = undefined;
     var currentMapName = '';
 
@@ -108,6 +109,8 @@
     class DataParser {
       constructor(arrayBuffer) {
         this.header = {
+          num_particles: 0,
+          num_path_options: 0,
           num_points: 0,
           num_lines: 0,
           num_arcs: 0,
@@ -164,6 +167,8 @@
       }
 
       readHeader() {
+        this.header.num_particles = this.readUint32();
+        this.header.num_path_options = this.readUint32();
         this.header.num_points = this.readUint32();
         this.header.num_lines = this.readUint32();
         this.header.num_arcs = this.readUint32();
@@ -196,6 +201,18 @@
         return pose;
       }
 
+      readPathVisualization() {
+        let path = {
+          curvature: 0,
+          distance: 0,
+          clearance: 0
+        };
+        path.curvature = this.readFloat32();
+        path.distance = this.readFloat32();
+        path.clearance = this.readFloat32();
+        return path;
+      }
+      
       readMultiple(n, reader) {
         let arr = [];
         for (let i = 0; i < n; ++i) {
@@ -260,6 +277,8 @@
         let message = {
           header: this.readHeader(),
           laser: this.readLaser(),
+          particles: this.readMultiple(this.header.num_particles, () => this.readPose()),
+          path_options: this.readMultiple(this.header.num_path_options, () => this.readPathVisualization()),
           points: this.readMultiple(this.header.num_points, () => this.readPoint()),
           lines: this.readMultiple(this.header.num_lines, () => this.readLine()),
           arcs: this.readMultiple(this.header.num_arcs, () => this.readArc()),
@@ -570,6 +589,7 @@
       // console.log(d.header);
       visMsg = d;
       lastLaserScan = d.laser;
+      particles = d.particles;
       robotPose = d.robotPose;
     }
 
@@ -671,6 +691,13 @@
       drawLine(kPoseColor, p3.x, p3.y, p1.x, p1.y);
     }
 
+    function drawParticles() {
+      if (particles === undefined) return;
+      ctx.lineWidth = 2;
+      particles.forEach(p => drawPose(p, 'rgba(200, 0, 0, 0.2)'));
+      ctx.lineWidth = 1;
+    }
+
     function draw() {
       const kDrawInterval = 0.03;
       const tNow = window.performance.now();
@@ -687,6 +714,8 @@
       drawLaserScan();
       drawPoints();
       drawLines();
+      drawPathOptions();
+      drawParticles();
       drawArcs();
       if (visMsg) drawPose(visMsg.header.robot_pose, 'rgb(0, 150, 0)');
     }
