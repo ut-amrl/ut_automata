@@ -43,21 +43,25 @@ class QWebSocket;
 struct MessageHeader {
   MessageHeader() : nonce(42) {}
   uint32_t nonce;                 // 1
-  uint32_t num_points;            // 2
-  uint32_t num_lines;             // 3
-  uint32_t num_arcs;              // 4
-  uint32_t num_laser_rays;        // 5
-  uint32_t num_local_points;      // 6
-  uint32_t num_local_lines;       // 7
-  uint32_t num_local_arcs;        // 8
-  float laser_min_angle;          // 9
-  float laser_max_angle;          // 10
-  float loc_x;                    // 11
-  float loc_y;                    // 12
-  float loc_r;                    // 13
-  char map[16];                   // 14-29
+  uint32_t num_particles;         // 2
+  uint32_t num_path_options;      // 3
+  uint32_t num_points;            // 4
+  uint32_t num_lines;             // 5
+  uint32_t num_arcs;              // 6
+  uint32_t num_laser_rays;        // 7
+  uint32_t num_local_points;      // 8
+  uint32_t num_local_lines;       // 9
+  uint32_t num_local_arcs;        // 10
+  float laser_min_angle;          // 11
+  float laser_max_angle;          // 12
+  float loc_x;                    // 13
+  float loc_y;                    // 14
+  float loc_r;                    // 15
+  char map[16];                   // 16-30 
   size_t GetByteLength() const {
-    const size_t len = 13 * 4 + 16 +
+    const size_t len = 15 * 4 + 16 +
+        num_particles * 3 * 4 +     // x, y, theta
+        num_path_options * 3 * 4 +  // curvature, distance, clearance
         num_points * 3 * 4 +        // x, y, color
         num_lines * 5 * 4 +         // x1, y1, x2, y2, color
         num_arcs * 6 * 4 +          // x, y, radius, start_angle, end_angle, color
@@ -69,6 +73,8 @@ struct MessageHeader {
 struct DataMessage {
   MessageHeader header;
   std::vector<uint32_t> laser_scan;
+  std::vector<amrl_msgs::Pose2Df> particles;
+  std::vector<amrl_msgs::PathVisualization> path_options;
   std::vector<amrl_msgs::ColoredPoint2D> points;
   std::vector<amrl_msgs::ColoredLine2D> lines;
   std::vector<amrl_msgs::ColoredArc2D> arcs;
