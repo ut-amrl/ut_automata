@@ -30,7 +30,7 @@ laser_loc = Vector3(0.2, 0, 0.15)
 
 -- Kinematic and dynamic constraints for the car.
 min_turn_radius = 0.98
-max_speed = 1.2
+max_speed = 5.0
 max_accel = 5.0
 
 -- Laser noise simulation.
