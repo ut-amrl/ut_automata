@@ -57,9 +57,9 @@ struct MessageHeader {
   float loc_x;                    // 13
   float loc_y;                    // 14
   float loc_r;                    // 15
-  char map[16];                   // 16-30 
+  char map[32];                   // 16-48 
   size_t GetByteLength() const {
-    const size_t len = 15 * 4 + 16 +
+    const size_t len = 15 * 4 + 32 +
         num_particles * 3 * 4 +     // x, y, theta
         num_path_options * 3 * 4 +  // curvature, distance, clearance
         num_points * 3 * 4 +        // x, y, color

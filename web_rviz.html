@@ -182,7 +182,7 @@
         this.header.laser_max_angle = this.readFloat32();
         this.header.robot_pose = this.readPose();
         this.header.map = '';
-        for (let i = 0; i < 16; ++i) {
+        for (let i = 0; i < 32; ++i) {
           const c = this.readUint8();
           if (c > 0) {
             this.header.map += String.fromCharCode(c);
