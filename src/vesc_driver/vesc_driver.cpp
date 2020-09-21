@@ -116,6 +116,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   }
   if (kDebug) printf("CONNECTED\n");
   state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
+  autonomy_enabler_pub_ = nh.advertise<std_msgs::Bool>("autonomy_enabler", 1);
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
   car_status_pub_ = nh.advertise<CarStatusMsg>("car_status", 1);
 
@@ -213,6 +214,17 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     mux_drive_speed_ = speed;
     mux_steering_angle_ = steering_angle;
     if (kDebug) printf("%7.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
+  }
+
+  if (drive_mode_ == kAutonomousDrive || 
+      drive_mode_ == kAutonomousContinuousDrive) {
+    std_msgs::Bool msg;
+    msg.data = true;
+    autonomy_enabler_pub_.publish(msg);
+  } else {
+    std_msgs::Bool msg;
+    msg.data = false;
+    autonomy_enabler_pub_.publish(msg);
   }
 }
 
