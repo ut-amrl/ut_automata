@@ -707,7 +707,8 @@
       tLastDraw = tNow;
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (visMsg && currentMapName !== visMsg.header.map) {
+      if (visMsg && visMsg.header.map !== '' &&
+          currentMapName !== visMsg.header.map) {
         currentMapName = visMsg.header.map;
         loadMap(visMsg.header.map);
       }
