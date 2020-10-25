@@ -8,7 +8,7 @@ speed_to_erpm_offset = 160.0;
 -- servo value (0 to 1) =  steering_angle_to_servo_gain * steering angle
 --    (radians) + steering_angle_to_servo_offset
 steering_angle_to_servo_gain = -0.9015;
-steering_angle_to_servo_offset = 0.5054; -- 0.5304
+steering_angle_to_servo_offset = 0.426; --0.5054; -- 0.5304
 -- erpm_speed_limit = 14000; -- 3250
 erpm_speed_limit = 22000; -- 3250
 servo_min = 0.05;
@@ -18,7 +18,21 @@ servo_max = 0.95;
 -- https://traxxas.com/products/models/electric/ford-fiesta-st-rally?t=specs
 wheelbase = 0.324;
 
+max_acceleration = 6.0; -- m/s^2
+max_deceleration = 6.0; -- m/s^2
+
+joystick_normal_speed = 1.0; -- m/s
+joystick_turbo_speed = 2.0; -- m/s
+
 if (car_name == "car1")
 then
   steering_angle_to_servo_offset = 0.57;
 end
+
+if (car_name == "car0")
+then
+  steering_angle_to_servo_offset = 0.426;
+  steering_angle_to_servo_gain = -0.9015;
+  speed_to_erpm_gain = 5256;
+end
+
