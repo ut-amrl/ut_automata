@@ -12,6 +12,7 @@
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "nav_msgs/Odometry.h"
 #include "sensor_msgs/Joy.h"
+#include "std_msgs/Bool.h"
 
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
@@ -37,6 +38,7 @@ private:
   ros::Publisher state_pub_;
   ros::Publisher odom_pub_;
   ros::Publisher car_status_pub_;
+  ros::Publisher autonomy_enabler_pub_;
   ros::Subscriber ackermann_curvature_sub_;
   ros::Subscriber joystick_sub_;
   ros::SteadyTimer timer_;
