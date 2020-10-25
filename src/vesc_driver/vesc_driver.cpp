@@ -294,7 +294,10 @@ void VescDriver::sendDriveCommands() {
   vesc_.setSpeed(erpm_clipped);
 
   // Set servo position command.
-  vesc_.setServo(Clip(servo, servo_min_, servo_max_, "servo"));
+  const float clipped_servo = Clip(servo, servo_min_, servo_max_, "servo");
+  vesc_.setServo(clipped_servo);
+  mux_steering_angle_ = (clipped_servo - steering_to_servo_offset_) 
+                        / steering_to_servo_gain_;
   last_steering_angle_ = mux_steering_angle_;
 }
 
