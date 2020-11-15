@@ -39,3 +39,16 @@ After adding these lines you will need to either relog into the computer or run:
    git submodule update
    make -j
    ```
+3. To build the hardware drivers as well on the actual cars:
+   ```
+   make hardware
+   ```
+
+### Motion Limits
+
+The car's motion profile is limited by the top speed, the top acceleration and deceleration, and the VESC motor counts/second. The relevant lines in the `config/vesc.lua` config file are:
+   ```
+   erpm_speed_limit = 22000;
+   max_acceleration = 6.0; -- m/s^2
+   max_deceleration = 6.0; -- m/s^2
+   ```
