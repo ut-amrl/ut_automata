@@ -24,22 +24,22 @@ After adding these lines you will need to either relog into the computer or run:
 1. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
 
 ### Clone and Build Course Code
-1. From your home directory run:
+1. Clone the reposotiroy, including the submodules:
    ```
    git clone https://github.com/ut-amrl/ut_automata.git --recurse-submodule
-   cd ut_automata
-   make -j
    ```
-
-2. Alternatively if you have accidently forgot the ```--recurse-submodule``` flag during cloning phase, you can use the following steps instead:
+   If you forgot to include the ```--recurse-submodule```
+   flag when cloning the repo, you can  clone the submodules later using:
    ```
-   git clone https://github.com/ut-amrl/ut_automata.git
-   cd ut_automata
    git submodule init
    git submodule update
+   ```
+1. Build the repo:
+   ```
+   cd ut_automata
    make -j
    ```
-3. To build the hardware drivers as well on the actual cars:
+1. To build the hardware drivers as well on the actual cars:
    ```
    make hardware
    ```
