@@ -36,6 +36,7 @@ max_accel = 5.0
 -- Laser noise simulation.
 laser_noise_stddev = 0.01
 
--- Turning error simulation.
-angular_error_bias = DegToRad(0);
-angular_error_rate = 0.1;
+-- Actuation angular drift per unit distance traversed. 
+angular_drift_rate = DegToRad(5.0);
+-- Actuation Angular noise standard deviation per unit distance traversed. 
+angular_error_rate = DegToRad(0.0);
