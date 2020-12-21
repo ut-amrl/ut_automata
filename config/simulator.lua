@@ -37,6 +37,6 @@ max_accel = 5.0
 laser_noise_stddev = 0.01
 
 -- Actuation angular drift per unit distance traversed. 
-angular_drift_rate = DegToRad(5.0);
+angular_drift_rate = DegToRad(-0.5);
 -- Actuation Angular noise standard deviation per unit distance traversed. 
-angular_error_rate = DegToRad(0.0);
+angular_error_rate = DegToRad(5.0);
