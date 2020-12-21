@@ -1,5 +1,7 @@
-# ut_automata
-Repository for UT AUTOmata courses  
+# UT AUTOmata
+Infrastructure repository for UT AUTOmata
+
+![UT AUTOmata](https://amrl.cs.utexas.edu/assets/images/robots/automata_group.jpg)
 
 ### Overview
 These instructions are tailored to the computer setup in the GDC1.310 lab. If you are setting this up on your own personal computer, you will need to modify the instructions for your own setup, including perhaps saving the setup script entries to `.bashrc` instead of `.profile`
