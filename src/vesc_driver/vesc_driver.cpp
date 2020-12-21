@@ -22,16 +22,16 @@ static const float kCommandInterval = 1.0 / kCommandRate;
 
 CONFIG_FLOAT(speed_to_erpm_gain_, "speed_to_erpm_gain");
 CONFIG_FLOAT(speed_to_erpm_offset_, "speed_to_erpm_offset");
-
 CONFIG_FLOAT(steering_to_servo_gain_, "steering_angle_to_servo_gain");
 CONFIG_FLOAT(steering_to_servo_offset_, "steering_angle_to_servo_offset");
-
 CONFIG_FLOAT(wheelbase_, "wheelbase");
-
 CONFIG_FLOAT(erpm_speed_limit_, "erpm_speed_limit");
 CONFIG_FLOAT(servo_min_, "servo_min");
 CONFIG_FLOAT(servo_max_, "servo_max");
-
+CONFIG_FLOAT(max_accel_, "max_acceleration");
+CONFIG_FLOAT(max_decel_, "max_deceleration");
+CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
+CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
 CONFIG_STRING(serial_port_, "serial_port");
 
 config_reader::ConfigReader reader({
@@ -108,7 +108,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   try {
     if (kDebug) printf("CONNECT\n");
     vesc_.connect(serial_port_);
-  } catch (SerialException e) {
+  } catch (SerialException& e) {
     fprintf(stderr, "Failed to connect to the VESC, %s.", e.what());
     ros::shutdown();
     exit(1);
@@ -116,6 +116,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   }
   if (kDebug) printf("CONNECTED\n");
   state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
+  autonomy_enabler_pub_ = nh.advertise<std_msgs::Bool>("autonomy_enabler", 1);
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
   car_status_pub_ = nh.advertise<CarStatusMsg>("car_status", 1);
 
@@ -148,8 +149,6 @@ void VescDriver::checkCommandTimeout() {
 void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
   static const bool kDebug = false;
   static const float kMaxTurnRate = 0.25;
-  static const float kTurboSpeed = 2.0;
-  static const float kNormalSpeed = 1.0;
   static const float kAxesEps = 0.2;
   static const size_t kManualDriveButton = 4;
   static const size_t kAutonomousDriveButton = 5;
@@ -207,12 +206,23 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     const float steer_joystick = -msg.axes[0];
     const float drive_joystick = -msg.axes[4];
     const bool turbo_mode = (msg.axes[2] >= 0.9);
-    const float max_speed = (turbo_mode ? kTurboSpeed : kNormalSpeed);
+    const float max_speed = (turbo_mode ? turbo_speed_ : normal_speed_);
     float speed = drive_joystick * max_speed;
     float steering_angle = steer_joystick * kMaxTurnRate;
     mux_drive_speed_ = speed;
     mux_steering_angle_ = steering_angle;
     if (kDebug) printf("%7.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
+  }
+
+  if (drive_mode_ == kAutonomousDrive || 
+      drive_mode_ == kAutonomousContinuousDrive) {
+    std_msgs::Bool msg;
+    msg.data = true;
+    autonomy_enabler_pub_.publish(msg);
+  } else {
+    std_msgs::Bool msg;
+    msg.data = false;
+    autonomy_enabler_pub_.publish(msg);
   }
 }
 
@@ -252,15 +262,13 @@ float Clip(float x, float x_min, float x_max, const char* name) {
 
 void VescDriver::sendDriveCommands() {
   static const bool kDebug = false;
-  static const float kMaxAcceleration = 4.0; // m/s^2
-  static const float kMaxDeceleration = 6.0; // m/s^2
   static float last_speed_ = 0;
 
   using math_util::Bound;
   const float max_accel =
-    ((last_speed_ > 0.0) ? kMaxAcceleration : kMaxDeceleration);
+    ((last_speed_ > 0.0) ? max_accel_ : max_decel_);
   const float max_decel =
-    ((last_speed_ > 0.0) ? kMaxDeceleration : kMaxAcceleration);
+    ((last_speed_ > 0.0) ? max_decel_ : max_accel_);
   const float smooth_speed = math_util::Clamp<float>(
       mux_drive_speed_,
       last_speed_ - kCommandInterval * max_decel,
@@ -282,7 +290,10 @@ void VescDriver::sendDriveCommands() {
   vesc_.setSpeed(erpm_clipped);
 
   // Set servo position command.
-  vesc_.setServo(Clip(servo, servo_min_, servo_max_, "servo"));
+  const float clipped_servo = Clip(servo, servo_min_, servo_max_, "servo");
+  vesc_.setServo(clipped_servo);
+  mux_steering_angle_ = (clipped_servo - steering_to_servo_offset_) 
+                        / steering_to_servo_gain_;
   last_steering_angle_ = mux_steering_angle_;
 }
 
