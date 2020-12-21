@@ -23,6 +23,7 @@
 #include <stdio.h>
 
 #include <random>
+#include <string>
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
@@ -30,6 +31,8 @@
 #include "geometry_msgs/Pose2D.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "gflags/gflags.h"
+#include "glog/logging.h"
+#include "ros/package.h"
 
 #include "simulator.h"
 #include "amrl_msgs/Localization2DMsg.h"
@@ -43,6 +46,8 @@
 
 DEFINE_bool(localize, false, "Publish localization");
 
+const string kAmrlMapsDir = ros::package::getPath("amrl_maps");
+
 using Eigen::Rotation2Df;
 using Eigen::Vector2f;
 using amrl_msgs::AckermannCurvatureDriveMsg;
@@ -53,6 +58,7 @@ using math_util::AngleMod;
 using math_util::DegToRad;
 using math_util::RadToDeg;
 using std::atan2;
+using std::string;
 using vector_map::VectorMap;
 
 CONFIG_STRING(cMapName, "map_name");
@@ -75,6 +81,9 @@ CONFIG_FLOAT(cAngularErrorBias, "angular_error_bias");
 CONFIG_FLOAT(cAngularErrorRate, "angular_error_rate");
 config_reader::ConfigReader reader({"config/simulator.lua"});
 
+string MapNameToFile(const string& map) {
+  return kAmrlMapsDir + "/" + map + "/" + map + ".vectormap.txt";
+}
 
 Simulator::Simulator() :
     laser_noise_(0, 1),
@@ -87,6 +96,13 @@ Simulator::Simulator() :
 Simulator::~Simulator() { }
 
 void Simulator::init(ros::NodeHandle& n) {
+  if (kAmrlMapsDir.empty()) {
+    fprintf(stderr, 
+            "ERROR: AMRL maps directory not found. "
+            "Make sure your ROS_PACKAGE_PATH environment variable includes "
+            "the path to the amrl_maps repository.\n");
+    exit(1);
+  }
   scanDataMsg.header.seq = 0;
   scanDataMsg.header.frame_id = "base_laser";
   scanDataMsg.angle_min = DegToRad(-135.0);
@@ -104,6 +120,8 @@ void Simulator::init(ros::NodeHandle& n) {
 
   curLoc = Vector2f(cStartX, cStartY);
   curAngle = cStartAngle;
+  map_name_ = cMapName;
+  map_.Load(MapNameToFile(cMapName));
 
   initSimulatorVizMarkers();
   drawMap();
@@ -114,7 +132,7 @@ void Simulator::init(ros::NodeHandle& n) {
       &Simulator::DriveCallback,
       this);
   initSubscriber = n.subscribe(
-      "/initialpose", 1, &Simulator::InitalLocationCallback, this);
+      "/set_pose", 1, &Simulator::InitalLocationCallback, this);
   odometryTwistPublisher = n.advertise<nav_msgs::Odometry>("/odom",1);
   laserPublisher = n.advertise<sensor_msgs::LaserScan>("/scan", 1);
   mapLinesPublisher = n.advertise<visualization_msgs::Marker>(
@@ -132,14 +150,20 @@ void Simulator::init(ros::NodeHandle& n) {
   br = new tf::TransformBroadcaster();
 }
 
-void Simulator::InitalLocationCallback(const PoseWithCovarianceStamped& msg) {
-  curLoc = Vector2f(msg.pose.pose.position.x, msg.pose.pose.position.y);
-  curAngle = 2.0 *
-      atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
-  printf("Set robot pose: %.2f,%.2f, %.1f\u00b0\n",
+void Simulator::InitalLocationCallback(
+    const amrl_msgs::Localization2DMsg& msg) {
+  curLoc = Vector2f(msg.pose.x, msg.pose.y);
+  curAngle = msg.pose.theta;
+  if (map_name_ != msg.map) {
+    map_.Load(MapNameToFile(msg.map));
+    map_name_ = msg.map;
+    drawMap();
+  }
+  printf("Set robot pose: %.2f,%.2f, %.1f\u00b0 @ %s\n",
          curLoc.x(),
          curLoc.y(),
-         RadToDeg(curAngle));
+         RadToDeg(curAngle),
+         msg.map.c_str());
 }
 
 
@@ -276,10 +300,6 @@ void Simulator::publishOdometry() {
 }
 
 void Simulator::publishLaser() {
-  if (map_.file_name != cMapName) {
-    map_.Load(cMapName);
-    drawMap();
-  }
   scanDataMsg.header.stamp = ros::Time::now();
   const Vector2f laserRobotLoc(cLaserLocX, cLaserLocY);
   const Vector2f laserLoc = curLoc + Rotation2Df(curAngle) * laserRobotLoc;
@@ -423,7 +443,7 @@ void Simulator::Run() {
     localization_msg_.pose.x = curLoc.x();
     localization_msg_.pose.y = curLoc.y();
     localization_msg_.pose.theta = curAngle;
-    localization_msg_.map = map_.file_name;
+    localization_msg_.map = map_name_;
     localization_msg_.header.stamp = ros::Time::now();
     localizationPublisher.publish(localization_msg_);
   }

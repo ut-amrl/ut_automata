@@ -31,7 +31,7 @@ ROSBUILD_INIT()
 SET(ROS_BUILD_STATIC_LIBS true)
 SET(ROS_BUILD_SHARED_LIBS false)
 
-find_package(Qt5 COMPONENTS Core Widgets Gui OpenGL WebSockets REQUIRED)
+find_package(Qt5 COMPONENTS Core Widgets Gui WebSockets REQUIRED)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 

@@ -380,7 +380,7 @@
           x: x,
           y: y,
           theta: theta,
-          map: currentMapName
+          map: mapList.value
         }));
       }
 
@@ -395,7 +395,7 @@
           x: x,
           y: y,
           theta: theta,
-          map: currentMapName
+          map: mapList.value
         }));
       }
 
@@ -407,8 +407,7 @@
     };
 
     function changeMap() {
-      currentMapName = mapList.value;
-      loadMap(currentMapName);
+      loadMap(mapList.value);
     }
 
     function loadMap(mapName) {
