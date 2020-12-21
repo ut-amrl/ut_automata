@@ -10,7 +10,7 @@ function DegToRad(d)
   return math.pi * d / 180
 end
 
-map_name =  "maps/GDC1/GDC1.vectormap.txt";
+map_name =  "GDC1";
 -- Simulator starting location.
 start_x = -21
 start_y = 9.0

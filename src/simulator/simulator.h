@@ -22,6 +22,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "eigen3/Eigen/Dense"
@@ -114,6 +115,7 @@ class Simulator{
   std::normal_distribution<float> angular_error_;
 
   amrl_msgs::Localization2DMsg localization_msg_;
+  std::string map_name_;
 
 private:
   void initVizMarker(visualization_msgs::Marker& vizMarker,
@@ -126,8 +128,7 @@ private:
                      std::vector<float> color);
   void initSimulatorVizMarkers();
   void drawMap();
-  void InitalLocationCallback(
-      const geometry_msgs::PoseWithCovarianceStamped& msg);
+  void InitalLocationCallback(const amrl_msgs::Localization2DMsg& msg);
   void DriveCallback(const amrl_msgs::AckermannCurvatureDriveMsg& msg);
   void publishOdometry();
   void publishLaser();
