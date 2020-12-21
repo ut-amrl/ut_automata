@@ -11,4 +11,5 @@
   <depend package="sensor_msgs"/>
   <depend package="tf"/>
   <depend package="amrl_msgs"/>
+  <depend package="amrl_maps"/>
 </package>
