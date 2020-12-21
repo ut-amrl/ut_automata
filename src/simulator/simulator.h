@@ -76,42 +76,37 @@ class AccelLimits{
 };
 
 class Simulator{
-  Eigen::Vector2f loc;
-  double vel;
-  double angVel;
+  // Forward velocity of the robot at the instantaneous base_link frame.
+  double robot_vel_;
+  // Angular velocity of the robot.
+  double robot_ang_vel_;
 
-  ros::Subscriber driveSubscriber;
-  ros::Subscriber initSubscriber;
+  ros::Subscriber drive_subscriber_;
+  ros::Subscriber init_subscriber_;
 
-  ros::Publisher odometryTwistPublisher;
-  ros::Publisher laserPublisher;
-  ros::Publisher mapLinesPublisher;
-  ros::Publisher posMarkerPublisher;
-  ros::Publisher truePosePublisher;
-  ros::Publisher localizationPublisher;
-  tf::TransformBroadcaster *br;
+  ros::Publisher odometry_publisher_;
+  ros::Publisher laser_publisher_;
+  ros::Publisher map_publisher_;
+  ros::Publisher robot_marker_publisher_;
+  ros::Publisher true_pose_publisher_;
+  ros::Publisher localization_publisher_;
+  tf::TransformBroadcaster *tf_broadcaster_;
 
 
-  sensor_msgs::LaserScan scanDataMsg;
-  nav_msgs::Odometry odometryTwistMsg;
+  sensor_msgs::LaserScan scan_msg_;
+  nav_msgs::Odometry odom_msg_;
 
   vector_map::VectorMap map_;
 
-  visualization_msgs::Marker lineListMarker;
-  visualization_msgs::Marker robotPosMarker;
-
-  static const float startX;
-  static const float startY;
-  static const float startAngle;
+  visualization_msgs::Marker line_list_marker_;
+  visualization_msgs::Marker robot_pos_marker_;
 
   // True robot location - will be corrupted by actuation error.
   Eigen::Vector2f true_robot_loc_;
   float true_robot_angle_;
 
-  double tLastCmd;
+  double t_last_cmd_;
 
-  static const float DT;
-  static const float kMinR;
   geometry_msgs::PoseStamped truePoseMsg;
 
   amrl_msgs::AckermannCurvatureDriveMsg last_cmd_;
