@@ -220,7 +220,12 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.num_laser_rays = laser_msg.ranges.size();
   msg.laser_scan.resize(laser_msg.ranges.size());
   for (size_t i = 0; i < laser_msg.ranges.size(); ++i) {
-    msg.laser_scan[i] = static_cast<uint32_t>(laser_msg.ranges[i] * 1000.0);
+    if (laser_msg.ranges[i] > laser_msg.range_min && 
+        laser_msg.ranges[i] < laser_msg.range_max) {
+      msg.laser_scan[i] = static_cast<uint32_t>(laser_msg.ranges[i] * 1000.0);
+    } else {
+      msg.laser_scan[i] = 0;
+    }
   }
 
   msg.particles = global_msg.particles;
