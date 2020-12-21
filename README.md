@@ -26,6 +26,7 @@ After adding these lines you will need to either relog into the computer or run:
 ### Dependencies
 1. Run `install_dependencies.sh` to install package dependencies.
 1. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
+1. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
 
 ### Clone and Build Course Code
 1. Clone the reposotiroy, including the submodules:
