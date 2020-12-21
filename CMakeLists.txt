@@ -15,7 +15,7 @@ IF(CMAKE_VERSION VERSION_LESS "3.7.0")
     SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 ENDIF()
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -Wno-stringop-truncation -Wno-deprecated-copy -g")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")

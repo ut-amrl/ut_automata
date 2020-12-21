@@ -22,6 +22,7 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <algorithm>
 #include <random>
 #include <string>
 
@@ -43,6 +44,10 @@
 #include "shared/ros/ros_helpers.h"
 #include "shared/util/timer.h"
 #include "vector_map.h"
+
+using std::string;
+using std::vector;
+using std::max;
 
 DEFINE_bool(localize, false, "Publish localization");
 
@@ -184,7 +189,7 @@ void Simulator::InitalLocationCallback(
  * @param color       vector of 4 float values representing color of marker;
  *                    0: red, 1: green, 2: blue, 3: alpha
  */
-void Simulator::initVizMarker(visualization_msgs::Marker& vizMarker, string ns,
+void Simulator::InitVizMarker(visualization_msgs::Marker& vizMarker, string ns,
     int id, string type, geometry_msgs::PoseStamped p,
     geometry_msgs::Point32 scale, double duration, vector<float> color) {
 
@@ -244,7 +249,7 @@ void Simulator::initSimulatorVizMarkers() {
   color[1] = 134.0 / 255.0;
   color[2] = 244.0 / 255.0;
   color[3] = 1.0;
-  initVizMarker(lineListMarker, "map_lines", 0, "linelist", p, scale, 0.0,
+  InitVizMarker(lineListMarker, "map_lines", 0, "linelist", p, scale, 0.0,
 color);
 
   p.pose.position.z = 0.5 * cCarHeight;
@@ -255,7 +260,7 @@ color);
   color[1] = 156.0 / 255.0;
   color[2] = 255.0 / 255.0;
   color[3] = 0.8;
-  initVizMarker(robotPosMarker, "robot_position", 1, "cube", p, scale, 0.0,
+  InitVizMarker(robotPosMarker, "robot_position", 1, "cube", p, scale, 0.0,
 color);
 
 }

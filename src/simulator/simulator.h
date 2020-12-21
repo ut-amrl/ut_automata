@@ -47,8 +47,6 @@
 #ifndef SIMULATOR_H
 #define SIMULATOR_H
 
-using namespace std;
-
 class AccelLimits{
   public:
     double max_accel;  // acceleration limit from 0 to max_vel
@@ -56,18 +54,24 @@ class AccelLimits{
     double max_vel;    // maximum velocity along dimension
 
   public:
-    void set(double a,double d,double v)
-    {max_accel=a; max_deccel=d; max_vel=v;}
+    void Set(double a,double d,double v) {
+      max_accel = a; 
+      max_deccel = d;
+      max_vel = v;
+    }
 
-    // return new limits with all parameters scaled by <f>
-    AccelLimits operator*(double f) const
-    {AccelLimits r; r.set(max_accel*f,max_deccel*f,max_vel*f); return(r);}
+    // Return new limits with all parameters scaled by <f>.
+    AccelLimits operator*(double f) const {
+      AccelLimits r;
+      r.Set(max_accel * f, max_deccel * f, max_vel * f);
+      return(r);
+    }
 
-    // scale all parameters by <f> in-place
-    AccelLimits &operator*=(double f);
+    // Scale all parameters by <f> in-place.
+    AccelLimits& operator*=(double f);
 
-    // set limits to <al> with all parameters scaled by <f>
-    AccelLimits &set(const AccelLimits &al,double f);
+    // Set limits to <al> with all parameters scaled by <f>.
+    AccelLimits& set(const AccelLimits &al,double f);
 };
 
 class Simulator{
@@ -118,10 +122,10 @@ class Simulator{
   std::string map_name_;
 
 private:
-  void initVizMarker(visualization_msgs::Marker& vizMarker,
-                     string ns,
+  void InitVizMarker(visualization_msgs::Marker& vizMarker,
+                     std::string ns,
                      int id,
-                     string type,
+                     std::string type,
                      geometry_msgs::PoseStamped p,
                      geometry_msgs::Point32 scale,
                      double duration,
