@@ -1,13 +1,12 @@
 #!/usr/bin/env python
+import roslib
+roslib.load_manifest('ut_automata')
 import rospy
-
-from ackermann_msgs.msg import AckermannDriveStamped
+from amrl_msgs.msg import AckermannCurvatureDriveMsg
 
 import sys, select, termios, tty
 
 banner = """
-Reading from the keyboard  and Publishing to AckermannDriveStamped!
----------------------------
 Moving around:
         w
    a    s    d
@@ -29,17 +28,17 @@ def getKey():
    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
    return key
 
-speed = 0.5
-turn = 0.25
+speed = 1.0
+turn = 1.0
 
 def vels(speed,turn):
   return "currently:\tspeed %s\tturn %s " % (speed,turn)
 
 if __name__=="__main__":
-  print banner
+  print(banner)
   settings = termios.tcgetattr(sys.stdin)
-  pub = rospy.Publisher('commands/ackermann',
-                        AckermannDriveStamped,
+  pub = rospy.Publisher('ackermann_curvature_drive',
+                        AckermannCurvatureDriveMsg,
                         queue_size=5)
   rospy.init_node('keyop')
 
@@ -58,31 +57,23 @@ if __name__=="__main__":
           th = 0
           if (key == '\x03'):
              break
-       msg = AckermannDriveStamped();
-       msg.header.stamp = rospy.Time.now();
-       msg.header.frame_id = "base_link";
+       msg = AckermannCurvatureDriveMsg()
+       msg.header.stamp = rospy.Time.now()
+       msg.header.frame_id = "base_link"
 
-       msg.drive.speed = x*speed;
-       msg.drive.acceleration = 1;
-       msg.drive.jerk = 1;
-       msg.drive.steering_angle = th*turn
-       msg.drive.steering_angle_velocity = 1
+       msg.velocity = x*speed
+       msg.curvature = th*turn
 
        pub.publish(msg)
 
   except:
-    print 'error'
+    print('error')
 
   finally:
-    msg = AckermannDriveStamped();
-    msg.header.stamp = rospy.Time.now();
-    msg.header.frame_id = "base_link";
-
-    msg.drive.speed = 0;
-    msg.drive.acceleration = 1;
-    msg.drive.jerk = 1;
-    msg.drive.steering_angle = 0
-    msg.drive.steering_angle_velocity = 1
+    msg = AckermannCurvatureDriveMsg()
+    msg.header.stamp = rospy.Time.now()
+    msg.header.frame_id = "base_link"
+    msg.velocity = 0
+    msg.curvature = 0
     pub.publish(msg)
-
     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
