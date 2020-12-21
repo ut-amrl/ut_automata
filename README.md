@@ -1,4 +1,6 @@
 # UT AUTOmata
+[![Build Status](https://travis-ci.com/ut-amrl/ut_automata.svg?token=rBLDT1qXfkKmkTerGLzY&branch=master)](https://travis-ci.com/ut-amrl/ut_automata)
+
 Infrastructure repository for UT AUTOmata
 
 ![UT AUTOmata](https://amrl.cs.utexas.edu/assets/images/robots/automata_group.jpg)

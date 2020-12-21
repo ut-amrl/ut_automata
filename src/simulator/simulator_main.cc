@@ -32,9 +32,9 @@
 
 int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
-  printf("\nF1/10 Simulator\n\n");
+  printf("\nUT AUTOmata F1/10 Simulator\n\n");
 
-  ros::init(argc, argv, "F1Tenth_Simulator");
+  ros::init(argc, argv, "ut_automata_simulator");
   ros::NodeHandle n;
 
   Simulator simulator;

@@ -1,0 +1,54 @@
+os: linux
+dist: focal
+language:
+  - cpp
+env:
+  global:
+    - ROS_CI_DESKTOP="`lsb_release -cs`"  # e.g. [trusty|xenial|...]
+    - CI_SOURCE_PATH=$(pwd)
+    - ROSINSTALL_FILE=$CI_SOURCE_PATH/dependencies.rosinstall
+    - CATKIN_OPTIONS=$CI_SOURCE_PATH/catkin.options
+    - ROS_PARALLEL_JOBS='-j8 -l6'
+compiler:
+  - clang
+  - gcc
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - gcc-7
+      - g++-7
+      - cmake
+      - clang-7
+before_install:
+  - sudo add-apt-repository universe
+  - sudo add-apt-repository multiverse
+  - sudo apt update
+  - sudo sh -c "echo \"deb http://packages.ros.org/ros/ubuntu $ROS_CI_DESKTOP main\" > /etc/apt/sources.list.d/ros-latest.list"
+  - sudo apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+  - sudo apt-get update -qq
+  - sudo apt-get install dpkg
+  - sudo apt-get install -y ros-noetic-desktop libgtest-dev libeigen3-dev libgoogle-glog-dev cmake build-essential
+  - sudo apt-get install python3-rosdep build-essential
+  - sudo apt-get install -y g++ cmake libpopt-dev
+  - sudo apt-get install -y liblua5.1-dev
+  - sudo apt-get install -y libeigen3-dev libqt5websockets5-dev
+  - sudo apt-get install -y libgoogle-glog-dev libgflags-dev
+  - source /opt/ros/noetic/setup.bash
+  - sudo rosdep init
+  - rosdep update --include-eol-distros  # Support EOL distros.
+  - pushd $CI_SOURCE_PATH/..
+  - git clone https://github.com/ut-amrl/amrl_msgs.git
+  - git clone https://github.com/ut-amrl/amrl_maps.git
+  - pushd $CI_SOURCE_PATH/../amrl_msgs
+  - export ROS_PACKAGE_PATH=`pwd`:$ROS_PACKAGE_PATH
+  - make
+  - popd
+  - popd
+script:
+  - source /opt/ros/noetic/setup.bash
+  - export ROS_PACKAGE_PATH=`pwd`:$ROS_PACKAGE_PATH
+  - export ROS_PACKAGE_PATH=`pwd`/../amrl_msgs:$ROS_PACKAGE_PATH
+  - export ROS_PACKAGE_PATH=`pwd`/../amrl_maps:$ROS_PACKAGE_PATH
+  - make
