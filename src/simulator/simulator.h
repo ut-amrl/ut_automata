@@ -40,6 +40,7 @@
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "amrl_msgs/Localization2DMsg.h"
 
+#include "shared/util/random.h"
 #include "shared/util/timer.h"
 #include "shared/math/geometry.h"
 #include "simulator/vector_map.h"
@@ -101,10 +102,11 @@ class Simulator{
 
   static const float startX;
   static const float startY;
-  Eigen::Vector2f curLoc;
-
   static const float startAngle;
-  float curAngle;
+
+  // True robot location - will be corrupted by actuation error.
+  Eigen::Vector2f true_robot_loc_;
+  float true_robot_angle_;
 
   double tLastCmd;
 
@@ -114,12 +116,15 @@ class Simulator{
 
   amrl_msgs::AckermannCurvatureDriveMsg last_cmd_;
 
-  std::default_random_engine rng_;
-  std::normal_distribution<float> laser_noise_;
-  std::normal_distribution<float> angular_error_;
-
   amrl_msgs::Localization2DMsg localization_msg_;
   std::string map_name_;
+
+  util_random::Random random_;
+
+  // Odometry-reported robot location - will be according to commands, but
+  // starting in arbitrary odometry frame.
+  Eigen::Vector2f odom_loc_;
+  float odom_angle_;
 
 private:
   void InitVizMarker(visualization_msgs::Marker& vizMarker,
@@ -130,20 +135,20 @@ private:
                      geometry_msgs::Point32 scale,
                      double duration,
                      std::vector<float> color);
-  void initSimulatorVizMarkers();
-  void drawMap();
+  void InitSimulatorVizMarkers();
+  void DrawMap();
   void InitalLocationCallback(const amrl_msgs::Localization2DMsg& msg);
   void DriveCallback(const amrl_msgs::AckermannCurvatureDriveMsg& msg);
-  void publishOdometry();
-  void publishLaser();
-  void publishVisualizationMarkers();
-  void publishTransform();
-  void update();
+  void PublishOdometry();
+  void PublishLaser();
+  void PublishVisualizationMarkers();
+  void PublishTransform();
+  void Update();
 
 public:
   Simulator();
   ~Simulator();
-  void init(ros::NodeHandle &n);
+  void Init(ros::NodeHandle &n);
   void Run();
 };
 #endif //SIMULATOR_H

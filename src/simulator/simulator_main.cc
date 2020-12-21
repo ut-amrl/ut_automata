@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
   ros::NodeHandle n;
 
   Simulator simulator;
-  simulator.init(n);
+  simulator.Init(n);
 
   // main loop
   RateLoop rate(40.0);
