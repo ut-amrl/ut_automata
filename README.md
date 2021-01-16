@@ -39,3 +39,16 @@ After adding these lines you will need to either relog into the computer or run:
    git submodule update
    make -j
    ```
+
+### Autostart on Actual Car Jetson Computer
+
+To start the car driver nodes automatically when the Jetson boots up:
+1. Install a symlink to the `ut_automata.service` under systemd:
+      ```
+      sudo ln -s (PATH_TO_REPO)/scripts/ut_automata.service /etc/systemd/system/ut_automata.service
+      ```
+1. Enable the service:
+      ```
+      sudo service enable ut_automata
+      ```
+1. Reboot the computer
