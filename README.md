@@ -30,7 +30,6 @@ After adding these lines you will need to either relog into the computer or run:
    cd ut_automata
    make -j
    ```
-
 2. Alternatively if you have accidently forgot the ```--recurse-submodule``` flag during cloning phase, you can use the following steps instead:
    ```
    git clone https://github.com/ut-amrl/ut_automata.git
@@ -39,16 +38,29 @@ After adding these lines you will need to either relog into the computer or run:
    git submodule update
    make -j
    ```
+3. To build the hardware drivers as well on the actual cars:
+   ```
+   make hardware
+   ```
 
 ### Autostart on Actual Car Jetson Computer
 
 To start the car driver nodes automatically when the Jetson boots up:
 1. Install a symlink to the `ut_automata.service` under systemd:
-      ```
-      sudo ln -s (PATH_TO_REPO)/scripts/ut_automata.service /etc/systemd/system/ut_automata.service
-      ```
+   ```
+   sudo ln -s (PATH_TO_REPO)/scripts/ut_automata.service /etc/systemd/system/ut_automata.service
+   ```
 1. Enable the service:
-      ```
-      sudo service enable ut_automata
-      ```
+   ```
+   sudo service enable ut_automata
+   ```
 1. Reboot the computer
+
+### Motion Limits
+
+The car's motion profile is limited by the top speed, the top acceleration and deceleration, and the VESC motor counts/second. The relevant lines in the `config/vesc.lua` config file are:
+   ```
+   erpm_speed_limit = 22000;
+   max_acceleration = 6.0; -- m/s^2
+   max_deceleration = 6.0; -- m/s^2
+   ```
