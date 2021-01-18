@@ -55,4 +55,5 @@ script:
   - source /opt/ros/melodic/setup.bash
   - export ROS_PACKAGE_PATH=`pwd`:$ROS_PACKAGE_PATH
   - export ROS_PACKAGE_PATH=`pwd`/../amrl_msgs:$ROS_PACKAGE_PATH
+  - export ROS_PACKAGE_PATH=`pwd`/../amrl_maps:$ROS_PACKAGE_PATH
   - make hardware
