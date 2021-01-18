@@ -1,11 +1,11 @@
 # UT AUTOmata
-[![Build Status](https://travis-ci.com/ut-amrl/ut_automata.svg?token=rBLDT1qXfkKmkTerGLzY&branch=master)](https://travis-ci.com/ut-amrl/ut_automata)
+
+[![Build Status](https://travis-ci.com/ut-amrl/ut_automata.svg?branch=master)](https://travis-ci.com/ut-amrl/ut_automata)
 
 Infrastructure repository for UT AUTOmata
 
 ![UT AUTOmata](https://amrl.cs.utexas.edu/assets/images/robots/automata_group.jpg)
 
-[![Build Status](https://travis-ci.com/ut-amrl/ut_automata.svg?branch=master)](https://travis-ci.com/ut-amrl/ut_automata)
 
 ### Overview
 These instructions are tailored to the computer setup in the GDC1.310 lab. If you are setting this up on your own personal computer, you will need to modify the instructions for your own setup, including perhaps saving the setup script entries to `.bashrc` instead of `.profile`
