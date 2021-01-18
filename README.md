@@ -31,7 +31,7 @@ After adding these lines you will need to either relog into the computer or run:
 1. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
 
 ### Clone and Build Course Code
-1. Clone the reposotiroy, including the submodules:
+1. Clone the repository, including the submodules:
    ```
    git clone https://github.com/ut-amrl/ut_automata.git --recurse-submodule
    ```
