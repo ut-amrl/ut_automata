@@ -63,10 +63,6 @@ class Joystick {
  private:
   int fd;
 
-  static const int MaxModelSize = 1024;
-
-  const int kDeadzone = 6000;
-
   const Model *model;
   int model_size;
 
