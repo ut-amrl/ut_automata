@@ -12,7 +12,7 @@
 #include <boost/crc.hpp>
 
 #include "vesc_driver/vesc_packet_factory.h"
-#include "serial/serial.h"
+#include "serial.h"
 
 
 namespace vesc_driver

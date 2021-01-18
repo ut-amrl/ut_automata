@@ -15,7 +15,7 @@
 // If not, see <http://www.gnu.org/licenses/>.
 // ========================================================================
 
-#include "serial/serial.h"
+#include "serial.h"
 
 #include <sys/poll.h>
 #include <sys/stat.h>
