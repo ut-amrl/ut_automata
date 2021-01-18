@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include "boost/bind.hpp"
+#include "gflags/gflags.h"
 #include "ut_automata/CarStatusMsg.h"
 #include "ut_automata/VescStateStamped.h"
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
@@ -34,10 +35,8 @@ CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
 CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
 CONFIG_STRING(serial_port_, "serial_port");
 
-config_reader::ConfigReader reader({
-  "config/car.lua",
-  "config/vesc.lua"
-});
+DEFINE_string(config_dir, "config", 
+    "Directory containting the car.lua and vesc.lua config files.");
 
 using ut_automata::CarStatusMsg;
 using ut_automata::VescStateStamped;
@@ -66,6 +65,13 @@ VescDriver::VescDriver(ros::NodeHandle nh,
     fw_version_minor_(-1),
     t_last_command_(0),
     t_last_joystick_(0) {
+  {
+    // Load config.
+    config_reader::ConfigReader reader({
+      FLAGS_config_dir + "/car.lua",
+      FLAGS_config_dir + "/vesc.lua"
+    });
+  }
   state_msg_.header.seq = 0;
   state_msg_.header.frame_id = "base_link";
   car_status_msg_.header = state_msg_.header;
