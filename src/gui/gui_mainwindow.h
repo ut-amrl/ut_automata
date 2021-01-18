@@ -70,7 +70,6 @@ class Led : public QWidget {
 
  private:
   bool status_on_;
-  QWidget* led_;
 };
 
 class StatusLed : public QFrame {
