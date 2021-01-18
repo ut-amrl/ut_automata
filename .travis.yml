@@ -38,7 +38,7 @@ before_install:
   - sudo apt-get install -y libgoogle-glog-dev libgflags-dev libceres-dev
   - sudo apt-get install -y libtbb-dev libgoogle-perftools-dev libopenmpi-dev
   - sudo apt-get install -y python-pygame ros-melodic-serial 
-  - sudo apt-get install -y libqt5websockets5-dev
+  - sudo apt-get install -y libqt5websockets5-dev libqt5opengl5-dev
   - sudo apt-get install -y ros-melodic-rosbridge-suite ros-melodic-angles 
   - source /opt/ros/melodic/setup.bash
   - sudo rosdep init
