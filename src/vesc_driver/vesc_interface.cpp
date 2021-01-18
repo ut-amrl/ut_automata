@@ -9,11 +9,10 @@
 #include <iostream>
 #include <iomanip>
 
-#include <serial/serial.h>
 #include <boost/crc.hpp>
 
 #include "vesc_driver/vesc_packet_factory.h"
-
+#include "serial/serial.h"
 
 
 namespace vesc_driver
@@ -22,10 +21,7 @@ namespace vesc_driver
 class VescInterface::Impl
 {
 public:
-  Impl() :
-    serial_(std::string(), 115200, serial::Timeout::simpleTimeout(100),
-            serial::eightbits, serial::parity_none, serial::stopbits_one, serial::flowcontrol_none)
-  {}
+  Impl() {}
 
   void* rxThread(void);
 
@@ -38,7 +34,7 @@ public:
   bool rx_thread_run_;
   PacketHandlerFunction packet_handler_;
   ErrorHandlerFunction error_handler_;
-  serial::Serial serial_;
+  Serial serial_;
   VescFrame::CRC send_crc_;
 };
 
@@ -107,10 +103,10 @@ void* VescInterface::Impl::rxThread(void)
       buffer.erase(buffer.begin(), iter);
     }
 
-    // attempt to read at least bytes_needed bytes from the serial port
-    int bytes_to_read =
-      std::max(bytes_needed, std::min(4096, static_cast<int>(serial_.available())));
-    int bytes_read = serial_.read(buffer, bytes_to_read);
+    // Wait for input on the serial port for up to 100ms
+    serial_.waitForInput(100);
+    // attempt to read from the serial port
+    int bytes_read = serial_.read(buffer.data(), buffer.size());
     if (bytes_needed > 0 && 0 == bytes_read && !buffer.empty()) {
       error_handler_("Possibly out-of-sync with VESC, read timout in the middle of a frame.");
     }
@@ -158,14 +154,9 @@ void VescInterface::connect(const std::string& port)
   }
 
   // connect to serial port
-  try {
-    impl_->serial_.setPort(port);
-    impl_->serial_.open();
-  }
-  catch (const std::exception& e) {
-      std::stringstream ss;
-      ss << "Failed to open the serial port to the VESC. " << e.what();
-      throw SerialException(ss.str().c_str());
+  if (!impl_->serial_.open(port.c_str(), 115200)) {
+      fprintf(stderr, "Failed to open the serial port %s to the VESC\n",
+          port.c_str());
   }
 
   // start up a monitoring thread
@@ -207,7 +198,8 @@ bool VescInterface::isConnected() const
 
 void VescInterface::send(const VescPacket& packet)
 {
-  size_t written = impl_->serial_.write(packet.frame());
+  const std::vector<uint8_t>& buffer = packet.frame();
+  size_t written = impl_->serial_.write(buffer.data(), buffer.size());
   if (written != packet.frame().size()) {
     std::stringstream ss;
     ss << "Wrote " << written << " bytes, expected " << packet.frame().size() << ".";
