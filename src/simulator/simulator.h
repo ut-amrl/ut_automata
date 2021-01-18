@@ -22,6 +22,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "eigen3/Eigen/Dense"
@@ -39,14 +40,13 @@
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "amrl_msgs/Localization2DMsg.h"
 
+#include "shared/util/random.h"
 #include "shared/util/timer.h"
 #include "shared/math/geometry.h"
 #include "simulator/vector_map.h"
 
 #ifndef SIMULATOR_H
 #define SIMULATOR_H
-
-using namespace std;
 
 class AccelLimits{
   public:
@@ -55,90 +55,95 @@ class AccelLimits{
     double max_vel;    // maximum velocity along dimension
 
   public:
-    void set(double a,double d,double v)
-    {max_accel=a; max_deccel=d; max_vel=v;}
+    void Set(double a,double d,double v) {
+      max_accel = a; 
+      max_deccel = d;
+      max_vel = v;
+    }
 
-    // return new limits with all parameters scaled by <f>
-    AccelLimits operator*(double f) const
-    {AccelLimits r; r.set(max_accel*f,max_deccel*f,max_vel*f); return(r);}
+    // Return new limits with all parameters scaled by <f>.
+    AccelLimits operator*(double f) const {
+      AccelLimits r;
+      r.Set(max_accel * f, max_deccel * f, max_vel * f);
+      return(r);
+    }
 
-    // scale all parameters by <f> in-place
-    AccelLimits &operator*=(double f);
+    // Scale all parameters by <f> in-place.
+    AccelLimits& operator*=(double f);
 
-    // set limits to <al> with all parameters scaled by <f>
-    AccelLimits &set(const AccelLimits &al,double f);
+    // Set limits to <al> with all parameters scaled by <f>.
+    AccelLimits& set(const AccelLimits &al,double f);
 };
 
 class Simulator{
-  Eigen::Vector2f loc;
-  double vel;
-  double angVel;
+  // Forward velocity of the robot at the instantaneous base_link frame.
+  double robot_vel_;
+  // Angular velocity of the robot.
+  double robot_ang_vel_;
 
-  ros::Subscriber driveSubscriber;
-  ros::Subscriber initSubscriber;
+  ros::Subscriber drive_subscriber_;
+  ros::Subscriber init_subscriber_;
 
-  ros::Publisher odometryTwistPublisher;
-  ros::Publisher laserPublisher;
-  ros::Publisher mapLinesPublisher;
-  ros::Publisher posMarkerPublisher;
-  ros::Publisher truePosePublisher;
-  ros::Publisher localizationPublisher;
-  tf::TransformBroadcaster *br;
+  ros::Publisher odometry_publisher_;
+  ros::Publisher laser_publisher_;
+  ros::Publisher map_publisher_;
+  ros::Publisher robot_marker_publisher_;
+  ros::Publisher true_pose_publisher_;
+  ros::Publisher localization_publisher_;
+  tf::TransformBroadcaster *tf_broadcaster_;
 
 
-  sensor_msgs::LaserScan scanDataMsg;
-  nav_msgs::Odometry odometryTwistMsg;
+  sensor_msgs::LaserScan scan_msg_;
+  nav_msgs::Odometry odom_msg_;
 
   vector_map::VectorMap map_;
 
-  visualization_msgs::Marker lineListMarker;
-  visualization_msgs::Marker robotPosMarker;
+  visualization_msgs::Marker line_list_marker_;
+  visualization_msgs::Marker robot_pos_marker_;
 
-  static const float startX;
-  static const float startY;
-  Eigen::Vector2f curLoc;
+  // True robot location - will be corrupted by actuation error.
+  Eigen::Vector2f true_robot_loc_;
+  float true_robot_angle_;
 
-  static const float startAngle;
-  float curAngle;
+  double t_last_cmd_;
 
-  double tLastCmd;
-
-  static const float DT;
-  static const float kMinR;
   geometry_msgs::PoseStamped truePoseMsg;
 
   amrl_msgs::AckermannCurvatureDriveMsg last_cmd_;
 
-  std::default_random_engine rng_;
-  std::normal_distribution<float> laser_noise_;
-  std::normal_distribution<float> angular_error_;
-
   amrl_msgs::Localization2DMsg localization_msg_;
+  std::string map_name_;
+
+  util_random::Random random_;
+
+  // Odometry-reported robot location - will be according to commands, but
+  // starting in arbitrary odometry frame.
+  Eigen::Vector2f odom_loc_;
+  float odom_angle_;
 
 private:
-  void initVizMarker(visualization_msgs::Marker& vizMarker,
-                     string ns,
+  void InitVizMarker(visualization_msgs::Marker& vizMarker,
+                     std::string ns,
                      int id,
-                     string type,
+                     std::string type,
                      geometry_msgs::PoseStamped p,
                      geometry_msgs::Point32 scale,
                      double duration,
                      std::vector<float> color);
-  void initSimulatorVizMarkers();
-  void drawMap();
-  void InitalLocationCallback(
-      const geometry_msgs::PoseWithCovarianceStamped& msg);
+  void InitSimulatorVizMarkers();
+  void DrawMap();
+  void InitalLocationCallback(const amrl_msgs::Localization2DMsg& msg);
   void DriveCallback(const amrl_msgs::AckermannCurvatureDriveMsg& msg);
-  void publishOdometry();
-  void publishLaser();
-  void publishVisualizationMarkers();
-  void publishTransform();
-  void update();
+  void PublishOdometry();
+  void PublishLaser();
+  void PublishVisualizationMarkers();
+  void PublishTransform();
+  void Update();
 
 public:
   Simulator();
   ~Simulator();
-  void init(ros::NodeHandle &n);
+  void Init(ros::NodeHandle &n);
   void Run();
 };
 #endif //SIMULATOR_H

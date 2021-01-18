@@ -10,7 +10,7 @@ function DegToRad(d)
   return math.pi * d / 180
 end
 
-map_name =  "maps/GDC1/GDC1.vectormap.txt";
+map_name =  "GDC1";
 -- Simulator starting location.
 start_x = -21
 start_y = 9.0
@@ -36,6 +36,7 @@ max_accel = 5.0
 -- Laser noise simulation.
 laser_noise_stddev = 0.01
 
--- Turning error simulation.
-angular_error_bias = DegToRad(0);
-angular_error_rate = 0.1;
+-- Actuation angular drift per unit distance traversed. 
+angular_drift_rate = DegToRad(-0.5);
+-- Actuation Angular noise standard deviation per unit distance traversed. 
+angular_error_rate = DegToRad(5.0);

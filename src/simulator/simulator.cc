@@ -22,7 +22,8 @@
 #include <math.h>
 #include <stdio.h>
 
-#include <random>
+#include <algorithm>
+#include <string>
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
@@ -30,6 +31,8 @@
 #include "geometry_msgs/Pose2D.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "gflags/gflags.h"
+#include "glog/logging.h"
+#include "ros/package.h"
 
 #include "simulator.h"
 #include "amrl_msgs/Localization2DMsg.h"
@@ -38,10 +41,9 @@
 #include "shared/math/line2d.h"
 #include "shared/math/math_util.h"
 #include "shared/ros/ros_helpers.h"
+#include "shared/util/random.h"
 #include "shared/util/timer.h"
 #include "vector_map.h"
-
-DEFINE_bool(localize, false, "Publish localization");
 
 using Eigen::Rotation2Df;
 using Eigen::Vector2f;
@@ -53,7 +55,14 @@ using math_util::AngleMod;
 using math_util::DegToRad;
 using math_util::RadToDeg;
 using std::atan2;
+using std::max;
+using std::string;
+using std::vector;
 using vector_map::VectorMap;
+
+DEFINE_bool(localize, false, "Publish localization");
+
+const string kAmrlMapsDir = ros::package::getPath("amrl_maps");
 
 CONFIG_STRING(cMapName, "map_name");
 CONFIG_FLOAT(cCarLength, "car_length");
@@ -71,75 +80,95 @@ CONFIG_FLOAT(cMinTurnR, "min_turn_radius");
 CONFIG_FLOAT(cMaxAccel, "max_accel");
 CONFIG_FLOAT(cMaxSpeed, "max_speed");
 CONFIG_FLOAT(cLaserStdDev, "laser_noise_stddev");
-CONFIG_FLOAT(cAngularErrorBias, "angular_error_bias");
+CONFIG_FLOAT(cAngularDriftRate, "angular_drift_rate");
 CONFIG_FLOAT(cAngularErrorRate, "angular_error_rate");
 config_reader::ConfigReader reader({"config/simulator.lua"});
 
+string MapNameToFile(const string& map) {
+  return kAmrlMapsDir + "/" + map + "/" + map + ".vectormap.txt";
+}
 
-Simulator::Simulator() :
-    laser_noise_(0, 1),
-    angular_error_(0, 1) {
-  tLastCmd = GetMonotonicTime();
+Simulator::Simulator() : 
+    random_(GetMonotonicTime() * 1e6),
+    odom_loc_(random_.UniformRandom(-10, 10), 
+                  random_.UniformRandom(-10, 10)),
+    odom_angle_(random_.UniformRandom(-M_PI, M_PI)) {
+  t_last_cmd_ = GetMonotonicTime();
   truePoseMsg.header.seq = 0;
   truePoseMsg.header.frame_id = "map";
 }
 
 Simulator::~Simulator() { }
 
-void Simulator::init(ros::NodeHandle& n) {
-  scanDataMsg.header.seq = 0;
-  scanDataMsg.header.frame_id = "base_laser";
-  scanDataMsg.angle_min = DegToRad(-135.0);
-  scanDataMsg.angle_max = DegToRad(135.0);
-  scanDataMsg.range_min = 0.02;
-  scanDataMsg.range_max = 10.0;
-  scanDataMsg.angle_increment = DegToRad(0.25);
-  scanDataMsg.intensities.clear();
-  scanDataMsg.time_increment = 0.0;
-  scanDataMsg.scan_time = 0.05;
+void Simulator::Init(ros::NodeHandle& n) {
+  if (kAmrlMapsDir.empty()) {
+    fprintf(stderr, 
+            "ERROR: AMRL maps directory not found. "
+            "Make sure your ROS_PACKAGE_PATH environment variable includes "
+            "the path to the amrl_maps repository.\n");
+    exit(1);
+  }
+  scan_msg_.header.seq = 0;
+  scan_msg_.header.frame_id = "base_laser";
+  scan_msg_.angle_min = DegToRad(-135.0);
+  scan_msg_.angle_max = DegToRad(135.0);
+  scan_msg_.range_min = 0.02;
+  scan_msg_.range_max = 10.0;
+  scan_msg_.angle_increment = DegToRad(0.25);
+  scan_msg_.intensities.clear();
+  scan_msg_.time_increment = 0.0;
+  scan_msg_.scan_time = 0.05;
 
-  odometryTwistMsg.header.seq = 0;
-  odometryTwistMsg.header.frame_id = "odom";
-  odometryTwistMsg.child_frame_id = "base_footprint";
+  odom_msg_.header.seq = 0;
+  odom_msg_.header.frame_id = "odom";
+  odom_msg_.child_frame_id = "base_footprint";
 
-  curLoc = Vector2f(cStartX, cStartY);
-  curAngle = cStartAngle;
+  true_robot_loc_ = Vector2f(cStartX, cStartY);
+  true_robot_angle_ = cStartAngle;
+  map_name_ = cMapName;
+  map_.Load(MapNameToFile(cMapName));
 
-  initSimulatorVizMarkers();
-  drawMap();
+  InitSimulatorVizMarkers();
+  DrawMap();
 
-  driveSubscriber = n.subscribe(
+  drive_subscriber_ = n.subscribe(
       "/ackermann_curvature_drive",
       1,
       &Simulator::DriveCallback,
       this);
-  initSubscriber = n.subscribe(
-      "/initialpose", 1, &Simulator::InitalLocationCallback, this);
-  odometryTwistPublisher = n.advertise<nav_msgs::Odometry>("/odom",1);
-  laserPublisher = n.advertise<sensor_msgs::LaserScan>("/scan", 1);
-  mapLinesPublisher = n.advertise<visualization_msgs::Marker>(
+  init_subscriber_ = n.subscribe(
+      "/set_pose", 1, &Simulator::InitalLocationCallback, this);
+  odometry_publisher_ = n.advertise<nav_msgs::Odometry>("/odom",1);
+  laser_publisher_ = n.advertise<sensor_msgs::LaserScan>("/scan", 1);
+  map_publisher_ = n.advertise<visualization_msgs::Marker>(
       "/simulator_visualization", 6);
-  posMarkerPublisher = n.advertise<visualization_msgs::Marker>(
+  robot_marker_publisher_ = n.advertise<visualization_msgs::Marker>(
       "/simulator_visualization", 6);
-  truePosePublisher = n.advertise<geometry_msgs::PoseStamped>(
+  true_pose_publisher_ = n.advertise<geometry_msgs::PoseStamped>(
       "/simulator_true_pose", 1);
   if (FLAGS_localize) {
-    localizationPublisher = n.advertise<amrl_msgs::Localization2DMsg>(
+    localization_publisher_ = n.advertise<amrl_msgs::Localization2DMsg>(
         "/localization", 1);
     localization_msg_.header.seq = 0;
     localization_msg_.header.frame_id = "map";
   }
-  br = new tf::TransformBroadcaster();
+  tf_broadcaster_ = new tf::TransformBroadcaster();
 }
 
-void Simulator::InitalLocationCallback(const PoseWithCovarianceStamped& msg) {
-  curLoc = Vector2f(msg.pose.pose.position.x, msg.pose.pose.position.y);
-  curAngle = 2.0 *
-      atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
-  printf("Set robot pose: %.2f,%.2f, %.1f\u00b0\n",
-         curLoc.x(),
-         curLoc.y(),
-         RadToDeg(curAngle));
+void Simulator::InitalLocationCallback(
+    const amrl_msgs::Localization2DMsg& msg) {
+  true_robot_loc_ = Vector2f(msg.pose.x, msg.pose.y);
+  true_robot_angle_ = msg.pose.theta;
+  if (map_name_ != msg.map) {
+    map_.Load(MapNameToFile(msg.map));
+    map_name_ = msg.map;
+    DrawMap();
+  }
+  printf("Set robot pose: %.2f,%.2f, %.1f\u00b0 @ %s\n",
+         true_robot_loc_.x(),
+         true_robot_loc_.y(),
+         RadToDeg(true_robot_angle_),
+         msg.map.c_str());
 }
 
 
@@ -160,9 +189,15 @@ void Simulator::InitalLocationCallback(const PoseWithCovarianceStamped& msg) {
  * @param color       vector of 4 float values representing color of marker;
  *                    0: red, 1: green, 2: blue, 3: alpha
  */
-void Simulator::initVizMarker(visualization_msgs::Marker& vizMarker, string ns,
-    int id, string type, geometry_msgs::PoseStamped p,
-    geometry_msgs::Point32 scale, double duration, vector<float> color) {
+void Simulator::InitVizMarker(
+    visualization_msgs::Marker& vizMarker, 
+    string ns,
+    int id, 
+    string type, 
+    geometry_msgs::PoseStamped p,
+    geometry_msgs::Point32 scale, 
+    double duration, 
+    vector<float> color) {
 
   vizMarker.header.frame_id = p.header.frame_id;
   vizMarker.header.stamp = ros::Time::now();
@@ -204,7 +239,7 @@ void Simulator::initVizMarker(visualization_msgs::Marker& vizMarker, string ns,
   vizMarker.action = visualization_msgs::Marker::ADD;
 }
 
-void Simulator::initSimulatorVizMarkers() {
+void Simulator::InitSimulatorVizMarkers() {
   geometry_msgs::PoseStamped p;
   geometry_msgs::Point32 scale;
   vector<float> color;
@@ -213,15 +248,16 @@ void Simulator::initSimulatorVizMarkers() {
   p.header.frame_id = "/map";
 
   p.pose.orientation.w = 1.0;
-  scale.x = 0.02;
+  scale.x = 0.05;
   scale.y = 0.0;
   scale.z = 0.0;
   color[0] = 66.0 / 255.0;
   color[1] = 134.0 / 255.0;
   color[2] = 244.0 / 255.0;
   color[3] = 1.0;
-  initVizMarker(lineListMarker, "map_lines", 0, "linelist", p, scale, 0.0,
-color);
+  InitVizMarker(
+      line_list_marker_, "map_lines", 0, "linelist", p, scale, 0.0, color);
+  line_list_marker_.header.frame_id = "map";
 
   p.pose.position.z = 0.5 * cCarHeight;
   scale.x = cCarLength;
@@ -231,108 +267,101 @@ color);
   color[1] = 156.0 / 255.0;
   color[2] = 255.0 / 255.0;
   color[3] = 0.8;
-  initVizMarker(robotPosMarker, "robot_position", 1, "cube", p, scale, 0.0,
-color);
-
+  InitVizMarker(
+      robot_pos_marker_, "robot_position", 1, "cube", p, scale, 0.0, color);
+  robot_pos_marker_.header.frame_id = "map";
 }
 
-void Simulator::drawMap() {
-  ros_helpers::ClearMarker(&lineListMarker);
+void Simulator::DrawMap() {
+  ros_helpers::ClearMarker(&line_list_marker_);
   for (const Line2f& l : map_.lines) {
-    ros_helpers::DrawEigen2DLine(l.p0, l.p1, &lineListMarker);
+    ros_helpers::DrawEigen2DLine(l.p0, l.p1, &line_list_marker_);
   }
 }
 
-void Simulator::publishOdometry() {
-  tf::Quaternion robotQ = tf::createQuaternionFromYaw(curAngle);
+void Simulator::PublishOdometry() {
+  odom_msg_.header.stamp = ros::Time::now();
+  odom_msg_.pose.pose.position.x = odom_loc_.x();
+  odom_msg_.pose.pose.position.y = odom_loc_.y();
+  odom_msg_.pose.pose.position.z = 0.0;
+  odom_msg_.pose.pose.orientation.x = 0;
+  odom_msg_.pose.pose.orientation.y = 0;
+  odom_msg_.pose.pose.orientation.z = sin(0.5 * odom_angle_);
+  odom_msg_.pose.pose.orientation.w = cos(0.5 * odom_angle_);
+  odom_msg_.twist.twist.angular.x = 0.0;
+  odom_msg_.twist.twist.angular.y = 0.0;
+  odom_msg_.twist.twist.angular.z = robot_ang_vel_;
+  odom_msg_.twist.twist.linear.x = robot_vel_;
+  odom_msg_.twist.twist.linear.y = 0;
+  odom_msg_.twist.twist.linear.z = 0.0;
 
-  odometryTwistMsg.header.stamp = ros::Time::now();
-  odometryTwistMsg.pose.pose.position.x = curLoc.x();
-  odometryTwistMsg.pose.pose.position.y = curLoc.y();
-  odometryTwistMsg.pose.pose.position.z = 0.0;
-  odometryTwistMsg.pose.pose.orientation.x = robotQ.x();
-  odometryTwistMsg.pose.pose.orientation.y = robotQ.y();
-  odometryTwistMsg.pose.pose.orientation.z = robotQ.z();;
-  odometryTwistMsg.pose.pose.orientation.w = robotQ.w();
-  odometryTwistMsg.twist.twist.angular.x = 0.0;
-  odometryTwistMsg.twist.twist.angular.y = 0.0;
-  odometryTwistMsg.twist.twist.angular.z = angVel;
-  odometryTwistMsg.twist.twist.linear.x = vel;
-  odometryTwistMsg.twist.twist.linear.y = 0;
-  odometryTwistMsg.twist.twist.linear.z = 0.0;
+  odometry_publisher_.publish(odom_msg_);
 
-  odometryTwistPublisher.publish(odometryTwistMsg);
-
-  robotPosMarker.pose.position.x =
-      curLoc.x() - cos(curAngle) * cRearAxleOffset;
-  robotPosMarker.pose.position.y =
-      curLoc.y() - sin(curAngle) * cRearAxleOffset;
-  robotPosMarker.pose.position.z = 0.5 * cCarHeight;
-  robotPosMarker.pose.orientation.w = 1.0;
-  robotPosMarker.pose.orientation.x = robotQ.x();
-  robotPosMarker.pose.orientation.y = robotQ.y();
-  robotPosMarker.pose.orientation.z = robotQ.z();
-  robotPosMarker.pose.orientation.w = robotQ.w();
+  robot_pos_marker_.pose.position.x =
+      true_robot_loc_.x() - cos(true_robot_angle_) * cRearAxleOffset;
+  robot_pos_marker_.pose.position.y =
+      true_robot_loc_.y() - sin(true_robot_angle_) * cRearAxleOffset;
+  robot_pos_marker_.pose.position.z = 0.5 * cCarHeight;
+  robot_pos_marker_.pose.orientation.x = 0;
+  robot_pos_marker_.pose.orientation.y = 0;
+  robot_pos_marker_.pose.orientation.z = sin(0.5 * true_robot_angle_);
+  robot_pos_marker_.pose.orientation.w = cos(0.5 * true_robot_angle_);
 }
 
-void Simulator::publishLaser() {
-  if (map_.file_name != cMapName) {
-    map_.Load(cMapName);
-    drawMap();
-  }
-  scanDataMsg.header.stamp = ros::Time::now();
+void Simulator::PublishLaser() {
+  scan_msg_.header.stamp = ros::Time::now();
   const Vector2f laserRobotLoc(cLaserLocX, cLaserLocY);
-  const Vector2f laserLoc = curLoc + Rotation2Df(curAngle) * laserRobotLoc;
+  const Vector2f laserLoc = true_robot_loc_ + Rotation2Df(true_robot_angle_) * laserRobotLoc;
 
   const int num_rays = static_cast<int>(
-      1.0 + (scanDataMsg.angle_max - scanDataMsg.angle_min) /
-      scanDataMsg.angle_increment);
+      1.0 + (scan_msg_.angle_max - scan_msg_.angle_min) /
+      scan_msg_.angle_increment);
   map_.GetPredictedScan(laserLoc,
-                        scanDataMsg.range_min,
-                        scanDataMsg.range_max,
-                        scanDataMsg.angle_min + curAngle,
-                        scanDataMsg.angle_max + curAngle,
+                        scan_msg_.range_min,
+                        scan_msg_.range_max,
+                        scan_msg_.angle_min + true_robot_angle_,
+                        scan_msg_.angle_max + true_robot_angle_,
                         num_rays,
-                        &scanDataMsg.ranges);
-  for (float& r : scanDataMsg.ranges) {
-    if (r > scanDataMsg.range_max - 0.1) {
-      r = scanDataMsg.range_max;
+                        &scan_msg_.ranges);
+  for (float& r : scan_msg_.ranges) {
+    if (r > scan_msg_.range_max - 0.1) {
+      r = scan_msg_.range_max;
       continue;
     }
-    r = max<float>(0.0, r + cLaserStdDev * laser_noise_(rng_));
+    r = max<float>(0.0, r + random_.Gaussian(0, cLaserStdDev));
   }
-  laserPublisher.publish(scanDataMsg);
+  laser_publisher_.publish(scan_msg_);
 }
 
-void Simulator::publishTransform() {
+void Simulator::PublishTransform() {
   tf::Transform transform;
   tf::Quaternion q;
 
   transform.setOrigin(tf::Vector3(0.0,0.0,0.0));
   transform.setRotation(tf::Quaternion(0.0, 0.0, 0.0, 1.0));
-  br->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "/map",
+  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "/map",
 "/odom"));
 
-  transform.setOrigin(tf::Vector3(curLoc.x(), curLoc.y(), 0.0));
-  q.setRPY(0.0,0.0,curAngle);
+  transform.setOrigin(tf::Vector3(true_robot_loc_.x(), true_robot_loc_.y(), 0.0));
+  q.setRPY(0.0,0.0,true_robot_angle_);
   transform.setRotation(q);
-  br->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "/odom",
+  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "/odom",
 "/base_footprint"));
 
   transform.setOrigin(tf::Vector3(0.0 ,0.0, 0.0));
   transform.setRotation(tf::Quaternion(0.0, 0.0, 0.0, 1.0));
-  br->sendTransform(tf::StampedTransform(transform, ros::Time::now(),
+  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(),
 "/base_footprint", "/base_link"));
 
   transform.setOrigin(tf::Vector3(cLaserLocX, cLaserLocY, cLaserLocZ));
   transform.setRotation(tf::Quaternion(0.0, 0.0, 0.0, 1));
-  br->sendTransform(tf::StampedTransform(transform, ros::Time::now(),
+  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(),
 "/base_link", "/base_laser"));
 }
 
-void Simulator::publishVisualizationMarkers() {
-  mapLinesPublisher.publish(lineListMarker);
-  posMarkerPublisher.publish(robotPosMarker);
+void Simulator::PublishVisualizationMarkers() {
+  map_publisher_.publish(line_list_marker_);
+  robot_marker_publisher_.publish(robot_pos_marker_);
 }
 
 float AbsBound(float x, float bound) {
@@ -352,12 +381,12 @@ void Simulator::DriveCallback(const AckermannCurvatureDriveMsg& msg) {
     return;
   }
   last_cmd_ = msg;
-  tLastCmd = GetMonotonicTime();
+  t_last_cmd_ = GetMonotonicTime();
 }
 
-void Simulator::update() {
+void Simulator::Update() {
   static const double kMaxCommandAge = 0.1;
-  if (GetMonotonicTime() > tLastCmd + kMaxCommandAge) {
+  if (GetMonotonicTime() > t_last_cmd_ + kMaxCommandAge) {
     last_cmd_.velocity = 0;
   }
   // Epsilon curvature corresponding to a very large radius of turning.
@@ -372,59 +401,59 @@ void Simulator::update() {
   const bool linear_motion = (fabs(desired_curvature) < kEpsilonCurvature);
 
   const float dv_max = cDT * cMaxAccel;
-  const float bounded_dv = AbsBound(desired_vel - vel, dv_max);
-  vel = vel + bounded_dv;
-  const float dist = vel * cDT;
+  const float bounded_dv = AbsBound(desired_vel - robot_vel_, dv_max);
+  robot_vel_ = robot_vel_ + bounded_dv;
+  const float dist = robot_vel_ * cDT;
 
-  float dx = 0, dy = 0, dtheta = 0;
+  // Robot-frame uncorrupted motion.
+  float dtheta;
+  Vector2f dLoc;
   if (linear_motion) {
-    dx = dist;
-    dy = 0;
-    dtheta = cDT * cAngularErrorBias;
+    dLoc = Vector2f(dist, 0);
+    dtheta = 0;
   } else {
     const float r = 1.0 / desired_curvature;
-    dtheta = dist * desired_curvature +
-        angular_error_(rng_) * cDT * cAngularErrorBias +
-        angular_error_(rng_) * cAngularErrorRate * fabs(dist *
-            desired_curvature);
-    dx = r * sin(dtheta);
-    dy = r * (1.0 - cos(dtheta));
+    dtheta = dist * desired_curvature;
+    dLoc = r * Vector2f(sin(dtheta), 1.0 - cos(dtheta));
   }
 
-  curLoc.x() += dx * cos(curAngle) - dy * sin(curAngle);
-  curLoc.y() += dx * sin(curAngle) + dy * cos(curAngle);
-  curAngle = AngleMod(curAngle + dtheta);
+  odom_loc_ += Rotation2Df(odom_angle_) * dLoc;
+  odom_angle_ = AngleMod(odom_angle_ + dtheta);
+
+  true_robot_loc_ += Rotation2Df(true_robot_angle_) * dLoc;
+  true_robot_angle_ = AngleMod(true_robot_angle_ + dtheta + 
+      dist * cAngularDriftRate + 
+      random_.Gaussian(0.0, fabs(dist) * cAngularErrorRate));
 
   truePoseMsg.header.stamp = ros::Time::now();
-  truePoseMsg.pose.position.x = curLoc.x();
-  truePoseMsg.pose.position.y = curLoc.y();
+  truePoseMsg.pose.position.x = true_robot_loc_.x();
+  truePoseMsg.pose.position.y = true_robot_loc_.y();
   truePoseMsg.pose.position.z = 0;
-  truePoseMsg.pose.orientation.w = cos(0.5 * curAngle);
-  truePoseMsg.pose.orientation.z = sin(0.5 * curAngle);
+  truePoseMsg.pose.orientation.w = cos(0.5 * true_robot_angle_);
+  truePoseMsg.pose.orientation.z = sin(0.5 * true_robot_angle_);
   truePoseMsg.pose.orientation.x = 0;
   truePoseMsg.pose.orientation.y = 0;
-  truePosePublisher.publish(truePoseMsg);
-
+  true_pose_publisher_.publish(truePoseMsg);
 }
 
 void Simulator::Run() {
   // Simulate time-step.
-  update();
+  Update();
   //publish odometry and status
-  publishOdometry();
+  PublishOdometry();
   //publish laser rangefinder messages
-  publishLaser();
+  PublishLaser();
   // publish visualization marker messages
-  publishVisualizationMarkers();
+  PublishVisualizationMarkers();
   //publish tf
-  publishTransform();
+  PublishTransform();
 
   if (FLAGS_localize) {
-    localization_msg_.pose.x = curLoc.x();
-    localization_msg_.pose.y = curLoc.y();
-    localization_msg_.pose.theta = curAngle;
-    localization_msg_.map = map_.file_name;
+    localization_msg_.pose.x = true_robot_loc_.x();
+    localization_msg_.pose.y = true_robot_loc_.y();
+    localization_msg_.pose.theta = true_robot_angle_;
+    localization_msg_.map = map_name_;
     localization_msg_.header.stamp = ros::Time::now();
-    localizationPublisher.publish(localization_msg_);
+    localization_publisher_.publish(localization_msg_);
   }
 }

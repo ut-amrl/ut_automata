@@ -380,7 +380,7 @@
           x: x,
           y: y,
           theta: theta,
-          map: currentMapName
+          map: mapList.value
         }));
       }
 
@@ -395,7 +395,7 @@
           x: x,
           y: y,
           theta: theta,
-          map: currentMapName
+          map: mapList.value
         }));
       }
 
@@ -407,8 +407,7 @@
     };
 
     function changeMap() {
-      currentMapName = mapList.value;
-      loadMap(currentMapName);
+      loadMap(mapList.value);
     }
 
     function loadMap(mapName) {
@@ -903,6 +902,7 @@
         lastLaserScan.ranges.length;
       for (let i = 0; i < lastLaserScan.ranges.length; ++i) {
         const r = lastLaserScan.ranges[i];
+        if (r == 0) continue;
         const a = lastLaserScan.angle_min + i * da + offset.theta;
         const x = Math.cos(a) * r + offset.x;
         const y = Math.sin(a) * r + offset.y;

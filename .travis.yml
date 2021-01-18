@@ -1,5 +1,5 @@
 os: linux
-dist: bionic
+dist: focal
 language:
   - cpp
 env:
@@ -45,6 +45,7 @@ before_install:
   - rosdep update --include-eol-distros  # Support EOL distros.
   - pushd $CI_SOURCE_PATH/..
   - git clone https://github.com/ut-amrl/amrl_msgs.git
+  - git clone https://github.com/ut-amrl/amrl_maps.git
   - pushd $CI_SOURCE_PATH/../amrl_msgs
   - export ROS_PACKAGE_PATH=`pwd`:$ROS_PACKAGE_PATH
   - make

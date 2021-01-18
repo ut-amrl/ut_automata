@@ -11,11 +11,11 @@ SET(CMAKE_AUTOMOC ON)
 SET(CMAKE_AUTORCC ON)
 SET(CMAKE_AUTOUIC ON)
 
-if(CMAKE_VERSION VERSION_LESS "3.7.0")
-    set(CMAKE_INCLUDE_CURRENT_DIR ON)
-endif()
+IF(CMAKE_VERSION VERSION_LESS "3.7.0")
+    SET(CMAKE_INCLUDE_CURRENT_DIR ON)
+ENDIF()
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -Wno-stringop-truncation -Wno-deprecated-copy -g -rdynamic")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")
@@ -31,9 +31,8 @@ ROSBUILD_INIT()
 SET(ROS_BUILD_STATIC_LIBS true)
 SET(ROS_BUILD_SHARED_LIBS false)
 
-find_package(Qt5 COMPONENTS Core Widgets Gui OpenGL WebSockets REQUIRED)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
+FIND_PACKAGE(Qt5 COMPONENTS Core Widgets Gui WebSockets REQUIRED)
+SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 MESSAGE(STATUS "ROS-Overrride Build Type: ${CMAKE_BUILD_TYPE}")
 MESSAGE(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS}")
@@ -41,7 +40,7 @@ MESSAGE(STATUS "Build-Specific Libraries: ${BUILD_SPECIFIC_LIBRARIES}")
 
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/submodules")
+SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/submodules")
 
 INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR})
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR})
@@ -54,10 +53,9 @@ ROSBUILD_GENMSG()
 ADD_SUBDIRECTORY(src/shared)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/shared)
 
-SET(libs roslib roscpp glog gflags amrl-shared-lib
+SET(libs roslib roscpp glog gflags amrl_shared_lib
     ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1 boost_system)
 
-# node executable
 IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
   MESSAGE(STATUS "Building hardware drivers")
   rosbuild_add_executable(vesc_driver
