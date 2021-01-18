@@ -7,7 +7,7 @@ Infrastructure repository for UT AUTOmata
 ![UT AUTOmata](https://amrl.cs.utexas.edu/assets/images/robots/automata_group.jpg)
 
 
-### Overview
+## Overview: Simulator and Visualization Infrastructure
 These instructions are tailored to the computer setup in the GDC1.310 lab. If you are setting this up on your own personal computer, you will need to modify the instructions for your own setup, including perhaps saving the setup script entries to `.bashrc` instead of `.profile`
 
 ### Update your `.profile` file
@@ -30,7 +30,7 @@ After adding these lines you will need to either relog into the computer or run:
 1. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
 1. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
 
-### Clone and Build Course Code
+### Clone and Build UT AUTOmata infrastructure Code
 1. Clone the repository, including the submodules:
    ```
    git clone https://github.com/ut-amrl/ut_automata.git --recurse-submodule
@@ -46,9 +46,17 @@ After adding these lines you will need to either relog into the computer or run:
    cd ut_automata
    make -j
    ```
-1. To build the hardware drivers as well on the actual cars:
+
+## Overview: Real Car Setup
+
+To set up the infrastructure on the real car:
+1. Install L4T including Ubuntu 18.04 on the car's Jetson TX2 computer. The
+   latest supported version is L4T 32.4.4, included as part of [Nvidia JetPack 4.4.1](https://developer.nvidia.com/embedded/jetpack).
+1. Install [ROS Melodic](https://wiki.ros.org/melodic/Installation)
+1. Follow the same instructions above to clone the code, install dependencies,
+   and finally compile the infrastructure including hardware drivers using:
    ```
-   make hardware
+   make hardware -j4
    ```
 
 ### Autostart on Actual Car Jetson Computer
