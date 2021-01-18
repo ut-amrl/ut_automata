@@ -30,7 +30,7 @@ before_install:
   - sudo apt-get update -qq
   - sudo apt-get install dpkg
   - sudo apt-get install -y ros-melodic-desktop libgtest-dev libeigen3-dev libgoogle-glog-dev cmake build-essential
-  - sudo apt-get install python3-rosdep build-essential
+  - sudo apt-get install build-essential
   - sudo apt-get install -y g++ cmake libpopt-dev
   - sudo apt-get install -y liblua5.1-dev libeigen3-dev libglew1.5-dev
   - sudo apt-get install -y freeglut3-dev libncurses5-dev libjpeg8-dev
