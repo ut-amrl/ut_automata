@@ -322,7 +322,7 @@ void Exec(const string& cmd) {
 
 void MainWindow::StartCar() {
   const string path = ros::package::getPath("ut_automata");
-  Exec(path + "/scripts/start_car.sh");
+  Exec(path + "/scripts/start_car_gui.sh");
 }
 
 void MainWindow::StartRos() {
