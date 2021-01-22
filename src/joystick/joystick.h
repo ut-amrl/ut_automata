@@ -40,7 +40,7 @@ class Joystick {
     float weight, bias;    // weight and bias to apply in transformation
   };
 
-  Joystick();
+  Joystick(std::string mode_);
 
   bool IsOpen() { return (fd != -1); }
   std::string GetName();
@@ -57,6 +57,8 @@ class Joystick {
   int32_t GetButton(unsigned int idx);
   void GetAllButtons(std::vector<int32_t>* buttons);
 
+  size_t Remap(size_t num, size_t type);
+
   const int MaxAxisVal;
   const double MaxAxisValInv;
 
@@ -67,6 +69,7 @@ class Joystick {
   int model_size;
 
  public:
+  std::string mode_;
   std::string name_;
   std::vector<int32_t> buttons_;
   std::vector<float> axes_;

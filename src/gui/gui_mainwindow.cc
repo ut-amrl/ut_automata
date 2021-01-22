@@ -222,24 +222,24 @@ MainWindow::MainWindow(QWidget* parent) :
     expanding_policy.setVerticalPolicy(QSizePolicy::Expanding);
     expanding_policy.setHorizontalPolicy(QSizePolicy::Expanding);
     QPushButton* start_ros = new QPushButton("Start roscore");
-    QPushButton* stop_ros = new QPushButton("Stop roscore");
+    QPushButton* start_camera = new QPushButton("Start Camera");
     QPushButton* start_car = new QPushButton("Start Car");
     QPushButton* stop_all = new QPushButton("Stop all nodes");
     start_ros->setFont(font);
-    stop_ros->setFont(font);
+    start_camera->setFont(font);
     start_car->setFont(font);
     stop_all->setFont(font);
     start_ros->setSizePolicy(expanding_policy);
-    stop_ros->setSizePolicy(expanding_policy);
+    start_camera->setSizePolicy(expanding_policy);
     start_car->setSizePolicy(expanding_policy);
     stop_all->setSizePolicy(expanding_policy);
     connect(start_car, SIGNAL(clicked()), this, SLOT(StartCar()));
     connect(start_ros, SIGNAL(clicked()), this, SLOT(StartRos()));
-    connect(stop_ros, SIGNAL(clicked()), this, SLOT(StopRos()));
+    connect(start_camera, SIGNAL(clicked()), this, SLOT(StartCamera()));
     connect(stop_all, SIGNAL(clicked()), this, SLOT(StopAll()));
     QVBoxLayout* vbox = new QVBoxLayout();
     vbox->addWidget(start_ros);
-    vbox->addWidget(stop_ros);
+    vbox->addWidget(start_camera);
     vbox->addWidget(start_car);
     vbox->addWidget(stop_all);
     ros_group->setLayout(vbox);
@@ -330,8 +330,8 @@ void MainWindow::StartRos() {
   Exec("/usr/bin/screen -mdS roscore roscore");
 }
 
-void MainWindow::StopRos() {
-  Exec("/usr/bin/killall roscore");
+void MainWindow::StartCamera() {
+  Exec("roslaunch astra_camera astra.launch > /dev/null &");
 }
 
 void MainWindow::StopAll() {

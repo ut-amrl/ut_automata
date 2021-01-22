@@ -32,7 +32,7 @@
 #include "shared/util/timer.h"
 
 DEFINE_int32(idx, 0, "Joystick index");
-
+DEFINE_string(mode, "logitech", "(logitech, ps4) name of controller used");
 using sensor_msgs::Joy;
 using std::string;
 using std::vector;
@@ -44,9 +44,9 @@ int main(int argc, char** argv) {
   ros::init(argc, argv, "joystick");
   ros::NodeHandle n;
   ros::Publisher publisher = n.advertise<sensor_msgs::Joy>("joystick", 1);
-  Joystick joystick;
+  Joystick joystick = Joystick(FLAGS_mode);
   if (!joystick.Open(FLAGS_idx)) {
-    fprintf(stderr, "ERROR: Unable to open joystick)!\n");
+    fprintf(stderr, "ERROR: Unable to open joystick!\n");
     return(1);
   }
 
