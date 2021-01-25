@@ -235,7 +235,7 @@ MainWindow::MainWindow(QWidget* parent) :
     stop_all->setSizePolicy(expanding_policy);
     connect(start_car, SIGNAL(clicked()), this, SLOT(StartCar()));
     connect(start_ros, SIGNAL(clicked()), this, SLOT(StartRos()));
-    connect(stop_ros, SIGNAL(clicked()), this, SLOT(StopRos()));
+    connect(stop_ros, SIGNAL(clicked()), this, SLOT(StartCamera()));
     connect(stop_all, SIGNAL(clicked()), this, SLOT(StopAll()));
     QVBoxLayout* vbox = new QVBoxLayout();
     vbox->addWidget(start_ros);
@@ -330,8 +330,8 @@ void MainWindow::StartRos() {
   Exec("/usr/bin/screen -mdS roscore roscore");
 }
 
-void MainWindow::StopRos() {
-  Exec("/usr/bin/killall roscore");
+void MainWindow::StartCamera() {
+  Exec("roslaunch astra_camera astra.launch");
 }
 
 void MainWindow::StopAll() {
