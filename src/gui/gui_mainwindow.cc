@@ -222,7 +222,7 @@ MainWindow::MainWindow(QWidget* parent) :
     expanding_policy.setVerticalPolicy(QSizePolicy::Expanding);
     expanding_policy.setHorizontalPolicy(QSizePolicy::Expanding);
     QPushButton* start_ros = new QPushButton("Start roscore");
-    QPushButton* stop_ros = new QPushButton("Stop roscore");
+    QPushButton* stop_ros = new QPushButton("Start Camera");
     QPushButton* start_car = new QPushButton("Start Car");
     QPushButton* stop_all = new QPushButton("Stop all nodes");
     start_ros->setFont(font);
