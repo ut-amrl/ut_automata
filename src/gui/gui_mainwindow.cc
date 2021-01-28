@@ -321,12 +321,10 @@ void Exec(const string& cmd) {
 }
 
 void MainWindow::StartCar() {
-  const string path = ros::package::getPath("ut_automata");
-  Exec(path + "/scripts/start_car_gui.sh");
+  Exec("roslaunch ut_automata start_car.launch start_gui:=flase");
 }
 
 void MainWindow::StartRos() {
-  const string path = ros::package::getPath("ut_automata");
   Exec("/usr/bin/screen -mdS roscore roscore");
 }
 
@@ -335,7 +333,10 @@ void MainWindow::StartCamera() {
 }
 
 void MainWindow::StopAll() {
+  // two seperate kills to ensure that both
+  // autostart and manual start will be stopped
   Exec("/opt/ros/melodic/bin/rosnode kill -a");
+  Exec("pkill roslaunch");
 }
 
 void MainWindow::closeWindow() {
