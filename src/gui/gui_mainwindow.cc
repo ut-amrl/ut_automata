@@ -336,7 +336,7 @@ void MainWindow::StopAll() {
   // two seperate kills to ensure that both
   // autostart and manual start will be stopped
   Exec("/opt/ros/melodic/bin/rosnode kill -a");
-  Exec("pkill roslaunch");
+  Exec("/usr/bin/pkill roslaunch");
 }
 
 void MainWindow::closeWindow() {
