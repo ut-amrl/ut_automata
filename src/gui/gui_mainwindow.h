@@ -121,7 +121,7 @@ public slots:
   void UpdateIP();
   void StartRos();
   void StartCar();
-  void StopRos();
+  void StartCamera();
   void StopAll();
   void UpdateStatusSlot(int mode, 
                         float battery,

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Comment=Start UT_AUTOMATA GUI
+Encoding=UTF-8
+Exec=/home/amrl_user/ut_automata/scripts/start_car.sh
+GenericName=Start UT_AUTOMATA GUI
+Icon=/home/amrl_user/ut_automata/assets/gui_icon.png
+Name=Start UT_AUTOMATA GUI
+StartupNotify=false
+Type=Application
+StartupWMClass=Gui
+OnlyShowIn=Unity;
+X-BAMFGenerated=true

@@ -58,6 +58,69 @@ To set up the infrastructure on the real car:
    ```
    make hardware -j4
    ```
+## Usage 
+### Manual Start for Simulation
+To run the simulator, please do:
+```
+./bin/simulator 
+```
+By default, the simulator does not provide localization information, to enable true localization, please add `--localize` to the command.
+
+We also provide a web visualizer along with the simulator. To start the websocket, please do:
+```
+./bin/websocket
+```
+
+### Manual Start on Actual Car Jetson Computer
+A few different components needs to be started. Please refer to the below sections for details:
+
+#### Joystick
+To start the joystick, please do
+```
+./bin/joystick --idx 1
+```
+The `--idx` flag is used to specify which input device the joystick driver listens to and thus enable joystick input. 
+
+#### VESC
+To start the VESC driver, please do
+```
+./bin/vesc_driver
+```
+This executable enables the VESC to be utilized, thus enabling the car to move.
+
+#### LiDAR
+To start the LiDAR, please do
+```
+roslaunch ut_automata hokuyo_10lx.launch
+```
+This will allow the LiDAR to be utilized.
+
+#### Websocket
+To start the websocket, please do:
+```
+./bin/websocket
+```
+The websocket allows for visualization on a web based visualizer.
+
+#### GUI
+To start the GUI, please do:
+```
+DISPLAY=:0 ./bin/gui
+```
+The gui allows the car's status to be displayed on screen. 
+
+Note, on the Jeston computers, by default, if the desktop application (located at top left of Jeston Desktop) is clicked, it will launch the gui along with all other nodes mentioned above.
+
+#### Camera (Optional)
+To start the camera, please do:
+```
+roslaunch astra_camera astra.launch
+```
+This will enable the depth and ir image. For RGB image please do:
+```
+roslaunch usb_cam usb_cam-test.launch
+```
+Note that the autostart mentioned below does not launch the camera module.
 
 ### Autostart on Actual Car Jetson Computer
 
