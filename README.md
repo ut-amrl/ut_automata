@@ -26,9 +26,12 @@ After adding these lines you will need to either relog into the computer or run:
 `source ~/.profile`
 
 ### Dependencies
-1. Run `install_dependencies.sh` to install package dependencies.
-1. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
-1. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
+1. Run `install_dependencies.sh` to install package dependencies, or manually install them:
+      ```
+      sudo apt install python-pygame libgoogle-glog-dev libgflags-dev liblua5.1-0-dev libqt5websockets5-dev libqt5opengl5-dev
+      ```
+2. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
+3. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
 
 ### Clone and Build UT AUTOmata infrastructure Code
 1. Clone the repository, including the submodules:
