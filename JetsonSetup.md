@@ -60,3 +60,9 @@
 5. Manually enter the IP address of the Jetson computer, and the admin username and password:
     ![image](https://user-images.githubusercontent.com/3406269/116788939-f9912f00-aa71-11eb-980d-24dc96409fd3.png)
 6. To install pytorch, follow the instructions here: https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-8-0-now-available/72048 
+
+
+## Optional Tools
+
+To monitor CPU and GPU usage, clone and install [Jetson Stats](https://github.com/rbonghi/jetson_stats)
+![image](https://github.com/rbonghi/jetson_stats/wiki/images/jtop.gif)
