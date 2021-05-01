@@ -55,7 +55,7 @@ After adding these lines you will need to either relog into the computer or run:
 To set up the infrastructure on the real car:
 1. Install L4T including Ubuntu 18.04 on the car's Jetson TX2 computer. The
    latest supported version is L4T 32.4.4, included as part of [Nvidia JetPack 4.4.1](https://developer.nvidia.com/embedded/jetpack).
-   For detailed instructions see [JetpackSetup.md](JetpackSetup.md)
+   For detailed instructions see [JetsonSetup.md](JetsonSetup.md)
 1. Install [ROS Melodic](https://wiki.ros.org/melodic/Installation)
 1. Follow the same instructions above to clone the code, install dependencies,
    and finally compile the infrastructure including hardware drivers using:
@@ -75,43 +75,29 @@ We also provide a web visualizer along with the simulator. To start the websocke
 ./bin/websocket
 ```
 
-### Manual Start on Actual Car Jetson Computer
-A few different components needs to be started. Please refer to the below sections for details:
+### Manually starting the control stack on the actual car's Jetson computer
 
-#### Joystick
-To start the joystick, please do
-```
-./bin/joystick --idx 1
-```
-The `--idx` flag is used to specify which input device the joystick driver listens to and thus enable joystick input. 
-
-#### VESC
-To start the VESC driver, please do
-```
-./bin/vesc_driver
-```
-This executable enables the VESC to be utilized, thus enabling the car to move.
-
-#### LiDAR
-To start the LiDAR, please do
-```
-roslaunch ut_automata hokuyo_10lx.launch
-```
-This will allow the LiDAR to be utilized.
-
-#### Websocket
-To start the websocket, please do:
-```
-./bin/websocket
-```
-The websocket allows for visualization on a web based visualizer.
-
-#### GUI
-To start the GUI, please do:
-```
-DISPLAY=:0 ./bin/gui
-```
-The gui allows the car's status to be displayed on screen. 
+1. Joystick
+   ```
+   ./bin/joystick --idx 1
+   ```
+   The `--idx` flag is used to specify which input device the joystick driver listens to and thus enable joystick input. 
+2. VESC driver (motor driver)
+   ```
+   ./bin/vesc_driver
+   ```
+3. LiDAR
+   ```
+   roslaunch ut_automata hokuyo_10lx.launch
+   ```
+4. Websocket for remote visualization and control
+   ```
+   ./bin/websocket
+   ```
+5. GUI to display and control the status of the software components
+   ```
+   DISPLAY=:0 ./bin/gui
+   ```
 
 Note, on the Jeston computers, by default, if the desktop application (located at top left of Jeston Desktop) is clicked, it will launch the gui along with all other nodes mentioned above.
 
