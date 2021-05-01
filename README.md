@@ -83,6 +83,8 @@ To set up the infrastructure on the real car:
 
 ### Manually starting the control stack on the actual car's Jetson computer
 
+The cars have the GUI app installed with a desktop icon on the launcher bar. When clicked, it will launch the gui along with all other on-car nodes mentioned below.
+
 1. Joystick
    ```
    ./bin/joystick --idx 1
@@ -108,19 +110,14 @@ To set up the infrastructure on the real car:
       1. Clone this repository on your the computer you wish to use for visualization and control, e.g. your laptop. (the OS does not matter)
       2. Open the `webviz.html` file in your browser
       3. Enter the IP address of the computer running the simulator, and clock on `Connect`
-
-Note, on the Jeston computers, by default, if the desktop application (located at top left of Jeston Desktop) is clicked, it will launch the gui along with all other nodes mentioned above.
-
-#### Camera (Optional)
-To start the camera, please do:
-```
-roslaunch astra_camera astra.launch
-```
-This will enable the depth and ir image. For RGB image please do:
-```
-roslaunch usb_cam usb_cam-test.launch
-```
-Note that the autostart mentioned below does not launch the camera module.
+7. Camera (Optional)
+   ```
+   roslaunch astra_camera astra.launch
+   ```
+   This will enable the depth and ir image. For RGB image only:
+   ```
+   roslaunch usb_cam usb_cam-test.launch
+   ```
 
 ### Autostart on Actual Car Jetson Computer
 
