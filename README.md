@@ -63,17 +63,23 @@ To set up the infrastructure on the real car:
    make hardware -j4
    ```
 ## Usage 
-### Manual Start for Simulation
-To run the simulator, please do:
-```
-./bin/simulator 
-```
-By default, the simulator does not provide localization information, to enable true localization, please add `--localize` to the command.
-
-We also provide a web visualizer along with the simulator. To start the websocket, please do:
-```
-./bin/websocket
-```
+### Manually starting the simulation stack
+1. Start the simulator
+   ```
+   ./bin/simulator 
+   ```
+   By default, the simulator does not provide localization information, to enable publishing ground-truth localization add `--localize` to the command:
+   ```
+   ./bin/simulator --localize
+   ```
+2. Websocket for remote visualization and control
+   ```
+   ./bin/websocket
+   ```
+3. Remote visualization and control
+      1. Clone this repository on your the computer you wish to use for visualization and control, e.g. your laptop. (the OS does not matter)
+      2. Open the `webviz.html` file in your browser
+      3. Enter the IP address of the computer running the simulator, and clock on `Connect`
 
 ### Manually starting the control stack on the actual car's Jetson computer
 
@@ -98,6 +104,10 @@ We also provide a web visualizer along with the simulator. To start the websocke
    ```
    DISPLAY=:0 ./bin/gui
    ```
+6. Remote visualization and control
+      1. Clone this repository on your the computer you wish to use for visualization and control, e.g. your laptop. (the OS does not matter)
+      2. Open the `webviz.html` file in your browser
+      3. Enter the IP address of the computer running the simulator, and clock on `Connect`
 
 Note, on the Jeston computers, by default, if the desktop application (located at top left of Jeston Desktop) is clicked, it will launch the gui along with all other nodes mentioned above.
 
