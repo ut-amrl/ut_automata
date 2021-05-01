@@ -55,6 +55,7 @@ After adding these lines you will need to either relog into the computer or run:
 To set up the infrastructure on the real car:
 1. Install L4T including Ubuntu 18.04 on the car's Jetson TX2 computer. The
    latest supported version is L4T 32.4.4, included as part of [Nvidia JetPack 4.4.1](https://developer.nvidia.com/embedded/jetpack).
+   For detailed instructions see [JetpackSetup.md](JetpackSetup.md)
 1. Install [ROS Melodic](https://wiki.ros.org/melodic/Installation)
 1. Follow the same instructions above to clone the code, install dependencies,
    and finally compile the infrastructure including hardware drivers using:
