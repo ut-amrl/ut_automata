@@ -2,7 +2,7 @@
 
 ## Table of Contents
 [JetPack on Nvidia DevKit](#jetpack-on-nvidia-devkit)  
-[JetPack on ConnectTech Orbitty Carrier](#jetpack-on-connectech-orbitty-carrier)  
+[JetPack on ConnectTech Orbitty Carrier](#jetpack-on-connecttech-orbitty-carrier)  
 [CUDA + PyTorch](#cuda-and-pytorch)  
 [ROS](#ros)  
 [ROS Melodic With Python3](#ros-melodic-with-python3)  
