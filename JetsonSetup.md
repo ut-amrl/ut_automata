@@ -1,5 +1,7 @@
 # 
 
+## JetPack
+
 1. Do **not** connect the Jetson to your computer at this stage.
 2. Run `sdkmanager` on the host computer, and select both "Host Machine" and "Jetson TX2" to download JetPack to the host.
     ![image](https://user-images.githubusercontent.com/3406269/116788542-c9e12780-aa6f-11eb-94ee-167d64f6a90e.png)
@@ -48,7 +50,7 @@
     joydeepb@ubuntu:~/nvidia/nvidia_sdk/JetPack_4.5.1_Linux_JETSON_TX2/Linux_for_Tegra$ sudo ./cti-flash.sh
     ```
 
-## Installing CUDA and PyTorch
+## CUDA and PyTorch
 
 1. Ensure that the Jetson is running, booted into Ubuntu, and accessible via the local network (e.g. WiFi) 
     from the host computer. Let the Jetson's IP address on the local network be `192.168.10.100`
@@ -61,6 +63,22 @@
     ![image](https://user-images.githubusercontent.com/3406269/116788939-f9912f00-aa71-11eb-980d-24dc96409fd3.png)
 6. To install pytorch, follow the instructions here: https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-8-0-now-available/72048 
 
+## ROS
+
+Install ROS Melodic as per the installation instructions: http://wiki.ros.org/melodic/Installation/Ubuntu
+
+## ROS Melodic With Python3
+
+After installing ROS, install rospkg for python3:
+```
+sudo apt install python3-pip python3-all-dev python3-rospkg
+```
+This will prompt to install python3-rospkg and to remove ROS packages (already installed). Select Yes for that prompt. 
+This will remove ROS packages and we will have to re-install them.
+```
+sudo apt install ros-melodic-desktop-full --fix-missing
+```
+After this, you should be able to run PyTorch with Cuda alongside ROS using Python3.
 
 ## Optional Tools
 
