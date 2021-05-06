@@ -1,11 +1,11 @@
 # 
 
 ## Table of Contents
-[JetPack Installation](jetpack)
-[CUDA + PyTorch](cuda-and-pytorch)
-[ROS](ros)
-[ROS Melodic With Python3](ros-melodic-with-python3)
-[Optional Tools](optional-tools)
+[JetPack Installation](jetpack)  
+[CUDA + PyTorch](cuda-and-pytorch)  
+[ROS](ros)  
+[ROS Melodic With Python3](ros-melodic-with-python3)  
+[Optional Tools](optional-tools)  
 
 
 ## JetPack
