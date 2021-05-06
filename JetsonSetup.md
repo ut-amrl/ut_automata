@@ -8,6 +8,8 @@
 [ROS Melodic With Python3](#ros-melodic-with-python3)  
 [Optional Tools](#optional-tools)  
 
+You will require an xUbuntu 18.04 computer to run the [Nvidia SDK Manager](https://developer.nvidia.com/nvidia-sdk-manager). As of the time this documentation was written, `sdkmanager` is incompatible with 20.04, but it can be run under a [VMWare Workstation Player](https://www.vmware.com/products/workstation-player/workstation-player-evaluation.html) virtual machine running 18.04 - you just need to [connect the Jetson USB device to the VM](https://www.vmware.com/support/ws5/doc/ws_devices_usb_connect.html)
+
 ## JetPack on Nvidia DevKit
 1. Run `sdkmanager` on the host computer, and select both "Host Machine" and "Jetson TX2" to download JetPack to the host.
     ![image](https://user-images.githubusercontent.com/3406269/116788542-c9e12780-aa6f-11eb-94ee-167d64f6a90e.png)
