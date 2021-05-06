@@ -1,12 +1,12 @@
 # 
 
 ## Table of Contents
-[JetPack on Nvidia DevKit](jetpack-on-nvidia-devkit)  
-[JetPack on ConnectTech Orbitty Carrier](jetpack-on-connectech-orbitty-carrier)  
-[CUDA + PyTorch](cuda-and-pytorch)  
-[ROS](ros)  
-[ROS Melodic With Python3](ros-melodic-with-python3)  
-[Optional Tools](optional-tools)  
+[JetPack on Nvidia DevKit](#jetpack-on-nvidia-devkit)  
+[JetPack on ConnectTech Orbitty Carrier](#jetpack-on-connectech-orbitty-carrier)  
+[CUDA + PyTorch](#cuda-and-pytorch)  
+[ROS](#ros)  
+[ROS Melodic With Python3](#ros-melodic-with-python3)  
+[Optional Tools](#optional-tools)  
 
 ## JetPack on Nvidia DevKit
 1. Run `sdkmanager` on the host computer, and select both "Host Machine" and "Jetson TX2" to download JetPack to the host.
