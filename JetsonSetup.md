@@ -1,14 +1,31 @@
 # 
 
 ## Table of Contents
-[JetPack Installation](jetpack)  
+[JetPack on Nvidia DevKit](jetpack-on-nvidia-devkit)  
+[JetPack on ConnectTech Orbitty Carrier](jetpack-on-connectech-orbitty-carrier)  
 [CUDA + PyTorch](cuda-and-pytorch)  
 [ROS](ros)  
 [ROS Melodic With Python3](ros-melodic-with-python3)  
 [Optional Tools](optional-tools)  
 
+## JetPack on Nvidia DevKit
+1. Run `sdkmanager` on the host computer, and select both "Host Machine" and "Jetson TX2" to download JetPack to the host.
+    ![image](https://user-images.githubusercontent.com/3406269/116788542-c9e12780-aa6f-11eb-94ee-167d64f6a90e.png)
+    Select CUDA and additional packages as desired
+    Click next past Step 02, accepting the license along the way.
+2. After Step 03 of the sdkmanager, the Jetpack image will be created, and it will ask you to connect the Jetson to the host computer: 
+    ![image](https://user-images.githubusercontent.com/3406269/116788518-a5854b00-aa6f-11eb-9d03-fb108bf09b9e.png)
+3. Connect the devkit using the microUSB OTG port on the devkit and enter recovery mode:
+    1. Plug in the power cable to the devkit board, but do not power on yet.
+    2. Press and hold the `REC` (Recovery) button
+    3. Press and release the `POWERBTN` (Power) button
+    4. Release the `REC` button
+4. Select "Manual Setup" in the dropdown option list on the sdkmanager window, and click on the "Flash" button
+5. After JetPack is installed, connect the devkit to a monitor, keyboard and mouse, and complete the Ubuntu setup wizard.
+6. If you selected CUDA and additional packages in step 1, it will ask you for the IP address and login details of the devkit. Continue on to install [CUDA + PyTorch](cuda-and-pytorch)  
 
-## JetPack
+
+## JetPack on ConnectTech Orbitty Carrier
 
 1. Do **not** connect the Jetson to your computer at this stage.
 2. Run `sdkmanager` on the host computer, and select both "Host Machine" and "Jetson TX2" to download JetPack to the host.
