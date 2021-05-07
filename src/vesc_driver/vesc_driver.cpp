@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include "boost/bind.hpp"
+#include "gflags/gflags.h"
 #include "ut_automata/CarStatusMsg.h"
 #include "ut_automata/VescStateStamped.h"
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
@@ -34,10 +35,8 @@ CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
 CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
 CONFIG_STRING(serial_port_, "serial_port");
 
-config_reader::ConfigReader reader({
-  "config/car.lua",
-  "config/vesc.lua"
-});
+DEFINE_string(config_dir, "config", 
+    "Directory containting the car.lua and vesc.lua config files.");
 
 using ut_automata::CarStatusMsg;
 using ut_automata::VescStateStamped;
@@ -66,6 +65,13 @@ VescDriver::VescDriver(ros::NodeHandle nh,
     fw_version_minor_(-1),
     t_last_command_(0),
     t_last_joystick_(0) {
+  {
+    // Load config.
+    config_reader::ConfigReader reader({
+      FLAGS_config_dir + "/car.lua",
+      FLAGS_config_dir + "/vesc.lua"
+    });
+  }
   state_msg_.header.seq = 0;
   state_msg_.header.frame_id = "base_link";
   car_status_msg_.header = state_msg_.header;
@@ -148,7 +154,7 @@ void VescDriver::checkCommandTimeout() {
 
 void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
   static const bool kDebug = false;
-  static const float kMaxTurnRate = 0.25;
+  static const float kMaxTurnRate = 0.41708264;
   static const float kAxesEps = 0.2;
   static const size_t kManualDriveButton = 4;
   static const size_t kAutonomousDriveButton = 5;
@@ -179,7 +185,7 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     // stop the car if any button is pressed
     drive_mode_ = kStoppedDrive;
     mux_drive_speed_ = 0;
-    mux_steering_angle_ = 0;
+    mux_steering_angle_ = last_steering_angle_;
   }
   else if (msg.buttons[kManualDriveButton] == 1) {
     // joystick mode
@@ -199,7 +205,7 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     if(kDebug) printf("Stopped\n");
     drive_mode_ = kStoppedDrive;
     mux_drive_speed_ = 0;
-    mux_steering_angle_ = 0;
+    mux_steering_angle_ = last_steering_angle_;
   }
   if (drive_mode_ == kJoystickDrive) {
     if (msg.axes.size() < 5) return;

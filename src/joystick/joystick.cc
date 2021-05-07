@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -39,10 +40,11 @@ using std::vector;
 namespace joystick {
 static const bool kDebug = false;
 
-Joystick::Joystick() : MaxAxisVal(32767), MaxAxisValInv(1.0 / MaxAxisVal) {
+Joystick::Joystick(string mode) : MaxAxisVal(32767), MaxAxisValInv(1.0 / MaxAxisVal) {
   fd = -1;
   model = NULL;
   model_size = 0;
+  mode_ = mode;
 }
 
 bool Joystick::Open(const char *dev) {
@@ -132,27 +134,27 @@ int Joystick::ProcessEvents(int max_wait_time_ms) {
         perror("read failed on pollable joystick\n");
         return(-1);
       }
-
+      int jse_num = Remap(jse.number, jse.type);
       switch (jse.type & ~JS_EVENT_INIT) {
         case JS_EVENT_AXIS:
-          if (kDebug) printf("axis %d now has value %d\n", jse.number,
+          if (kDebug) printf("axis %d now has value %d\n", jse_num,
                             jse.value);
-          if (jse.number + 1 > static_cast<int>(axes_.size())) {
+          if (jse_num + 1 > static_cast<int>(axes_.size())) {
             fprintf(stderr,
                     "ERROR: Received event for invalid axis %d\n",
-                    jse.number);
+                    jse_num);
           }
-          axes_[jse.number] = static_cast<float>(jse.value) / 32767.0;
+          axes_[jse_num] = static_cast<float>(jse.value) / 32767.0;
           break;
         case JS_EVENT_BUTTON:
-          if (kDebug) printf("button %d now has value %d\n", jse.number,
+          if (kDebug) printf("button %d now has value %d\n", jse_num,
                            jse.value);
-          if (jse.number + 1 > static_cast<int>(buttons_.size())) {
+          if (jse_num + 1 > static_cast<int>(buttons_.size())) {
             fprintf(stderr,
                     "ERROR: Received event for invalid button %d\n",
-                    jse.number);
+                    jse_num);
           }
-          buttons_[jse.number] = jse.value;
+          buttons_[jse_num] = jse.value;
           break;
       }
     }
@@ -170,6 +172,73 @@ void Joystick::Close() {
   if (fd >= 0) {
     ::close(fd);
   }
+}
+
+size_t Joystick::Remap(size_t num, size_t type){
+  if(mode_ == "logitech"){
+    // no need to remap
+  }
+  else if (mode_ == "ps4"){
+    if(type == JS_EVENT_AXIS){
+      switch(num){
+        case 1:
+          num = 1;
+          break;
+        case 0:
+          num = 0;
+          break;
+        case 4:
+          num = 5;
+          break;
+        case 3:
+          num = 2;
+          break;
+        case 2:
+          num = 3;
+          break;
+        case 5:
+          num = 4;
+          break;
+        case 7:
+          num = 7;
+          break;
+        case 6:
+          num = 6;
+          break;
+        default:
+          break;
+      }
+    }
+    else if (type == JS_EVENT_BUTTON){
+      switch(num){
+        case 4:
+          num = 4;
+          break;
+        case 5:
+          num = 5;
+          break;
+        case 3:
+          num = 3;
+          break;
+        case 1:
+          num = 0;
+          break;
+        case 0:
+          num = 2;
+          break;
+        case 2:
+          num = 1;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  else{
+    std::cerr << "FATAL: Joystick Name is ill defined." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  return num;
 }
 
 }  // namespace joystick

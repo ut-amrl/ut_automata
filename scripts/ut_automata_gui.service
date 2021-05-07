@@ -1,0 +1,18 @@
+[Unit]
+Description=UT AUTOmata GUI
+Requires=graphical.target
+After=graphical.target
+After=ut_automata.service
+
+[Service]
+ExecStart=/bin/bash /home/amrl_user/ut_automata/scripts/start_gui.sh
+Restart=no
+# Output to syslog
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=ut-automata-gui
+User=amrl_user
+Environment=HOME=/home/amrl_user
+
+[Install]
+WantedBy=default.target

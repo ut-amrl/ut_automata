@@ -1,0 +1,35 @@
+<launch>
+
+  <include file="$(find ut_automata)/launch/hokuyo_10lx.launch" />
+
+  <node name="vesc_driver" 
+      pkg="ut_automata"
+      type="vesc_driver"
+      args="--config_dir=$(find ut_automata)/config"
+      output="screen"
+      respawn="true"
+      respawn_delay="5"/>
+
+  <node name="websocket" 
+      pkg="ut_automata"
+      type="websocket"
+      output="screen"
+      respawn="true"
+      respawn_delay="2" />
+
+  <node name="joystick" 
+      pkg="ut_automata"
+      type="joystick"
+      args="--idx 1 --mode=ps4" 
+      output="screen"
+      respawn="true"
+      respawn_delay="2" />
+
+  <node name="gui" 
+      pkg="ut_automata"
+      type="gui"
+      output="screen"
+      respawn="true"
+      respawn_delay="5" />
+
+</launch>
