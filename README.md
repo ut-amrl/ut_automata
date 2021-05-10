@@ -26,9 +26,12 @@ After adding these lines you will need to either relog into the computer or run:
 `source ~/.profile`
 
 ### Dependencies
-1. Run `install_dependencies.sh` to install package dependencies.
-1. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
-1. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
+1. Run `install_dependencies.sh` to install package dependencies, or manually install them:
+      ```
+      sudo apt install python-pygame libgoogle-glog-dev libgflags-dev liblua5.1-0-dev libqt5websockets5-dev libqt5opengl5-dev
+      ```
+2. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
+3. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
 
 ### Clone and Build UT AUTOmata infrastructure Code
 1. Clone the repository, including the submodules:
@@ -52,11 +55,68 @@ After adding these lines you will need to either relog into the computer or run:
 To set up the infrastructure on the real car:
 1. Install L4T including Ubuntu 18.04 on the car's Jetson TX2 computer. The
    latest supported version is L4T 32.4.4, included as part of [Nvidia JetPack 4.4.1](https://developer.nvidia.com/embedded/jetpack).
+   For detailed instructions see [JetsonSetup.md](JetsonSetup.md)
 1. Install [ROS Melodic](https://wiki.ros.org/melodic/Installation)
 1. Follow the same instructions above to clone the code, install dependencies,
    and finally compile the infrastructure including hardware drivers using:
    ```
    make hardware -j4
+   ```
+## Usage 
+### Manually starting the simulation stack
+1. Start the simulator
+   ```
+   ./bin/simulator 
+   ```
+   By default, the simulator does not provide localization information, to enable publishing ground-truth localization add `--localize` to the command:
+   ```
+   ./bin/simulator --localize
+   ```
+2. Websocket for remote visualization and control
+   ```
+   ./bin/websocket
+   ```
+3. Remote visualization and control
+      1. Clone this repository on your the computer you wish to use for visualization and control, e.g. your laptop. (the OS does not matter)
+      2. Open the `webviz.html` file in your browser
+      3. Enter the IP address of the computer running the simulator, and clock on `Connect`
+
+### Manually starting the control stack on the actual car's Jetson computer
+
+The cars have the GUI app installed with a desktop icon on the launcher bar. When clicked, it will launch the gui along with all other on-car nodes mentioned below.
+
+1. Joystick
+   ```
+   ./bin/joystick --idx 1
+   ```
+   The `--idx` flag is used to specify which input device the joystick driver listens to and thus enable joystick input. 
+2. VESC driver (motor driver)
+   ```
+   ./bin/vesc_driver
+   ```
+3. LiDAR
+   ```
+   roslaunch ut_automata hokuyo_10lx.launch
+   ```
+4. Websocket for remote visualization and control
+   ```
+   ./bin/websocket
+   ```
+5. GUI to display and control the status of the software components
+   ```
+   DISPLAY=:0 ./bin/gui
+   ```
+6. Remote visualization and control
+      1. Clone this repository on your the computer you wish to use for visualization and control, e.g. your laptop. (the OS does not matter)
+      2. Open the `webviz.html` file in your browser
+      3. Enter the IP address of the computer running the simulator, and clock on `Connect`
+7. Camera (Optional)
+   ```
+   roslaunch astra_camera astra.launch
+   ```
+   This will enable the depth and ir image. For RGB image only:
+   ```
+   roslaunch usb_cam usb_cam-test.launch
    ```
 
 ### Autostart on Actual Car Jetson Computer
