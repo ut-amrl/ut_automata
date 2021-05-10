@@ -222,7 +222,7 @@ MainWindow::MainWindow(QWidget* parent) :
     expanding_policy.setVerticalPolicy(QSizePolicy::Expanding);
     expanding_policy.setHorizontalPolicy(QSizePolicy::Expanding);
     QPushButton* start_ros = new QPushButton("Start roscore");
-    QPushButton* stop_ros = new QPushButton("Start Camera");
+    QPushButton* start_camera = new QPushButton("Start Camera");
     QPushButton* start_car = new QPushButton("Start Car");
     QPushButton* stop_all = new QPushButton("Stop all nodes");
     start_ros->setFont(font);
@@ -235,7 +235,7 @@ MainWindow::MainWindow(QWidget* parent) :
     stop_all->setSizePolicy(expanding_policy);
     connect(start_car, SIGNAL(clicked()), this, SLOT(StartCar()));
     connect(start_ros, SIGNAL(clicked()), this, SLOT(StartRos()));
-    connect(stop_ros, SIGNAL(clicked()), this, SLOT(StartCamera()));
+    connect(start_camera, SIGNAL(clicked()), this, SLOT(StartCamera()));
     connect(stop_all, SIGNAL(clicked()), this, SLOT(StopAll()));
     QVBoxLayout* vbox = new QVBoxLayout();
     vbox->addWidget(start_ros);

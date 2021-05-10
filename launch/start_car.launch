@@ -22,7 +22,6 @@
   <node name="joystick" 
       pkg="ut_automata"
       type="joystick"
-      args="--idx 1" 
       output="screen"
       respawn="true"
       respawn_delay="2" />

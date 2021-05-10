@@ -31,8 +31,13 @@
 #include "joystick/joystick.h"
 #include "shared/util/timer.h"
 
-DEFINE_int32(idx, 0, "Joystick index");
-DEFINE_string(mode, "logitech", "(logitech, ps4) name of controller used");
+#include "config_reader/config_reader.h"
+
+CONFIG_STRING(joystick_name_, "joystick_name");
+CONFIG_STRING(joystick_port_, "joystick_port");
+
+DEFINE_string(config_dir, "config", "Directory containting the car.lua and vesc.lua config files.");
+
 using sensor_msgs::Joy;
 using std::string;
 using std::vector;
@@ -40,12 +45,15 @@ using joystick::Joystick;
 
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
-
+  // Load config.
+    config_reader::ConfigReader reader({
+      FLAGS_config_dir + "/joystick.lua"
+    });
   ros::init(argc, argv, "joystick");
   ros::NodeHandle n;
   ros::Publisher publisher = n.advertise<sensor_msgs::Joy>("joystick", 1);
-  Joystick joystick = Joystick(FLAGS_mode);
-  if (!joystick.Open(FLAGS_idx)) {
+  Joystick joystick = Joystick(joystick_name_);
+  if (!joystick.Open(joystick_port_.c_str())) {
     fprintf(stderr, "ERROR: Unable to open joystick!\n");
     return(1);
   }

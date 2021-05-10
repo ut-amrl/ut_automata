@@ -175,10 +175,10 @@ void Joystick::Close() {
 }
 
 size_t Joystick::Remap(size_t num, size_t type){
-  if(mode_ == "logitech"){
+  if(mode_ == "Logitech_F710"){
     // no need to remap
   }
-  else if (mode_ == "ps4"){
+  else if (mode_ == "Sony_DualShock_4"){
     if(type == JS_EVENT_AXIS){
       switch(num){
         case 5:
