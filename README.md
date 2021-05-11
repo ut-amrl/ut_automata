@@ -87,9 +87,8 @@ The cars have the GUI app installed with a desktop icon on the launcher bar. Whe
 
 1. Joystick
    ```
-   ./bin/joystick --idx 1
+   ./bin/joystick
    ```
-   The `--idx` flag is used to specify which input device the joystick driver listens to and thus enable joystick input. 
 2. VESC driver (motor driver)
    ```
    ./bin/vesc_driver
