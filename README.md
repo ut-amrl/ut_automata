@@ -112,7 +112,7 @@ The cars have the GUI app installed with a desktop icon on the launcher bar. Whe
       3. Enter the IP address of the computer running the simulator, and clock on `Connect`
 7. Camera (Optional)
    ```
-   roslaunch astra_camera astra.launch
+   roslaunch astra_camera astrapro.launch
    ```
    This will enable the depth and ir image. For RGB image only:
    ```
