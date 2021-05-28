@@ -64,7 +64,7 @@
     <option value="AHG2">AHG2</option>
     <option value="AHG2_Track">AHG2_Track</option>
     <option value="Slalom_Course">Slalom_Course</option>
-    <option value="UT_AUTOmata_Track_New">UT_AUTOmata_Track_New</option>
+    <option value="UT_AUTOmata_Track">UT_AUTOmata_Track</option>
   </select>
   <br>
   <canvas id="canvas" width="800" height="600" tabindex="0"> </canvas>
@@ -429,6 +429,7 @@
         mapList.selectedIndex = mapList.options.length - 1;
       }
       let url = `https://amrl.cs.utexas.edu/amrl_maps/${mapName}/${mapName}.vectormap.json`;
+      // for other branches:
       // let url = `https://raw.githubusercontent.com/ut-amrl/amrl_maps/${branchName}/${mapName}/${mapName}.vectormap.json`;
       console.log(`Loading "${url}"`);
       var xhr = new XMLHttpRequest();

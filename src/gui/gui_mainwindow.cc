@@ -329,7 +329,7 @@ void MainWindow::StartRos() {
 }
 
 void MainWindow::StartCamera() {
-  Exec("roslaunch astra_camera astra.launch");
+  Exec("roslaunch astra_camera astra.launch > /dev/null &");
 }
 
 void MainWindow::StopAll() {

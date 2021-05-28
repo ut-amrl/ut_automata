@@ -179,14 +179,15 @@ size_t Joystick::Remap(size_t num, size_t type){
     // no need to remap
   }
   else if (mode_ == "Sony_DualShock_4"){
+    // comments are in the form of Logitech F710 -> Sony Dualshock 4
     if(type == JS_EVENT_AXIS){
       switch(num){
-        case 5:
-        case 3:
+        case 5: // R1 -> RB
+        case 3: // Right Analog Stick (Left, Right) -> Right Analog Stick (Left, Right)
           num--;
           break;
-        case 2:
-        case 4:
+        case 2: // L2 -> LT
+        case 4: // Right Analog Stick (Up, Down) -> Right Analog Stick (Up, Down)
           num ++;
           break;
         default:
@@ -195,14 +196,14 @@ size_t Joystick::Remap(size_t num, size_t type){
     }
     else if (type == JS_EVENT_BUTTON){
       switch(num){
-        case 2:
-        case 1:
+        case 2: // Square -> X
+        case 1: // Circle -> B
           num--;
           break;
-        case 0:
+        case 0: // X -> A
           num += 2;
           break;
-        case 14:
+        case 14: // Midplate -> Start
           num = 14;
           break;
         default:
