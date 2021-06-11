@@ -321,7 +321,7 @@ void Exec(const string& cmd) {
 }
 
 void MainWindow::StartCar() {
-  Exec("roslaunch ut_automata start_car.launch start_gui:=flase");
+  Exec("roslaunch ut_automata start_car.launch start_gui:=false");
 }
 
 void MainWindow::StartRos() {
