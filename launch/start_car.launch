@@ -22,6 +22,7 @@
   <node name="joystick" 
       pkg="ut_automata"
       type="joystick"
+      args="--config_dir=$(find ut_automata)/config"
       output="screen"
       respawn="true"
       respawn_delay="2" />
