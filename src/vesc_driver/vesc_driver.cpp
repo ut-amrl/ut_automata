@@ -36,7 +36,7 @@ CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
 CONFIG_STRING(serial_port_, "serial_port");
 
 DEFINE_string(config_dir, "config", 
-    "Directory containting the car.lua and vesc.lua config files.");
+    "Directory containing the car.lua and vesc.lua config files.");
 
 using ut_automata::CarStatusMsg;
 using ut_automata::VescStateStamped;
