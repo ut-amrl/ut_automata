@@ -82,6 +82,9 @@ CONFIG_FLOAT(cMaxSpeed, "max_speed");
 CONFIG_FLOAT(cLaserStdDev, "laser_noise_stddev");
 CONFIG_FLOAT(cAngularDriftRate, "angular_drift_rate");
 CONFIG_FLOAT(cAngularErrorRate, "angular_error_rate");
+CONFIG_FLOAT(cMaxLaserRange, "max_laser_range");
+CONFIG_FLOAT(cLaserAngleIncrement, "laser_angle_increment");
+CONFIG_FLOAT(cLaserFOV, "laser_fov");
 config_reader::ConfigReader reader({"config/simulator.lua"});
 
 string MapNameToFile(const string& map) {
@@ -110,11 +113,11 @@ void Simulator::Init(ros::NodeHandle& n) {
   }
   scan_msg_.header.seq = 0;
   scan_msg_.header.frame_id = "base_laser";
-  scan_msg_.angle_min = DegToRad(-135.0);
-  scan_msg_.angle_max = DegToRad(135.0);
+  scan_msg_.angle_min = -0.5 * cLaserFOV;
+  scan_msg_.angle_max = 0.5 * cLaserFOV;
   scan_msg_.range_min = 0.02;
-  scan_msg_.range_max = 10.0;
-  scan_msg_.angle_increment = DegToRad(0.25);
+  scan_msg_.range_max = cMaxLaserRange;
+  scan_msg_.angle_increment = cLaserAngleIncrement;
   scan_msg_.intensities.clear();
   scan_msg_.time_increment = 0.0;
   scan_msg_.scan_time = 0.05;

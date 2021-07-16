@@ -35,6 +35,12 @@ max_accel = 5.0
 
 -- Laser noise simulation.
 laser_noise_stddev = 0.01
+-- Maximum range of the laser scanner.
+max_laser_range = 10
+-- Angular resolution of the laser scanner.
+laser_angle_increment = DegToRad(0.25)
+-- Total field of view of the laser scanner.
+laser_fov = DegToRad(270.0)
 
 -- Actuation angular drift per unit distance traversed. 
 angular_drift_rate = DegToRad(-0.5);
