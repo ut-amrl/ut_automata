@@ -113,10 +113,6 @@ The cars have the GUI app installed with a desktop icon on the launcher bar. Whe
    ```
    roslaunch astra_camera astrapro.launch
    ```
-   This will enable the depth and ir image. For RGB image only:
-   ```
-   rosrun usb_cam usb_cam_node
-   ```
 
 ### Autostart on Actual Car Jetson Computer
 
