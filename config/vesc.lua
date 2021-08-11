@@ -23,16 +23,3 @@ max_deceleration = 6.0; -- m/s^2
 
 joystick_normal_speed = 1.0; -- m/s
 joystick_turbo_speed = 2.0; -- m/s
-
-if (car_name == "car1")
-then
-  steering_angle_to_servo_offset = 0.57;
-end
-
-if (car_name == "car0")
-then
-  steering_angle_to_servo_offset = 0.426;
-  steering_angle_to_servo_gain = -0.9015;
-  speed_to_erpm_gain = 5256;
-end
-
