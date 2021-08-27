@@ -44,7 +44,7 @@ jobs:
       # Checkout and build amrl_msgs
       - name: Get amrl_msgs
         run: |
-          source /opt/ros/noetic/setup.bash
+          source /opt/ros/melodic/setup.bash
           export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs
           cd $GITHUB_WORKSPACE/..
           git clone https://github.com/ut-amrl/amrl_msgs.git
@@ -54,7 +54,7 @@ jobs:
       # Compiles the code
       - name: Run build
         run: |
-          source /opt/ros/noetic/setup.bash
+          source /opt/ros/melodic/setup.bash
           export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs
           cd $GITHUB_WORKSPACE
           make
