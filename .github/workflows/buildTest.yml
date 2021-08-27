@@ -51,10 +51,19 @@ jobs:
           cd amrl_msgs
           make
 
+
+      # Checkout and build amrl_maps
+      - name: Get amrl_maps
+        run: |
+          source /opt/ros/melodic/setup.bash
+          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_maps
+          cd $GITHUB_WORKSPACE/..
+          git clone https://github.com/ut-amrl/amrl_maps.git
+
       # Compiles the code
       - name: Run build
         run: |
           source /opt/ros/melodic/setup.bash
-          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs
+          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs:$GITHUB_WORKSPACE/../amrl_maps
           cd $GITHUB_WORKSPACE
           make
