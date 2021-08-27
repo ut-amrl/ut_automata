@@ -1,6 +1,6 @@
 # UT AUTOmata
 
-[![Build Status](https://travis-ci.com/ut-amrl/ut_automata.svg?branch=master)](https://travis-ci.com/ut-amrl/ut_automata)
+[![Build Status](https://github.com/ut-amrl/ut_automata/actions/workflows/buildTest.yml/badge.svg)](https://github.com/ut-amrl/ut_automata/actions)
 
 Infrastructure repository for UT AUTOmata
 
