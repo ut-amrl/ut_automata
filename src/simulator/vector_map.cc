@@ -62,7 +62,8 @@ namespace vector_map {
 void TrimOcclusion(const Vector2f& loc,
                    const Line2f& test_line,
                    Line2f* trim_line_ptr,
-                   vector<Line2f>* scene_lines_ptr) {
+                   vector<Line2f>* scene_lines_ptr, 
+                   float sqeps) {
   // return TrimOcclusionInt(loc, test_line, trim_line_ptr, scene_lines_ptr);
   static const bool kDebug = false;
   Line2f& trim_line = *trim_line_ptr;
@@ -73,7 +74,6 @@ void TrimOcclusion(const Vector2f& loc,
     printf("Loc: %f, %f\n", PRINT_VEC2(loc));
   }
   vector<Line2f>& scene_lines = *scene_lines_ptr;
-  static const float sqeps = 1e-8;
 
   // test_line.p0
   Vector2f l1_p0 = test_line.p0;
@@ -138,12 +138,14 @@ void TrimOcclusion(const Vector2f& loc,
   // test_line.p0 is in front of, and occludes trim_line.
   const bool occlusion0 = rayOcclusion0 &&
       (trim_line.Touches(loc) || trim_line.Touches(l1_p0) ||
-      !trim_line.Intersects(loc, l1_p0));
+      !trim_line.Intersects(loc, l1_p0)) &&
+      (Cross(l1_r0, l2_r0) < 0.0f || l1_r0.squaredNorm() < l2_r0.squaredNorm());
 
   // test_line.p1 is in front of, and occludes trim_line.
   const bool occlusion1 = rayOcclusion1 &&
       (trim_line.Touches(loc) || trim_line.Touches(l1_p1) ||
-      !trim_line.Intersects(loc, l1_p1));
+      !trim_line.Intersects(loc, l1_p1)) &&
+      (Cross(l1_r1, l2_r1) > 0.0f || l1_r1.squaredNorm() < l2_r1.squaredNorm());
 
   if (kDebug) {
     printf("completeOcclusion:%d occlusion0:%d occlusion1:%d\n",

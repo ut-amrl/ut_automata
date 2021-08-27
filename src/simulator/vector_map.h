@@ -38,7 +38,8 @@ namespace vector_map {
 void TrimOcclusion(const Eigen::Vector2f& loc,
                   const geometry::Line2f& line1,
                   geometry::Line2f* line2_ptr,
-                  std::vector<geometry::Line2f>* scene_lines_ptr);
+                  std::vector<geometry::Line2f>* scene_lines_ptr,
+                  float sqeps = 1e-8);
 
 struct VectorMap {
   VectorMap() {}
