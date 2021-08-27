@@ -101,4 +101,4 @@ TARGET_LINK_LIBRARIES(websocket
     Qt5::Gui
     Qt5::Widgets
     Qt5::WebSockets
-    ${libs} ${OPENGL_LIBRARY} GL)
+    ${libs})
