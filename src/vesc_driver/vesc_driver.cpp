@@ -124,6 +124,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
   autonomy_enabler_pub_ = nh.advertise<std_msgs::Bool>("autonomy_enabler", 1);
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
+  drive_pub_ = nh.advertise<geomery_msgs::TwistStamped>("vesc_drive", 1);
   car_status_pub_ = nh.advertise<CarStatusMsg>("car_status", 1);
 
   ackermann_curvature_sub_ = nh.subscribe(
@@ -291,6 +292,8 @@ void VescDriver::sendDriveCommands() {
   const float servo = steering_to_servo_gain_ * mux_steering_angle_ +
       steering_to_servo_offset_;
 
+  drive_pub_.publish(CalculateDriveCmd(mux_drive_speed_, mux_steering_angle_));
+
   // Set speed command.
   const float erpm_clipped = Clip(erpm, -erpm_speed_limit_, erpm_speed_limit_, "erpm");
   vesc_.setSpeed(erpm_clipped);
@@ -455,6 +458,27 @@ float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
   float turn_radius = lin_vel / rot_vel;
   steering_angle = std::atan(wheelbase_ / turn_radius);
   return steering_angle;
+}
+
+
+geometry_msgs::TwistStamped createTwist(float velocity, float curvature) {
+  geometry_msgs::TwistStamped  twist_msg;
+  twist_msg.header.stamp = ros::Time::now();
+  twist_msg.twist.linear.x = velocity;
+  twist_msg.twist.linear.y = 0;
+  twist_msg.twist.linear.z = 0;
+  twist_msg.twist.angular.x = 0;
+  twist_msg.twist.angular.y = 0;
+  twist_msg.twist.angular.z = velocity * curvature;
+  return twist_msg;
+}
+
+geometry_msgs::TwistStamped CalculateDriveCmd(float speed, float steering_angle) {
+  float velocity = speed;
+  float turn_radius = steering_angle != 0 ? wheelbase / tan(steering_angle) : 0;
+  float curvature = turn_radius != 0 ?  1.0 / turn_radius : 0;
+
+  return createTwist(velocity, curvature);
 }
 
 void VescDriver::ackermannCurvatureCallback(
