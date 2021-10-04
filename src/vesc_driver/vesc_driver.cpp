@@ -292,8 +292,6 @@ void VescDriver::sendDriveCommands() {
   const float servo = steering_to_servo_gain_ * mux_steering_angle_ +
       steering_to_servo_offset_;
 
-  drive_pub_.publish(CalculateDriveCmd(mux_drive_speed_, mux_steering_angle_));
-
   // Set speed command.
   const float erpm_clipped = Clip(erpm, -erpm_speed_limit_, erpm_speed_limit_, "erpm");
   vesc_.setSpeed(erpm_clipped);
@@ -304,6 +302,9 @@ void VescDriver::sendDriveCommands() {
   mux_steering_angle_ = (clipped_servo - steering_to_servo_offset_) 
                         / steering_to_servo_gain_;
   last_steering_angle_ = mux_steering_angle_;
+
+  const clipped_speed = (erpm_clipped - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+  drive_pub_.publish(CalculateDriveCmd(clipped_speed, mux_steering_angle_));
 }
 
 void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
