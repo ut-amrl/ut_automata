@@ -11,63 +11,44 @@
 
 #include <boost/crc.hpp>
 
+#include "glog/logging.h"
+
 #include "vesc_driver/vesc_packet_factory.h"
 #include "serial.h"
 
 
-namespace vesc_driver
-{
+namespace vesc_driver {
 
-class VescInterface::Impl
-{
-public:
-  Impl() {}
+pthread_t rx_thread_;
+bool rx_thread_run_;
+VescInterface::PacketHandlerFunction packet_handler_;
+Serial serial_;
 
-  void* rxThread(void);
-
-  static void* rxThreadHelper(void *context)
-  {
-    return ((VescInterface::Impl*)context)->rxThread();
-  }
-
-  pthread_t rx_thread_;
-  bool rx_thread_run_;
-  PacketHandlerFunction packet_handler_;
-  ErrorHandlerFunction error_handler_;
-  Serial serial_;
-  VescFrame::CRC send_crc_;
-};
-
-void* VescInterface::Impl::rxThread(void)
-{
+void* rxThread(void*) {
   Buffer buffer;
   buffer.reserve(4096);
 
   while (rx_thread_run_) {
-
     int bytes_needed = VescFrame::VESC_MIN_FRAME_SIZE;
     if (!buffer.empty()) {
-
       // search buffer for valid packet(s)
       Buffer::iterator iter(buffer.begin());
       Buffer::iterator iter_begin(buffer.begin());
       while (iter != buffer.end()) {
-
         // check if valid start-of-frame character
         if (VescFrame::VESC_SOF_VAL_SMALL_FRAME == *iter ||
             VescFrame::VESC_SOF_VAL_LARGE_FRAME == *iter) {
-
           // good start, now attempt to create packet
           std::string error;
-          VescPacketConstPtr packet =
-            VescPacketFactory::createPacket(iter, buffer.end(), &bytes_needed, &error);
+          VescPacketConstPtr packet = VescPacketFactory::createPacket(
+              iter, buffer.end(), &bytes_needed, &error);
           if (packet) {
             // good packet, check if we skipped any data
             if (std::distance(iter_begin, iter) > 0) {
-              std::ostringstream ss;
-              ss << "Out-of-sync with VESC, unknown data leading valid frame. Discarding "
-                 << std::distance(iter_begin, iter) << " bytes.";
-              error_handler_(ss.str());
+              fprintf(stderr, 
+                  "Out-of-sync with VESC, unknown data leading "   
+                  "valid frame. Discarding %ld bytes.\n",
+                  std::distance(iter_begin, iter));
             }
             // call packet handler
             packet_handler_(packet);
@@ -76,29 +57,27 @@ void* VescInterface::Impl::rxThread(void)
             iter_begin = iter;
             // continue to look for another frame in buffer
             continue;
-          }
-          else if (bytes_needed > 0) {
+          } else if (bytes_needed > 0) {
             // need more data, break out of while loop
             break; // for (iter_sof...
-          }
-          else {
+          } else {
             // else, this was not a packet, move on to next byte
-            error_handler_(error);
           }
         }
-
         iter++;
       }
 
       // if iter is at the end of the buffer, more bytes are needed
-      if (iter == buffer.end())
+      if (iter == buffer.end()) {
         bytes_needed = VescFrame::VESC_MIN_FRAME_SIZE;
+      }
 
       // erase "used" buffer
       if (std::distance(iter_begin, iter) > 0) {
-        std::ostringstream ss;
-        ss << "Out-of-sync with VESC, discarding " << std::distance(iter_begin, iter) << " bytes.";
-        error_handler_(ss.str());
+        fprintf(stderr, 
+                "Out-of-sync with VESC, unknown data leading "   
+                "valid frame. Discarding %ld bytes.\n",
+                std::distance(iter_begin, iter));
       }
       buffer.erase(buffer.begin(), iter);
     }
@@ -108,7 +87,9 @@ void* VescInterface::Impl::rxThread(void)
     // attempt to read from the serial port
     int bytes_read = serial_.read(buffer.data(), buffer.size());
     if (bytes_needed > 0 && 0 == bytes_read && !buffer.empty()) {
-      error_handler_("Possibly out-of-sync with VESC, read timout in the middle of a frame.");
+      fprintf(stderr, 
+              "Possibly out-of-sync with VESC, "
+              "read timout in the middle of a frame.");
     }
 
   }
@@ -117,134 +98,99 @@ void* VescInterface::Impl::rxThread(void)
 
 
 VescInterface::VescInterface(const std::string& port,
-                             const PacketHandlerFunction& packet_handler,
-                             const ErrorHandlerFunction& error_handler) :
-  impl_(new Impl())
-{
-  setPacketHandler(packet_handler);
-  setErrorHandler(error_handler);
+                             const PacketHandlerFunction& packet_handler) {
+  packet_handler_ = packet_handler;
   // attempt to conect if the port is specified
   if (!port.empty())
     connect(port);
 }
 
-VescInterface::~VescInterface()
-{
+VescInterface::~VescInterface() {
   disconnect();
 }
 
-void VescInterface::setPacketHandler(const PacketHandlerFunction& handler)
-{
-  // todo - definately need mutex
-  impl_->packet_handler_ = handler;
-}
 
-void VescInterface::setErrorHandler(const ErrorHandlerFunction& handler)
-{
-  // todo - definately need mutex
-  impl_->error_handler_ = handler;
-}
-
-void VescInterface::connect(const std::string& port)
-{
+bool VescInterface::connect(const std::string& port) {
   // todo - mutex?
 
-  if (isConnected()) {
-    throw SerialException("Already connected to serial port.");
-  }
+  CHECK(!isConnected()) << "Already connected to VESC on port " << port;
 
   // connect to serial port
-  if (!impl_->serial_.open(port.c_str(), 115200)) {
-      fprintf(stderr, "Failed to open the serial port %s to the VESC\n",
-          port.c_str());
+  if (serial_.open(port.c_str(), 115200)) {
+    fprintf(stderr, "Failed to open the serial port %s to the VESC\n",
+        port.c_str());
+    return false;
   }
 
   // start up a monitoring thread
-  impl_->rx_thread_run_ = true;
-  int result = pthread_create(&impl_->rx_thread_,
+  rx_thread_run_ = true;
+  int result = pthread_create(&rx_thread_,
                               NULL,
-                              &VescInterface::Impl::rxThreadHelper,
-                              impl_.get());
-  if (result != 0) {
-    fprintf(stderr,
-            "ERROR: pthread_create failed with error code %d\n",
-            result);
-    exit(1);
-  }
+                              &rxThread,
+                              NULL);
+  CHECK_EQ(result, 0) << "pthread_create failed with error code " << result;
+  return true;
 }
 
-void VescInterface::disconnect()
-{
+void VescInterface::disconnect() {
   // todo - mutex?
 
   if (isConnected()) {
     // bring down read thread
-    impl_->rx_thread_run_ = false;
-    int result = pthread_join(impl_->rx_thread_, NULL);
+    rx_thread_run_ = false;
+    int result = pthread_join(rx_thread_, NULL);
     if (result != 0) {
       fprintf(stderr,
               "ERROR: pthread_join failed with error code %d\n",
               result);
       exit(1);
     }
-    impl_->serial_.close();
+    serial_.close();
   }
 }
 
-bool VescInterface::isConnected() const
-{
-  return impl_->serial_.isOpen();
+bool VescInterface::isConnected() const {
+  return serial_.isOpen();
 }
 
-void VescInterface::send(const VescPacket& packet)
-{
+void VescInterface::send(const VescPacket& packet) {
   const std::vector<uint8_t>& buffer = packet.frame();
-  size_t written = impl_->serial_.write(buffer.data(), buffer.size());
-  if (written != packet.frame().size()) {
-    std::stringstream ss;
-    ss << "Wrote " << written << " bytes, expected " << packet.frame().size() << ".";
-    throw SerialException(ss.str().c_str());
-  }
+  size_t written = serial_.write(buffer.data(), buffer.size());
+  CHECK_EQ(written, packet.frame().size()) 
+      << "Wrote " << written << " bytes, expected " 
+      << packet.frame().size() << ".";
 }
 
-void VescInterface::requestFWVersion()
-{
+void VescInterface::requestFWVersion() {
   send(VescPacketRequestFWVersion());
 }
 
-void VescInterface::requestState()
-{
+void VescInterface::requestState() {
   send(VescPacketRequestValues());
 }
 
-void VescInterface::setDutyCycle(double duty_cycle)
-{
+void VescInterface::setDutyCycle(double duty_cycle) {
   send(VescPacketSetDuty(duty_cycle));
 }
 
-void VescInterface::setCurrent(double current)
-{
+void VescInterface::setCurrent(double current) {
   send(VescPacketSetCurrent(current));
 }
 
-void VescInterface::setBrake(double brake)
-{
+void VescInterface::setBrake(double brake) {
   send(VescPacketSetCurrentBrake(brake));
 }
 
-void VescInterface::setSpeed(double speed)
-{
+void VescInterface::setSpeed(double speed) {
   send(VescPacketSetRPM(speed));
 }
 
-void VescInterface::setPosition(double position)
-{
+void VescInterface::setPosition(double position) {
   send(VescPacketSetPos(position));
 }
 
-void VescInterface::setServo(double servo)
-{
+void VescInterface::setServo(double servo) {
   send(VescPacketSetServoPos(servo));
 }
 
-} // namespace vesc_driver
+}  // namespace vesc_driver

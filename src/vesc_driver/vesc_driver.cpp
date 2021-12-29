@@ -57,8 +57,7 @@ namespace vesc_driver
 VescDriver::VescDriver(ros::NodeHandle nh,
                        ros::NodeHandle private_nh) :
     vesc_(std::string(),
-          boost::bind(&VescDriver::vescPacketCallback, this, _1),
-          boost::bind(&VescDriver::vescErrorCallback, this, _1)),
+          boost::bind(&VescDriver::vescPacketCallback, this, _1)),
     driver_mode_(MODE_INITIALIZING),
     drive_mode_(kStoppedDrive),
     fw_version_major_(-1),
@@ -111,16 +110,10 @@ VescDriver::VescDriver(ros::NodeHandle nh,
 
 
   // attempt to connect to the serial port
-  try {
-    if (kDebug) printf("CONNECT\n");
-    vesc_.connect(serial_port_);
-  } catch (SerialException& e) {
-    fprintf(stderr, "Failed to connect to the VESC, %s.", e.what());
-    ros::shutdown();
-    exit(1);
-    return;
-  }
+  if (kDebug) printf("CONNECT\n");
+  CHECK(vesc_.connect(serial_port_)) << "Failed to connect to the VESC";
   if (kDebug) printf("CONNECTED\n");
+
   state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
   autonomy_enabler_pub_ = nh.advertise<std_msgs::Bool>("autonomy_enabler", 1);
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
@@ -324,12 +317,9 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
    *  OPERATING - receiving commands from subscriber topics
    */
   if (driver_mode_ == MODE_INITIALIZING) {
-    if (ros::WallTime::now().toSec() > kTStart + kMaxInitPeriod) {
-      fprintf(stderr, "FAIL: Timed out while trying to initialize VESC.\n");
-      ros::shutdown();
-      exit(3);
-      return;
-    }
+    CHECK_LE(ros::WallTime::now().toSec(), kTStart + kMaxInitPeriod) 
+        << "FAIL: Timed out while trying to initialize VESC.\n";
+
     if (kDebug) printf("INITIALIZING\n");
     // request version number, return packet will update the internal version
     // numbers
@@ -439,11 +429,9 @@ packet)
     // todo: might need lock here
     fw_version_major_ = fw_version->fwMajor();
     fw_version_minor_ = fw_version->fwMinor();
+  } else {
+    fprintf(stderr, "Unknown packet type: %s\n", packet->name().c_str());
   }
-}
-
-void VescDriver::vescErrorCallback(const std::string& error) {
-  fprintf(stderr, "VESC Error: %s\n", error.c_str());
 }
 
 float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
