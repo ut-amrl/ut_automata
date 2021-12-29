@@ -9,6 +9,7 @@
 
 #include "boost/bind.hpp"
 #include "gflags/gflags.h"
+#include "glog/logging.h"
 #include "ut_automata/CarStatusMsg.h"
 #include "ut_automata/VescStateStamped.h"
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
@@ -179,19 +180,16 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     drive_mode_ = kStoppedDrive;
     mux_drive_speed_ = 0;
     mux_steering_angle_ = 0;
-  }
-  else if (msg.buttons[kManualDriveButton] == 1) {
+  } else if (msg.buttons[kManualDriveButton] == 1) {
     // joystick mode
     if(kDebug) printf("Joystick\n");
     drive_mode_ = kJoystickDrive;
-  } 
-  else if ((toggle == kToggleOn) ||
+  } else if ((toggle == kToggleOn) ||
     (drive_mode_ == kAutonomousContinuousDrive && 
     toggle != kToggleOn)){
     if(kDebug) printf("ContAutonomous\n");
     drive_mode_ = kAutonomousContinuousDrive;
-  }
-  else if (msg.buttons[kAutonomousDriveButton] == 1) {
+  } else if (msg.buttons[kAutonomousDriveButton] == 1) {
     if(kDebug) printf("Autonomous\n");
     drive_mode_ = kAutonomousDrive;
   } else {
@@ -303,13 +301,8 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
   if (kDebug) printf("TIMER CALLBACK\n");
   checkCommandTimeout();
   // VESC interface should not unexpectedly disconnect, but test for it anyway
-  if (!vesc_.isConnected()) {
-    fprintf(stderr, "Unexpectedly disconnected from serial port.\n");
-    timer_.stop();
-    ros::shutdown();
-    exit(2);
-    return;
-  }
+  CHECK(vesc_.isConnected()) 
+      << "Unexpectedly disconnected from serial port.";
 
   /*
    * Driver state machine, modes:
@@ -317,7 +310,7 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
    *  OPERATING - receiving commands from subscriber topics
    */
   if (driver_mode_ == MODE_INITIALIZING) {
-    CHECK_LE(ros::WallTime::now().toSec(), kTStart + kMaxInitPeriod) 
+    CHECK_LE(ros::WallTime::now().toSec() - kTStart, kMaxInitPeriod) 
         << "FAIL: Timed out while trying to initialize VESC.\n";
 
     if (kDebug) printf("INITIALIZING\n");
