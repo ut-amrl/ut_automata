@@ -18,7 +18,7 @@
 #include "config_reader/config_reader.h"
 #include "shared/math/math_util.h"
 
-static const bool kDebug = true;
+static const bool kDebug = false;
 static const float kCommandRate = 20;
 static const float kCommandInterval = 1.0 / kCommandRate;
 
@@ -180,19 +180,16 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     drive_mode_ = kStoppedDrive;
     mux_drive_speed_ = 0;
     mux_steering_angle_ = 0;
-  }
-  else if (msg.buttons[kManualDriveButton] == 1) {
+  } else if (msg.buttons[kManualDriveButton] == 1) {
     // joystick mode
     if(kDebug) printf("Joystick\n");
     drive_mode_ = kJoystickDrive;
-  } 
-  else if ((toggle == kToggleOn) ||
+  } else if ((toggle == kToggleOn) ||
     (drive_mode_ == kAutonomousContinuousDrive && 
     toggle != kToggleOn)){
     if(kDebug) printf("ContAutonomous\n");
     drive_mode_ = kAutonomousContinuousDrive;
-  }
-  else if (msg.buttons[kAutonomousDriveButton] == 1) {
+  } else if (msg.buttons[kAutonomousDriveButton] == 1) {
     if(kDebug) printf("Autonomous\n");
     drive_mode_ = kAutonomousDrive;
   } else {

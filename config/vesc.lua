@@ -26,7 +26,7 @@ joystick_turbo_speed = 2.0; -- m/s
 
 if (car_name == "car1")
 then
-  steering_angle_to_servo_offset = 0.57;
+  steering_angle_to_servo_offset = 0.53;
 end
 
 if (car_name == "car0")

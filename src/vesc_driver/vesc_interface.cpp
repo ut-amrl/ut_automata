@@ -3,6 +3,7 @@
 #include "vesc_driver/vesc_interface.h"
 
 #include <pthread.h>
+#include <fcntl.h>
 
 #include <string>
 #include <sstream>
@@ -20,10 +21,13 @@
 
 namespace vesc_driver {
 
+static const bool kDebug = false;
 pthread_t rx_thread_;
 bool rx_thread_run_;
 VescInterface::PacketHandlerFunction packet_handler_;
 Serial serial_;
+
+uint8_t read_buffer[4096];
 
 void* rxThread(void*) {
   Buffer buffer;
@@ -83,23 +87,23 @@ void* rxThread(void*) {
       buffer.erase(buffer.begin(), iter);
     }
 
-    // Wait for input on the serial port for up to 100ms
-    printf("Wait...\n");
-    serial_.waitForInput(100000);
-    Sleep(1);
-    printf("Done waiting\n");
     // attempt to read from the serial port
-    int bytes_read = serial_.read(buffer.data(), buffer.size());
+    serial_.waitForInput(100);
+    int bytes_read = serial_.read(read_buffer, sizeof(read_buffer));
     if (bytes_read == -1) {
-      perror("Error reading from serial port: ");
+      perror("Error reading from serial port");
     }
-    printf("Bytes read: %d\n", bytes_read);
+    if (bytes_read > 0) {
+      if (kDebug) printf("Bytes read: %d\n", bytes_read);
+      for (int i = 0; i < bytes_read; ++i) {
+        buffer.push_back(read_buffer[i]);
+      }
+    }
     if (bytes_needed > 0 && 0 == bytes_read && !buffer.empty()) {
       fprintf(stderr, 
               "Possibly out-of-sync with VESC, "
               "read timout in the middle of a frame.");
     }
-
   }
   return NULL;
 }
@@ -164,11 +168,13 @@ bool VescInterface::isConnected() const {
 void VescInterface::send(const VescPacket& packet) {
   const std::vector<uint8_t>& buffer = packet.frame();
   size_t written = serial_.write(buffer.data(), buffer.size());
-  printf("Wrote %d bytes: ", static_cast<int>(written));
-  for (size_t i = 0; i < buffer.size(); ++i) {
-    printf("0x%X ", buffer[i]);
+  if (kDebug) {
+    printf("Wrote %d bytes: ", static_cast<int>(written));
+    for (size_t i = 0; i < buffer.size(); ++i) {
+      printf("0x%X ", buffer[i]);
+    }
+    printf("\n");
   }
-  printf("\n");
   CHECK_EQ(written, packet.frame().size()) 
       << "Wrote " << written << " bytes, expected " 
       << packet.frame().size() << ".";
