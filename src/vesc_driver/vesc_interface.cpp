@@ -15,6 +15,7 @@
 
 #include "vesc_driver/vesc_packet_factory.h"
 #include "serial.h"
+#include "shared/util/timer.h"
 
 
 namespace vesc_driver {
@@ -83,9 +84,16 @@ void* rxThread(void*) {
     }
 
     // Wait for input on the serial port for up to 100ms
-    serial_.waitForInput(100);
+    printf("Wait...\n");
+    serial_.waitForInput(100000);
+    Sleep(1);
+    printf("Done waiting\n");
     // attempt to read from the serial port
     int bytes_read = serial_.read(buffer.data(), buffer.size());
+    if (bytes_read == -1) {
+      perror("Error reading from serial port: ");
+    }
+    printf("Bytes read: %d\n", bytes_read);
     if (bytes_needed > 0 && 0 == bytes_read && !buffer.empty()) {
       fprintf(stderr, 
               "Possibly out-of-sync with VESC, "
@@ -116,7 +124,7 @@ bool VescInterface::connect(const std::string& port) {
   CHECK(!isConnected()) << "Already connected to VESC on port " << port;
 
   // connect to serial port
-  if (serial_.open(port.c_str(), 115200)) {
+  if (!serial_.open(port.c_str(), 115200)) {
     fprintf(stderr, "Failed to open the serial port %s to the VESC\n",
         port.c_str());
     return false;
@@ -156,6 +164,11 @@ bool VescInterface::isConnected() const {
 void VescInterface::send(const VescPacket& packet) {
   const std::vector<uint8_t>& buffer = packet.frame();
   size_t written = serial_.write(buffer.data(), buffer.size());
+  printf("Wrote %d bytes: ", static_cast<int>(written));
+  for (size_t i = 0; i < buffer.size(); ++i) {
+    printf("0x%X ", buffer[i]);
+  }
+  printf("\n");
   CHECK_EQ(written, packet.frame().size()) 
       << "Wrote " << written << " bytes, expected " 
       << packet.frame().size() << ".";

@@ -9,6 +9,7 @@
 
 #include "boost/bind.hpp"
 #include "gflags/gflags.h"
+#include "glog/logging.h"
 #include "ut_automata/CarStatusMsg.h"
 #include "ut_automata/VescStateStamped.h"
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
@@ -17,7 +18,7 @@
 #include "config_reader/config_reader.h"
 #include "shared/math/math_util.h"
 
-static const bool kDebug = false;
+static const bool kDebug = true;
 static const float kCommandRate = 20;
 static const float kCommandInterval = 1.0 / kCommandRate;
 
@@ -303,13 +304,8 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
   if (kDebug) printf("TIMER CALLBACK\n");
   checkCommandTimeout();
   // VESC interface should not unexpectedly disconnect, but test for it anyway
-  if (!vesc_.isConnected()) {
-    fprintf(stderr, "Unexpectedly disconnected from serial port.\n");
-    timer_.stop();
-    ros::shutdown();
-    exit(2);
-    return;
-  }
+  CHECK(vesc_.isConnected()) 
+      << "Unexpectedly disconnected from serial port.";
 
   /*
    * Driver state machine, modes:
@@ -317,7 +313,7 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
    *  OPERATING - receiving commands from subscriber topics
    */
   if (driver_mode_ == MODE_INITIALIZING) {
-    CHECK_LE(ros::WallTime::now().toSec(), kTStart + kMaxInitPeriod) 
+    CHECK_LE(ros::WallTime::now().toSec() - kTStart, kMaxInitPeriod) 
         << "FAIL: Timed out while trying to initialize VESC.\n";
 
     if (kDebug) printf("INITIALIZING\n");

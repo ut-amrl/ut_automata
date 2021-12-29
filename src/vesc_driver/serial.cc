@@ -98,7 +98,7 @@ bool Serial::open(const char *device, int baud, int flags, bool flow_control) {
   tio.c_cflag &= ~(PARENB|PARODD);  // disable parity
   tio.c_cflag &= ~(CSTOPB);             // only one stop bit
 
-  if (flow_control) {
+  if (false) {
     // for RoboDragons' radio only
     tio.c_cflag |= CRTSCTS;  // enable flow-control
     // tio.c_cflag |= IGNPAR|PARENB; // enable parity
@@ -117,7 +117,10 @@ bool Serial::open(const char *device, int baud, int flags, bool flow_control) {
   baud_in  = BaudFlagToRate(cfgetispeed(&tio));
   baud_out = BaudFlagToRate(cfgetospeed(&tio));
 
-  if (debug) printf("  baud: %d %d cf:0x%X\n", baud_in, baud_out, tio.c_cflag);
+  if (debug) {
+    printf("  baud: %d baudin: %d baudout: %d cf:0x%X\n",
+           baud, baud_in, baud_out, tio.c_cflag);
+  }
 
   return(baud_in == baud && baud_out == baud);
 }
