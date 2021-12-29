@@ -1,0 +1,69 @@
+name: Build-Test
+# Run this workflow every time a new commit pushed to your repository
+on: push
+
+jobs:
+  # Set the job key. The key is displayed as the job name
+  # when a job name is not provided
+  build-test:
+    # Name the Job
+    name: Build test
+    # Set the type of machine to run on
+    runs-on: ubuntu-18.04
+
+    steps:
+      # Run package update
+      - name: Run package update
+        run: |
+          sudo apt-get update
+          sudo apt-get dist-upgrade -y
+
+      # Install ROS Melodic
+      - name: Install ROS Melodic
+        run: |
+          sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
+          sudo apt install curl
+          curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install ros-melodic-desktop python-rosdep python-rosinstall python-rosinstall-generator python-wstool python-rosdep build-essential
+          sudo rosdep init
+          rosdep update
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt-get install git libgflags-dev libpopt-dev libgoogle-glog-dev liblua5.1-0-dev libboost-all-dev libqt5websockets5-dev ros-melodic-serial
+
+
+      # Checks out a copy of your repository
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      # Checkout and build amrl_msgs
+      - name: Get amrl_msgs
+        run: |
+          source /opt/ros/melodic/setup.bash
+          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs
+          cd $GITHUB_WORKSPACE/..
+          git clone https://github.com/ut-amrl/amrl_msgs.git
+          cd amrl_msgs
+          make
+
+
+      # Checkout and build amrl_maps
+      - name: Get amrl_maps
+        run: |
+          source /opt/ros/melodic/setup.bash
+          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_maps
+          cd $GITHUB_WORKSPACE/..
+          git clone https://github.com/ut-amrl/amrl_maps.git
+
+      # Compiles the code
+      - name: Run build
+        run: |
+          source /opt/ros/melodic/setup.bash
+          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs:$GITHUB_WORKSPACE/../amrl_maps
+          cd $GITHUB_WORKSPACE
+          make

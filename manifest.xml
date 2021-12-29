@@ -10,6 +10,7 @@
   <depend package="nav_msgs"/>
   <depend package="sensor_msgs"/>
   <depend package="tf"/>
+  <depend package="serial"/>
   <depend package="amrl_msgs"/>
   <depend package="amrl_maps"/>
 </package>

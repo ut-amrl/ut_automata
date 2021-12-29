@@ -25,6 +25,8 @@
 #include "eigen3/Eigen/Dense"
 #include "math/line2d.h"
 
+#include "glog/logging.h"
+
 #ifndef VECTOR_MAP_H
 #define VECTOR_MAP_H
 
@@ -36,7 +38,8 @@ namespace vector_map {
 void TrimOcclusion(const Eigen::Vector2f& loc,
                   const geometry::Line2f& line1,
                   geometry::Line2f* line2_ptr,
-                  std::vector<geometry::Line2f>* scene_lines_ptr);
+                  std::vector<geometry::Line2f>* scene_lines_ptr,
+                  float sqeps = 1e-8);
 
 struct VectorMap {
   VectorMap() {}
@@ -69,9 +72,30 @@ struct VectorMap {
                         float angle_max,
                         int num_rays,
                         std::vector<float>* scan);
+
+  // Get predicted point cloud in the direction of the specified rays from the current location.
+  void GetPredictedPointCloud(const Eigen::Vector2f& loc,
+                              float range_min,
+                              float range_max,
+                              const std::vector<Eigen::Vector2f>& rays,
+                              std::vector<Eigen::Vector2f>* predicted_points) const {
+    CHECK(false) << "Unimplemented";
+  }
+
+  void GetRayToLineCorrespondences(
+      const Eigen::Vector2f& sensor_loc,
+      const float angle,
+      const std::vector<Eigen::Vector2f>& rays,
+      const float min_range,
+      const float max_range,
+      std::vector<geometry::Line2f>* lines_ptr,
+      std::vector<int>* line_correspondences) const;
+
   void Cleanup();
 
   void Load(const std::string& file);
+
+  void Save(const std::string& file);
 
   bool Intersects(const Eigen::Vector2f& v0, const Eigen::Vector2f& v1) const ;
   std::vector<geometry::Line2f> lines;

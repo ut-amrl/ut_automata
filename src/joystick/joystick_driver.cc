@@ -31,7 +31,12 @@
 #include "joystick/joystick.h"
 #include "shared/util/timer.h"
 
-DEFINE_int32(idx, 0, "Joystick index");
+#include "config_reader/config_reader.h"
+
+CONFIG_STRING(joystick_name_, "joystick_name");
+CONFIG_STRING(joystick_port_, "joystick_port");
+
+DEFINE_string(config_dir, "config", "Directory containing joystick.lua config file.");
 
 using sensor_msgs::Joy;
 using std::string;
@@ -40,13 +45,16 @@ using joystick::Joystick;
 
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
-
+  // Load config.
+  config_reader::ConfigReader reader({
+    FLAGS_config_dir + "/joystick.lua"
+  });
   ros::init(argc, argv, "joystick");
   ros::NodeHandle n;
   ros::Publisher publisher = n.advertise<sensor_msgs::Joy>("joystick", 1);
-  Joystick joystick;
-  if (!joystick.Open(FLAGS_idx)) {
-    fprintf(stderr, "ERROR: Unable to open joystick)!\n");
+  Joystick joystick = Joystick(joystick_name_);
+  if (!joystick.Open(joystick_port_.c_str())) {
+    fprintf(stderr, "ERROR: Unable to open joystick!\n");
     return(1);
   }
 
