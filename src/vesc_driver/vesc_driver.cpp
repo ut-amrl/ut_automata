@@ -162,7 +162,7 @@ geometry_msgs::TwistStamped createTwist(float velocity, float curvature) {
 
 geometry_msgs::TwistStamped CalculateDriveCmd(float speed, float steering_angle) {
   float velocity = speed;
-  float turn_radius = steering_angle != 0 ? wheelbase / tan(steering_angle) : 0;
+  float turn_radius = steering_angle != 0 ? wheelbase_ / tan(steering_angle) : 0;
   float curvature = turn_radius != 0 ?  1.0 / turn_radius : 0;
 
   return createTwist(velocity, curvature);
