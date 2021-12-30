@@ -31,7 +31,6 @@ private:
   // interface to the VESC
   VescInterface vesc_;
   void vescPacketCallback(const boost::shared_ptr<VescPacket const>& packet);
-  void vescErrorCallback(const std::string& error);
   void timerCallback(const ros::SteadyTimerEvent& event);
 
   // ROS services

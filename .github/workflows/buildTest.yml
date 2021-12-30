@@ -32,7 +32,7 @@ jobs:
       # Install dependencies
       - name: Install dependencies
         run: |
-          sudo apt-get install git libgflags-dev libpopt-dev libgoogle-glog-dev liblua5.1-0-dev libboost-all-dev libqt5websockets5-dev ros-melodic-serial
+          sudo apt-get install git libgflags-dev libpopt-dev libgoogle-glog-dev liblua5.1-0-dev libboost-all-dev libqt5websockets5-dev
 
 
       # Checks out a copy of your repository

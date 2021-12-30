@@ -59,6 +59,7 @@ SET(libs roslib roscpp glog gflags amrl_shared_lib
 IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
   MESSAGE(STATUS "Building hardware drivers")
   rosbuild_add_executable(vesc_driver
+                          src/vesc_driver/serial.cc
                           src/vesc_driver/vesc_driver_node.cpp
                           src/vesc_driver/vesc_driver.cpp
                           src/vesc_driver/vesc_interface.cpp
