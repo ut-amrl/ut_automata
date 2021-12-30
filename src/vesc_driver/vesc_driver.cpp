@@ -14,6 +14,7 @@
 #include "ut_automata/VescStateStamped.h"
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "nav_msgs/Odometry.h"
+#include "geometry_msgs/TwistStamped.h"
 
 #include "config_reader/config_reader.h"
 #include "shared/math/math_util.h"
@@ -118,6 +119,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
   autonomy_enabler_pub_ = nh.advertise<std_msgs::Bool>("autonomy_enabler", 1);
   odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
+  drive_pub_ = nh.advertise<geometry_msgs::TwistStamped>("vesc_drive", 1);
   car_status_pub_ = nh.advertise<CarStatusMsg>("car_status", 1);
 
   ackermann_curvature_sub_ = nh.subscribe(
@@ -144,6 +146,26 @@ void VescDriver::checkCommandTimeout() {
     mux_drive_speed_ = 0;
     mux_steering_angle_ = 0;
   }
+}
+
+geometry_msgs::TwistStamped createTwist(float velocity, float curvature) {
+  geometry_msgs::TwistStamped  twist_msg;
+  twist_msg.header.stamp = ros::Time::now();
+  twist_msg.twist.linear.x = velocity;
+  twist_msg.twist.linear.y = 0;
+  twist_msg.twist.linear.z = 0;
+  twist_msg.twist.angular.x = 0;
+  twist_msg.twist.angular.y = 0;
+  twist_msg.twist.angular.z = velocity * curvature;
+  return twist_msg;
+}
+
+geometry_msgs::TwistStamped CalculateDriveCmd(float speed, float steering_angle) {
+  float velocity = speed;
+  float turn_radius = steering_angle != 0 ? wheelbase / tan(steering_angle) : 0;
+  float curvature = turn_radius != 0 ?  1.0 / turn_radius : 0;
+
+  return createTwist(velocity, curvature);
 }
 
 void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
@@ -292,6 +314,9 @@ void VescDriver::sendDriveCommands() {
   mux_steering_angle_ = (clipped_servo - steering_to_servo_offset_) 
                         / steering_to_servo_gain_;
   last_steering_angle_ = mux_steering_angle_;
+
+  const float clipped_speed = (erpm_clipped - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+  drive_pub_.publish(CalculateDriveCmd(clipped_speed, mux_steering_angle_));
 }
 
 void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {

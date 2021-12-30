@@ -36,6 +36,7 @@ private:
   // ROS services
   ros::Publisher state_pub_;
   ros::Publisher odom_pub_;
+  ros::Publisher drive_pub_;
   ros::Publisher car_status_pub_;
   ros::Publisher autonomy_enabler_pub_;
   ros::Subscriber ackermann_curvature_sub_;
