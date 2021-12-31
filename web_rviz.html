@@ -55,16 +55,17 @@
     <option value="GDC1">GDC1</option>
     <option value="GDC2">GDC2</option>
     <option value="GDC3">GDC3</option>
-    <option value="EmptyMap">EmptyMap</option>
-    <option value="UT_Campus">UT_Campus</option>
-    <option value="UT_AUTOmata_Track">UT_AUTOmata_Track</option>
-    <option value="Joydeepb-Home">Joydeepb-Home</option>
-    <option value="Joydeepb-Driveway">Joydeepb-Driveway</option>
     <option value="AHG1">AHG1</option>
     <option value="AHG2">AHG2</option>
     <option value="AHG2_Track">AHG2_Track</option>
     <option value="Slalom_Course">Slalom_Course</option>
     <option value="UT_AUTOmata_Track">UT_AUTOmata_Track</option>
+    <option value="AHGM">AHGM</option>
+    <option value="AHGHallway">AHGHallway</option>
+    <option value="UT_Campus">UT_Campus</option>
+    <option value="ASE1">ASE1</option>
+    <option value="ASE4">ASE4</option>
+    <option value="EmptyMap">EmptyMap</option>
   </select>
   <br>
   <canvas id="canvas" width="800" height="600" tabindex="0"> </canvas>
@@ -89,7 +90,6 @@
     var tLastDraw = 0;
     var map = [];
     var lastLaserScan = undefined;
-    var particles = undefined;
     var robot_interface = undefined;
     var currentMapName = '';
 
@@ -114,8 +114,6 @@
     class DataParser {
       constructor(arrayBuffer) {
         this.header = {
-          num_particles: 0,
-          num_path_options: 0,
           num_points: 0,
           num_lines: 0,
           num_arcs: 0,
@@ -172,8 +170,6 @@
       }
 
       readHeader() {
-        this.header.num_particles = this.readUint32();
-        this.header.num_path_options = this.readUint32();
         this.header.num_points = this.readUint32();
         this.header.num_lines = this.readUint32();
         this.header.num_arcs = this.readUint32();
@@ -185,10 +181,15 @@
         this.header.laser_max_angle = this.readFloat32();
         this.header.robot_pose = this.readPose();
         this.header.map = '';
+        let end_of_string = false;
         for (let i = 0; i < 32; ++i) {
           const c = this.readUint8();
-          if (c > 0) {
-            this.header.map += String.fromCharCode(c);
+          if (!end_of_string) {
+            if (c === 0) {
+              end_of_string = true;
+            } else {
+              this.header.map += String.fromCharCode(c);
+            }
           }
         }
         return this.header;
@@ -206,18 +207,6 @@
         return pose;
       }
 
-      readPathVisualization() {
-        let path = {
-          curvature: 0,
-          distance: 0,
-          clearance: 0
-        };
-        path.curvature = this.readFloat32();
-        path.distance = this.readFloat32();
-        path.clearance = this.readFloat32();
-        return path;
-      }
-      
       readMultiple(n, reader) {
         let arr = [];
         for (let i = 0; i < n; ++i) {
@@ -240,10 +229,16 @@
 
       readColor() {
         const c = this.readUint32();
+        const a = Math.abs((c & 0xFF000000) >> 24);
         const r = (c & 0xFF0000) >> 16;
         const g = (c & 0xFF00) >> 8;
         const b = c & 0xFF;
-        return `rgb(${r},${g},${b})`;
+        if (a > 0) {
+          return `rgba(${r},${g},${b},${a / 255})`;
+        } else {
+          return `rgb(${r},${g},${b})`;
+        }
+        
       }
 
       readPoint2D() {
@@ -282,8 +277,6 @@
         let message = {
           header: this.readHeader(),
           laser: this.readLaser(),
-          particles: this.readMultiple(this.header.num_particles, () => this.readPose()),
-          path_options: this.readMultiple(this.header.num_path_options, () => this.readPathVisualization()),
           points: this.readMultiple(this.header.num_points, () => this.readPoint()),
           lines: this.readMultiple(this.header.num_lines, () => this.readLine()),
           arcs: this.readMultiple(this.header.num_arcs, () => this.readArc()),
@@ -382,7 +375,7 @@
           x: x,
           y: y,
           theta: theta,
-          map: mapList.value
+          map: currentMapName
         }));
       }
 
@@ -397,7 +390,7 @@
           x: x,
           y: y,
           theta: theta,
-          map: mapList.value
+          map: currentMapName
         }));
       }
 
@@ -409,7 +402,8 @@
     };
 
     function changeMap() {
-      loadMap(mapList.value);
+      currentMapName = mapList.value;
+      loadMap(currentMapName);
     }
 
     function loadMap(mapName) {
@@ -423,9 +417,10 @@
       }
       if (!found) {
         let opt = document.createElement('option');
-        opt.appendChild(document.createTextNode(mapName));
+        // opt.appendChild(document.createTextNode(mapName));
         opt.value = mapName;
-        mapList.appendChild(mapName);
+        opt.innerHTML = mapName;
+        mapList.appendChild(opt);
         mapList.selectedIndex = mapList.options.length - 1;
       }
       let url = `https://amrl.cs.utexas.edu/amrl_maps/${mapName}/${mapName}.vectormap.json`;
@@ -595,7 +590,6 @@
       // console.log(d.header);
       visMsg = d;
       lastLaserScan = d.laser;
-      particles = d.particles;
       robotPose = d.robotPose;
     }
 
@@ -697,13 +691,6 @@
       drawLine(kPoseColor, p3.x, p3.y, p1.x, p1.y);
     }
 
-    function drawParticles() {
-      if (particles === undefined) return;
-      ctx.lineWidth = 2;
-      particles.forEach(p => drawPose(p, 'rgba(200, 0, 0, 0.2)'));
-      ctx.lineWidth = 1;
-    }
-
     function draw() {
       const kDrawInterval = 0.03;
       const tNow = window.performance.now();
@@ -711,8 +698,7 @@
       tLastDraw = tNow;
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (visMsg && visMsg.header.map !== '' &&
-          currentMapName !== visMsg.header.map) {
+      if (visMsg && currentMapName !== visMsg.header.map) {
         currentMapName = visMsg.header.map;
         loadMap(visMsg.header.map);
       }
@@ -721,8 +707,6 @@
       drawLaserScan();
       drawPoints();
       drawLines();
-      drawPathOptions();
-      drawParticles();
       drawArcs();
       if (visMsg) drawPose(visMsg.header.robot_pose, 'rgb(0, 150, 0)');
     }
@@ -906,7 +890,7 @@
         lastLaserScan.ranges.length;
       for (let i = 0; i < lastLaserScan.ranges.length; ++i) {
         const r = lastLaserScan.ranges[i];
-        if (r == 0) continue;
+        if (r === 0) continue;
         const a = lastLaserScan.angle_min + i * da + offset.theta;
         const x = Math.cos(a) * r + offset.x;
         const y = Math.sin(a) * r + offset.y;
