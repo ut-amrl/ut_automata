@@ -57,6 +57,7 @@
     <option value="GDC3">GDC3</option>
     <option value="AHG1">AHG1</option>
     <option value="AHG2">AHG2</option>
+    <option value="ICRA2022_F1Tenth_Track">ICRA2022_F1Tenth_Track</option>
     <option value="AHG2_Track">AHG2_Track</option>
     <option value="Slalom_Course">Slalom_Course</option>
     <option value="UT_AUTOmata_Track">UT_AUTOmata_Track</option>
@@ -588,7 +589,6 @@
     }
 
     function receiveData(d) {
-      // console.log(d.header);
       visMsg = d;
       lastLaserScan = d.laser;
       robotPose = d.robotPose;
@@ -793,6 +793,7 @@
     }
 
     function drawPathOption(color, o, drawClearance) {
+      console.log('drawing path option');
       if (Math.abs(o.curvature) < 1e-4) {
         // Straight line.
         let p0 = { x: 0, y: 0 };
