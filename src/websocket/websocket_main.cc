@@ -40,6 +40,7 @@ using amrl_msgs::Localization2DMsg;
 using sensor_msgs::LaserScan;
 using std::vector;
 
+DEFINE_double(fps, 10.0, "Max visualization frames rate.");
 DEFINE_double(max_age, 2.0, "Maximum age of a message before it gets dropped.");
 DECLARE_int32(v);
 
@@ -205,12 +206,12 @@ void *RosThread(void *arg) {
       n.advertise<geometry_msgs::PoseWithCovarianceStamped>("/initialpose", 10);
   nav_goal_pub_ =
       n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10);
-  amrl_init_loc_pub_ = 
+  amrl_init_loc_pub_ =
       n.advertise<amrl_msgs::Localization2DMsg>("/set_pose", 10);
-  amrl_nav_goal_pub_ = 
+  amrl_nav_goal_pub_ =
       n.advertise<amrl_msgs::Localization2DMsg>("/set_nav_target", 10);
 
-  RateLoop loop(10.0);
+  RateLoop loop(FLAGS_fps);
   while (ros::ok() && run_) {
     // Consume all pending messages.
     ros::spinOnce();

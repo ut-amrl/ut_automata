@@ -75,7 +75,8 @@ CONFIG_FLOAT(cLaserLocZ, "laser_loc.z");
 CONFIG_FLOAT(cStartX, "start_x");
 CONFIG_FLOAT(cStartY, "start_y");
 CONFIG_FLOAT(cStartAngle, "start_angle");
-CONFIG_FLOAT(cDT, "delta_t");
+CONFIG_FLOAT(cPublishRate, "publish_rate");
+CONFIG_FLOAT(cSubSampleRate, "sub_sample_rate");
 CONFIG_FLOAT(cMinTurnR, "min_turn_radius");
 CONFIG_FLOAT(cMaxAccel, "max_accel");
 CONFIG_FLOAT(cMaxSpeed, "max_speed");
@@ -91,10 +92,10 @@ string MapNameToFile(const string& map) {
   return kAmrlMapsDir + "/" + map + "/" + map + ".vectormap.txt";
 }
 
-Simulator::Simulator() : 
+Simulator::Simulator() :
     random_(GetMonotonicTime() * 1e6),
-    odom_loc_(random_.UniformRandom(-10, 10), 
-                  random_.UniformRandom(-10, 10)),
+    odom_loc_(random_.UniformRandom(-10, 10),
+              random_.UniformRandom(-10, 10)),
     odom_angle_(random_.UniformRandom(-M_PI, M_PI)) {
   t_last_cmd_ = GetMonotonicTime();
   truePoseMsg.header.seq = 0;
@@ -103,9 +104,19 @@ Simulator::Simulator() :
 
 Simulator::~Simulator() { }
 
+void Simulator::ResetState() {
+  odom_loc_ = Vector2f(random_.UniformRandom(-10, 10),
+                       random_.UniformRandom(-10, 10));
+  odom_angle_ = random_.UniformRandom(-M_PI, M_PI);
+  true_robot_loc_ = Vector2f(cStartX, cStartY);
+  true_robot_angle_ = cStartAngle;
+  map_name_ = cMapName;
+  map_.Load(MapNameToFile(cMapName));
+}
+
 void Simulator::Init(ros::NodeHandle& n) {
   if (kAmrlMapsDir.empty()) {
-    fprintf(stderr, 
+    fprintf(stderr,
             "ERROR: AMRL maps directory not found. "
             "Make sure your ROS_PACKAGE_PATH environment variable includes "
             "the path to the amrl_maps repository.\n");
@@ -126,11 +137,7 @@ void Simulator::Init(ros::NodeHandle& n) {
   odom_msg_.header.frame_id = "odom";
   odom_msg_.child_frame_id = "base_footprint";
 
-  true_robot_loc_ = Vector2f(cStartX, cStartY);
-  true_robot_angle_ = cStartAngle;
-  map_name_ = cMapName;
-  map_.Load(MapNameToFile(cMapName));
-
+  ResetState();
   InitSimulatorVizMarkers();
   DrawMap();
 
@@ -193,13 +200,13 @@ void Simulator::InitalLocationCallback(
  *                    0: red, 1: green, 2: blue, 3: alpha
  */
 void Simulator::InitVizMarker(
-    visualization_msgs::Marker& vizMarker, 
+    visualization_msgs::Marker& vizMarker,
     string ns,
-    int id, 
-    string type, 
+    int id,
+    string type,
     geometry_msgs::PoseStamped p,
-    geometry_msgs::Point32 scale, 
-    double duration, 
+    geometry_msgs::Point32 scale,
+    double duration,
     vector<float> color) {
 
   vizMarker.header.frame_id = p.header.frame_id;
@@ -389,9 +396,11 @@ void Simulator::DriveCallback(const AckermannCurvatureDriveMsg& msg) {
 
 void Simulator::Update() {
   static const double kMaxCommandAge = 0.1;
-  if (GetMonotonicTime() > t_last_cmd_ + kMaxCommandAge) {
+  if (!step_mode_ && GetMonotonicTime() > t_last_cmd_ + kMaxCommandAge) {
     last_cmd_.velocity = 0;
   }
+  const float dt = cSubSampleRate / cPublishRate;
+
   // Epsilon curvature corresponding to a very large radius of turning.
   static const float kEpsilonCurvature = 1.0 / 1E3;
   // Commanded speed bounded to motion limit.
@@ -403,10 +412,10 @@ void Simulator::Update() {
   // Indicates if the command is for linear motion.
   const bool linear_motion = (fabs(desired_curvature) < kEpsilonCurvature);
 
-  const float dv_max = cDT * cMaxAccel;
+  const float dv_max = dt * cMaxAccel;
   const float bounded_dv = AbsBound(desired_vel - robot_vel_, dv_max);
   robot_vel_ = robot_vel_ + bounded_dv;
-  const float dist = robot_vel_ * cDT;
+  const float dist = robot_vel_ * dt;
 
   // Robot-frame uncorrupted motion.
   float dtheta;
@@ -424,8 +433,8 @@ void Simulator::Update() {
   odom_angle_ = AngleMod(odom_angle_ + dtheta);
 
   true_robot_loc_ += Rotation2Df(true_robot_angle_) * dLoc;
-  true_robot_angle_ = AngleMod(true_robot_angle_ + dtheta + 
-      dist * cAngularDriftRate + 
+  true_robot_angle_ = AngleMod(true_robot_angle_ + dtheta +
+      dist * cAngularDriftRate +
       random_.Gaussian(0.0, fabs(dist) * cAngularErrorRate));
 
   truePoseMsg.header.stamp = ros::Time::now();
@@ -439,17 +448,21 @@ void Simulator::Update() {
   true_pose_publisher_.publish(truePoseMsg);
 }
 
-void Simulator::Run() {
+void Simulator::RunIteration() {
   // Simulate time-step.
   Update();
-  //publish odometry and status
-  PublishOdometry();
-  //publish laser rangefinder messages
-  PublishLaser();
-  // publish visualization marker messages
-  PublishVisualizationMarkers();
-  //publish tf
-  PublishTransform();
+
+  if (last_publish_time_ < GetMonotonicTime() - 1.0 / cPublishRate) {
+      //publish odometry and status
+    PublishOdometry();
+    //publish laser rangefinder messages
+    PublishLaser();
+    // publish visualization marker messages
+    PublishVisualizationMarkers();
+    //publish tf
+    PublishTransform();
+    last_publish_time_ = GetMonotonicTime();
+  }
 
   if (FLAGS_localize) {
     localization_msg_.pose.x = true_robot_loc_.x();
@@ -459,4 +472,34 @@ void Simulator::Run() {
     localization_msg_.header.stamp = ros::Time::now();
     localization_publisher_.publish(localization_msg_);
   }
+}
+
+void Simulator::Run() {
+  // main loop
+  const double simulator_fps = cPublishRate / cSubSampleRate;
+  RateLoop rate(simulator_fps);
+  while (ros::ok()){
+    ros::spinOnce();
+    RunIteration();
+    rate.Sleep();
+  }
+}
+
+void Simulator::Step(const amrl_msgs::AckermannCurvatureDriveMsg& cmd,
+                     nav_msgs::Odometry* odom_msg,
+                     sensor_msgs::LaserScan* scan_msg,
+                     amrl_msgs::Localization2DMsg* localization_msg) {
+  step_mode_ = true;
+  DriveCallback(cmd);
+  const int num_iterations = ceil(1.0 / cSubSampleRate);
+  for (int i = 0; i < num_iterations; ++i) {
+    RunIteration();
+  }
+  *odom_msg = odom_msg_;
+  *scan_msg = scan_msg_;
+  *localization_msg = localization_msg_;
+}
+
+void Simulator::SetStepMode(bool step_mode) {
+  step_mode_ = step_mode;
 }

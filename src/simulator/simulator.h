@@ -56,7 +56,7 @@ class AccelLimits{
 
   public:
     void Set(double a,double d,double v) {
-      max_accel = a; 
+      max_accel = a;
       max_deccel = d;
       max_vel = v;
     }
@@ -80,6 +80,8 @@ class Simulator{
   double robot_vel_;
   // Angular velocity of the robot.
   double robot_ang_vel_;
+  // Last time data was published.
+  double last_publish_time_ = 0.0;
 
   ros::Subscriber drive_subscriber_;
   ros::Subscriber init_subscriber_;
@@ -120,6 +122,7 @@ class Simulator{
   // starting in arbitrary odometry frame.
   Eigen::Vector2f odom_loc_;
   float odom_angle_;
+  bool step_mode_ = false;
 
 private:
   void InitVizMarker(visualization_msgs::Marker& vizMarker,
@@ -144,6 +147,14 @@ public:
   Simulator();
   ~Simulator();
   void Init(ros::NodeHandle &n);
+  void ResetState();
   void Run();
+  void RunIteration();
+  void SetStepMode(bool step_mode);
+
+  void Step(const amrl_msgs::AckermannCurvatureDriveMsg& cmd,
+            nav_msgs::Odometry* odom_msg,
+            sensor_msgs::LaserScan* scan_msg,
+            amrl_msgs::Localization2DMsg* localization_msg);
 };
 #endif //SIMULATOR_H

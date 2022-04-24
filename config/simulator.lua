@@ -10,14 +10,17 @@ function DegToRad(d)
   return math.pi * d / 180
 end
 
-map_name =  "GDC1";
+-- map_name =  "GDC1";
+map_name =  "ICRA2022_F1Tenth_Track";
+
 -- Simulator starting location.
-start_x = -21
-start_y = 9.0
-start_angle = 0.0
+start_x = 1.461
+start_y = 3.413
+start_angle = 2
 
 -- Time-step for simulation.
-delta_t = 0.025
+publish_rate = 40;
+sub_sample_rate = 0.2;
 
 -- Car dimensions.
 car_width = 0.281
@@ -30,8 +33,8 @@ laser_loc = Vector3(0.2, 0, 0.15)
 
 -- Kinematic and dynamic constraints for the car.
 min_turn_radius = 0.98
-max_speed = 5.0
-max_accel = 5.0
+max_speed = 8.0
+max_accel = 9.0
 
 -- Laser noise simulation.
 laser_noise_stddev = 0.01
@@ -42,7 +45,7 @@ laser_angle_increment = DegToRad(0.25)
 -- Total field of view of the laser scanner.
 laser_fov = DegToRad(270.0)
 
--- Actuation angular drift per unit distance traversed. 
+-- Actuation angular drift per unit distance traversed.
 angular_drift_rate = DegToRad(-0.5);
--- Actuation Angular noise standard deviation per unit distance traversed. 
+-- Actuation Angular noise standard deviation per unit distance traversed.
 angular_error_rate = DegToRad(5.0);

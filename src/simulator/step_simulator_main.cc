@@ -29,6 +29,8 @@
 #include "shared/util/timer.h"
 #include "simulator/simulator.h"
 
+DEFINE_double(fps, 120.0, "Simulator frames rate.");
+
 int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
   printf("\nUT AUTOmata F1/10 Simulator\n\n");
@@ -38,9 +40,17 @@ int main(int argc, char **argv) {
 
   Simulator simulator;
   simulator.Init(n);
+  simulator.SetStepMode(true);
 
   // main loop
-  simulator.Run();
+  RateLoop rate(FLAGS_fps);
+  while (ros::ok()){
+    ros::spinOnce();
+    // Wait for a character to be pressed.
+    getchar();
+    simulator.RunIteration();
+    rate.Sleep();
+  }
 
   printf("closing.\n");
 

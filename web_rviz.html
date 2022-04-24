@@ -81,6 +81,7 @@
     var prev_origin = { x: 0, y: 0 };
     var ctx = canvas.getContext("2d");
     var mouseDownLoc;
+    var curMouseLoc;
     var mouseDown = false;
     var setLocation = false;
     var setNavGoal = false;
@@ -238,7 +239,7 @@
         } else {
           return `rgb(${r},${g},${b})`;
         }
-        
+
       }
 
       readPoint2D() {
@@ -492,15 +493,15 @@
     }
 
     function onMouseMove(event) {
-      loc = getMouseLocation(event, canvas);
-      w = canvasToWorld(loc);
+      curMouseLoc = getMouseLocation(event, canvas);
+      w = canvasToWorld(curMouseLoc);
       const x_str = w.x.toFixed(3);
       const y_str = w.y.toFixed(3);
       coords.innerHTML = `x=${x_str}, y=${y_str}`;
       if (!mouseDown) return;
       if (setLocation || setNavGoal) return;
-      origin.x = prev_origin.x + loc.x - mouseDownLoc.x;
-      origin.y = prev_origin.y + loc.y - mouseDownLoc.y;
+      origin.x = prev_origin.x + curMouseLoc.x - mouseDownLoc.x;
+      origin.y = prev_origin.y + curMouseLoc.y - mouseDownLoc.y;
     };
 
     function onMouseDown(event) {
@@ -708,6 +709,13 @@
       drawPoints();
       drawLines();
       drawArcs();
+      if (mouseDown) {
+        // console.log(mouseDownLoc);
+        // console.log(curMouseLoc);
+        p0 = canvasToWorld(mouseDownLoc);
+        p1 = canvasToWorld(curMouseLoc);
+        drawLine("#000000", p0.x, p0.y, p1.x, p1.y);
+      }
       if (visMsg) drawPose(visMsg.header.robot_pose, 'rgb(0, 150, 0)');
     }
 

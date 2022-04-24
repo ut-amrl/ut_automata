@@ -93,6 +93,12 @@ ROSBUILD_ADD_EXECUTABLE(simulator
     src/simulator/simulator_main.cc)
 TARGET_LINK_LIBRARIES(simulator ${libs})
 
+ROSBUILD_ADD_EXECUTABLE(step_simulator
+    src/simulator/simulator.cc
+    src/simulator/vector_map.cc
+    src/simulator/step_simulator_main.cc)
+TARGET_LINK_LIBRARIES(step_simulator ${libs})
+
 ROSBUILD_ADD_EXECUTABLE(websocket
     src/websocket/websocket_main.cc
     src/websocket/websocket.cc
