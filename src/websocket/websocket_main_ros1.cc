@@ -13,7 +13,7 @@
 //  If not, see <http://www.gnu.org/licenses/>.
 //========================================================================
 /*!
- * \file    websocket_main.cpp
+ * \file    websocket_main_ros1.cpp
  * \brief   Main entry point for websocket bridge.
  * \author  Joydeep Biswas, (C) 2019
  */

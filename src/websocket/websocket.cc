@@ -1,4 +1,4 @@
-//========================================================================
+  //========================================================================
 //  This software is free: you can redistribute it and/or modify
 //  it under the terms of the GNU Lesser General Public License Version 3,
 //  as published by the Free Software Foundation.
@@ -184,78 +184,6 @@ QByteArray DataMessage::ToByteArray() const {
   buf = WriteElementVector(lines, buf);
   buf = WriteElementVector(arcs, buf);
   return data;
-}
-
-DataMessage DataMessage::FromRosMessages(
-      const LaserScan& laser_msg,
-      const VisualizationMsg& local_msg,
-      const VisualizationMsg& global_msg,
-      const Localization2DMsg& localization_msg) {
-  static const bool kDebug = false;
-  DataMessage msg;
-  for (size_t i = 0; i < sizeof(msg.header.map); ++i) {
-    msg.header.map[i] = 0;
-  }
-  msg.header.loc_x = localization_msg.pose.x;
-  msg.header.loc_y = localization_msg.pose.y;
-  msg.header.loc_r = localization_msg.pose.theta;
-  strncpy(msg.header.map,
-          localization_msg.map.data(),
-          std::min(sizeof(msg.header.map) - 1, localization_msg.map.size()));
-  msg.header.laser_min_angle = laser_msg.angle_min;
-  msg.header.laser_max_angle = laser_msg.angle_max;
-  msg.header.num_laser_rays = laser_msg.ranges.size();
-  msg.laser_scan.resize(laser_msg.ranges.size());
-  for (size_t i = 0; i < laser_msg.ranges.size(); ++i) {
-    if (laser_msg.ranges[i] <= laser_msg.range_min || 
-        laser_msg.ranges[i] >= laser_msg.range_max) {
-      msg.laser_scan[i] = 0;
-    } else {
-      msg.laser_scan[i] = static_cast<uint32_t>(laser_msg.ranges[i] * 1000.0);
-    }
-  }
-
-  msg.points = local_msg.points;
-  msg.header.num_local_points = local_msg.points.size();
-  msg.points.insert(msg.points.end(),
-                    global_msg.points.begin(),
-                    global_msg.points.end());
-
-  msg.lines = local_msg.lines;
-  msg.header.num_local_lines = local_msg.lines.size();
-  msg.lines.insert(msg.lines.end(),
-                   global_msg.lines.begin(),
-                   global_msg.lines.end());
-
-  msg.arcs = local_msg.arcs;
-  msg.header.num_local_arcs = local_msg.arcs.size();
-  msg.arcs.insert(msg.arcs.end(),
-                  global_msg.arcs.begin(),
-                  global_msg.arcs.end());
-
-  msg.header.num_points = msg.points.size();
-  msg.header.num_lines = msg.lines.size();
-  msg.header.num_arcs = msg.arcs.size();
-
-  if (kDebug) {
-    printf("nonce: %d "
-           "num_points: %d "
-           "num_lines: %d "
-           "num_arcs: %d "
-           "num_laser_rays: %d "
-           "num_local_points: %d "
-           "num_local_lines: %d "
-           "num_local_arcs: %d\n",
-           msg.header.nonce,
-           msg.header.num_points,
-           msg.header.num_lines,
-           msg.header.num_arcs,
-           msg.header.num_laser_rays,
-           msg.header.num_local_points,
-           msg.header.num_local_lines,
-           msg.header.num_local_arcs);
-  }
-  return msg;
 }
 
 void RobotWebSocket::SendError(const QString& error_val) {
