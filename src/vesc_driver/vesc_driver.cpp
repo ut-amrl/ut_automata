@@ -12,7 +12,6 @@
 #include "glog/logging.h"
 #include "ut_automata/CarStatusMsg.h"
 #include "ut_automata/VescStateStamped.h"
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
 #include "std_msgs/MultiArrayLayout.h"
 #include "std_msgs/MultiArrayDimension.h"
 #include "std_msgs/Float32MultiArray.h"
@@ -470,8 +469,8 @@ void VescDriver::ackermannCurvatureCallback(
     const std_msgs::Float32MultiArray::ConstPtr& cmd) {
   t_last_command_ = ros::WallTime::now().toSec();
   if (isAutonomous()) {
-    mux_drive_speed_ = *cmd.begin();
-    const float rot_vel = *cmd.begin() * *(cmd.end() - 1);
+    mux_drive_speed_ = *cmd->data.begin();
+    const float rot_vel = *cmd->data.begin() * *(cmd->data.end() - 1);
     mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
   }
 }

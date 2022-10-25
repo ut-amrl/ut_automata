@@ -9,7 +9,9 @@
 #include "ros/ros.h"
 #include "std_msgs/Float64.h"
 #include "boost/optional.hpp"
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
+#include "std_msgs/MultiArrayLayout.h"
+#include "std_msgs/MultiArrayDimension.h"
+#include "std_msgs/Float32MultiArray.h"
 #include "nav_msgs/Odometry.h"
 #include "sensor_msgs/Joy.h"
 #include "std_msgs/Bool.h"
@@ -97,7 +99,7 @@ private:
 
   // ROS callbacks
   void ackermannCurvatureCallback(
-      const amrl_msgs::AckermannCurvatureDriveMsg& cmd);
+      const std_msgs::Float32MultiArray::ConstPtr& cmd);
   void joystickCallback(const sensor_msgs::Joy& msg);
 
   void updateOdometry(float rpm, float steering_angle);
