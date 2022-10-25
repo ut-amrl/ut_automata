@@ -13,6 +13,9 @@
 #include "ut_automata/CarStatusMsg.h"
 #include "ut_automata/VescStateStamped.h"
 #include "amrl_msgs/AckermannCurvatureDriveMsg.h"
+#include "std_msgs/MultiArrayLayout.h"
+#include "std_msgs/MultiArrayDimension.h"
+#include "std_msgs/Float32MultiArray.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/TwistStamped.h"
 
@@ -123,7 +126,7 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   car_status_pub_ = nh.advertise<CarStatusMsg>("car_status", 1);
 
   ackermann_curvature_sub_ = nh.subscribe(
-      "/ackermann_curvature_drive",
+      "/ackermann_curvature_drive_fake",
       10,
       &VescDriver::ackermannCurvatureCallback,
       this);
@@ -464,11 +467,11 @@ float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
 }
 
 void VescDriver::ackermannCurvatureCallback(
-    const amrl_msgs::AckermannCurvatureDriveMsg& cmd) {
+    const std_msgs::Float32MultiArray::ConstPtr& cmd) {
   t_last_command_ = ros::WallTime::now().toSec();
   if (isAutonomous()) {
-    mux_drive_speed_ = cmd.velocity;
-    const float rot_vel = cmd.velocity * cmd.curvature;
+    mux_drive_speed_ = *cmd.begin();
+    const float rot_vel = *cmd.begin() * *(cmd.end() - 1);
     mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
   }
 }
