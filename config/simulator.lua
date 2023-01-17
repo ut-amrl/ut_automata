@@ -10,8 +10,8 @@ function DegToRad(d)
   return math.pi * d / 180
 end
 
--- map_name =  "GDC1";
-map_name =  "ICRA2022_F1Tenth_Track";
+map_name =  "GDC1";
+-- map_name =  "ICRA2022_F1Tenth_Track";
 
 -- Simulator starting location.
 start_x = 1.461
