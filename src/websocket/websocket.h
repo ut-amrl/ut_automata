@@ -34,6 +34,7 @@
 #include "amrl_msgs/ColoredPoint2D.h"
 #include "amrl_msgs/ColoredLine2D.h"
 #include "amrl_msgs/ColoredArc2D.h"
+#include "amrl_msgs/ColoredText.h"
 #include "amrl_msgs/VisualizationMsg.h"
 #include "sensor_msgs/LaserScan.h"
 
@@ -46,22 +47,26 @@ struct MessageHeader {
   uint32_t num_points;            // 2
   uint32_t num_lines;             // 3
   uint32_t num_arcs;              // 4
-  uint32_t num_laser_rays;        // 5
-  uint32_t num_local_points;      // 6
-  uint32_t num_local_lines;       // 7
-  uint32_t num_local_arcs;        // 8
-  float laser_min_angle;          // 9
-  float laser_max_angle;          // 10
-  float loc_x;                    // 11
-  float loc_y;                    // 12
-  float loc_r;                    // 13
+  uint32_t num_messages;          // 5 
+  uint32_t num_laser_rays;        // 6
+  uint32_t num_local_points;      // 7
+  uint32_t num_local_lines;       // 8
+  uint32_t num_local_arcs;        // 9
+  uint32_t num_local_messages;    // 10
+  uint32_t total_message_chars;   // 11
+  float laser_min_angle;          // 12
+  float laser_max_angle;          // 13
+  float loc_x;                    // 14
+  float loc_y;                    // 15
+  float loc_r;                    // 16
   char map[32];                   //
   size_t GetByteLength() const {
     const size_t len = 13 * 4 + 32 +
         num_laser_rays * 4 +   // each ray is uint32_t
         num_points * 3 * 4 +   // x, y, color
         num_lines * 5 * 4 +    // x1, y1, x2, y2, color
-        num_arcs * 6 * 4;      // x, y, radius, start_angle, end_angle, color
+        num_arcs * 6 * 4 +      // x, y, radius, start_angle, end_angle, color
+        num_messages * 4 * 4 + total_message_chars; // x, y, color, size, msg
     return len;
   }
 };
@@ -72,6 +77,7 @@ struct DataMessage {
   std::vector<amrl_msgs::ColoredPoint2D> points;
   std::vector<amrl_msgs::ColoredLine2D> lines;
   std::vector<amrl_msgs::ColoredArc2D> arcs;
+  std::vector<amrl_msgs::ColoredText> messages;
   QByteArray ToByteArray() const;
   static DataMessage FromRosMessages(
       const sensor_msgs::LaserScan& laser_msg,

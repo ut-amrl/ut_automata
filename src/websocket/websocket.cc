@@ -42,6 +42,7 @@
 #include "amrl_msgs/ColoredPoint2D.h"
 #include "amrl_msgs/ColoredLine2D.h"
 #include "amrl_msgs/ColoredArc2D.h"
+#include "amrl_msgs/ColoredText.h"
 #include "amrl_msgs/VisualizationMsg.h"
 #include "sensor_msgs/LaserScan.h"
 
@@ -50,6 +51,7 @@ using amrl_msgs::Point2D;
 using amrl_msgs::ColoredArc2D;
 using amrl_msgs::ColoredLine2D;
 using amrl_msgs::ColoredPoint2D;
+using amrl_msgs::ColoredText;
 using amrl_msgs::VisualizationMsg;
 using sensor_msgs::LaserScan;
 using std::vector;
@@ -140,6 +142,7 @@ DataMessage GenerateTestData(const MessageHeader& h) {
   msg.points.resize(h.num_points);
   msg.lines.resize(h.num_lines);
   msg.arcs.resize(h.num_arcs);
+  msg.messages.resize(h.num_messages);
   for (size_t i = 0; i < msg.laser_scan.size(); ++i) {
     msg.laser_scan[i] = 10 * i;
   }
@@ -170,6 +173,14 @@ DataMessage GenerateTestData(const MessageHeader& h) {
     }
     const uint8_t x = static_cast<uint8_t>(i);
     msg.arcs[i].color = (x << 16) | (x << 8) | x;
+
+    for(size_t i = 0; i < msg.messages.size(); i++) {
+      msg.messages[i].start.x = 1.0 * i;
+      msg.messages[i].start.y = 2.0 * i;
+      msg.messages[i].color = (x << 16) | (x << 8) | x;
+      msg.messages[i].size_em = 3.0 * i;
+      msg.messages[i].text = std::to_string(5.0 * i);
+    }
   }
   return msg;
 }
@@ -183,6 +194,7 @@ QByteArray DataMessage::ToByteArray() const {
   buf = WriteElementVector(points, buf);
   buf = WriteElementVector(lines, buf);
   buf = WriteElementVector(arcs, buf);
+  buf = WriteElementVector(messages, buf);
   return data;
 }
 
@@ -237,23 +249,34 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.num_lines = msg.lines.size();
   msg.header.num_arcs = msg.arcs.size();
 
+  msg.messages = local_msg.messages;
+  msg.header.num_messages = local_msg.messages.size();
+  msg.messages.insert(msg.messages.end(), 
+                      global_msg.messages.begin(), 
+                      global_msg.messages.end());
+
   if (kDebug) {
     printf("nonce: %d "
            "num_points: %d "
            "num_lines: %d "
            "num_arcs: %d "
+           "num_messages: %d "
            "num_laser_rays: %d "
            "num_local_points: %d "
            "num_local_lines: %d "
-           "num_local_arcs: %d\n",
+           "num_local_arcs: %d "
+           "num_local_messages: %d\n"
+           ,
            msg.header.nonce,
            msg.header.num_points,
            msg.header.num_lines,
            msg.header.num_arcs,
+           msg.header.num_messages,
            msg.header.num_laser_rays,
            msg.header.num_local_points,
            msg.header.num_local_lines,
-           msg.header.num_local_arcs);
+           msg.header.num_local_arcs,
+           msg.header.num_local_messages);
   }
   return msg;
 }
@@ -316,7 +339,7 @@ void RobotWebSocket::ProcessCallback(const QJsonObject& json) {
 }
 
 void RobotWebSocket::processTextMessage(QString message) {
-  static const bool kSendTestMessage = false;
+  static const bool kSendTestMessage = true;
   QWebSocket *client = qobject_cast<QWebSocket *>(sender());
   CHECK_NOTNULL(client);
   QJsonDocument doc = QJsonDocument::fromJson(message.toLocal8Bit());
@@ -328,9 +351,11 @@ void RobotWebSocket::processTextMessage(QString message) {
     header.num_points = 40;
     header.num_lines = 100;
     header.num_arcs = 100;
+    header.num_messages = 5;
     header.num_laser_rays = 270 * 4;
     header.laser_min_angle = -135;
     header.laser_max_angle = 135;
+    header.total_message_chars = 2 * header.num_messages - 1;
     printf("Test message data size: %lu\n", header.GetByteLength());
     const DataMessage data_msg = GenerateTestData(header);
     client->sendBinaryMessage(data_msg.ToByteArray());
