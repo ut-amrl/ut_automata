@@ -179,7 +179,7 @@ DataMessage GenerateTestData(const MessageHeader& h) {
       msg.messages[i].start.y = 2.0 * i;
       msg.messages[i].color = (x << 16) | (x << 8) | x;
       msg.messages[i].size_em = 3.0 * i;
-      msg.messages[i].text = std::to_string(5.0 * i);
+      msg.messages[i].text = std::to_string(1.0 * i);
     }
   }
   return msg;
@@ -217,6 +217,7 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.laser_min_angle = laser_msg.angle_min;
   msg.header.laser_max_angle = laser_msg.angle_max;
   msg.header.num_laser_rays = laser_msg.ranges.size();
+
   msg.laser_scan.resize(laser_msg.ranges.size());
   for (size_t i = 0; i < laser_msg.ranges.size(); ++i) {
     if (laser_msg.ranges[i] <= laser_msg.range_min || 
@@ -226,7 +227,6 @@ DataMessage DataMessage::FromRosMessages(
       msg.laser_scan[i] = static_cast<uint32_t>(laser_msg.ranges[i] * 1000.0);
     }
   }
-
   msg.points = local_msg.points;
   msg.header.num_local_points = local_msg.points.size();
   msg.points.insert(msg.points.end(),
@@ -254,6 +254,9 @@ DataMessage DataMessage::FromRosMessages(
   msg.messages.insert(msg.messages.end(), 
                       global_msg.messages.begin(), 
                       global_msg.messages.end());
+  for(amrl_msgs::ColoredText message : msg.messages) {
+    msg.header.total_message_chars += message.text.length();
+  }
 
   if (kDebug) {
     printf("nonce: %d "
@@ -306,7 +309,7 @@ bool StringKeyPresent(const QString& key,
 }
 
 void RobotWebSocket::ProcessCallback(const QJsonObject& json) {
-  static const bool kDebug = true;
+  static const bool kDebug = false;
   if (kDebug) {
     qInfo() << "Callback JSON:\n" << json;
   }
@@ -342,6 +345,7 @@ void RobotWebSocket::processTextMessage(QString message) {
   static const bool kSendTestMessage = true;
   QWebSocket *client = qobject_cast<QWebSocket *>(sender());
   CHECK_NOTNULL(client);
+  printf("%s\n", message.toStdString().c_str());
   QJsonDocument doc = QJsonDocument::fromJson(message.toLocal8Bit());
   QJsonObject json = doc.object();
   ProcessCallback(json);
@@ -355,9 +359,9 @@ void RobotWebSocket::processTextMessage(QString message) {
     header.num_laser_rays = 270 * 4;
     header.laser_min_angle = -135;
     header.laser_max_angle = 135;
-    header.total_message_chars = 2 * header.num_messages - 1;
-    printf("Test message data size: %lu\n", header.GetByteLength());
+    header.total_message_chars = header.num_messages * 2;
     const DataMessage data_msg = GenerateTestData(header);
+    printf("Test message data size: %lu\n", header.GetByteLength());
     client->sendBinaryMessage(data_msg.ToByteArray());
   }
 }
