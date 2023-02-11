@@ -53,12 +53,11 @@ struct MessageHeader {
   uint32_t num_local_lines;       // 8
   uint32_t num_local_arcs;        // 9
   uint32_t num_local_messages;    // 10
-  uint32_t total_message_chars;   // 11
-  float laser_min_angle;          // 12
-  float laser_max_angle;          // 13
-  float loc_x;                    // 14
-  float loc_y;                    // 15
-  float loc_r;                    // 16
+  float laser_min_angle;          // 11
+  float laser_max_angle;          // 12
+  float loc_x;                    // 13
+  float loc_y;                    // 14
+  float loc_r;                    // 15
   char map[32];                   //
   size_t GetByteLength() const {
     const size_t len = 16 * 4 + 32 + //header fields + map data
@@ -66,9 +65,16 @@ struct MessageHeader {
         num_points * 3 * 4 +   // x, y, color
         num_lines * 5 * 4 +    // x1, y1, x2, y2, color
         num_arcs * 6 * 4 +      // x, y, radius, start_angle, end_angle, color
-        num_messages * 4 * 4 + total_message_chars; // x, y, color, size, / msg
+        num_messages * 4 * 4 * 32; // x, y, color, size, msg
     return len;
   }
+};
+
+struct ColoredTextNative {
+  amrl_msgs::Point2D start;
+  uint32_t color;
+  float size_em;
+  char text[32];
 };
 
 struct DataMessage {
@@ -77,7 +83,7 @@ struct DataMessage {
   std::vector<amrl_msgs::ColoredPoint2D> points;
   std::vector<amrl_msgs::ColoredLine2D> lines;
   std::vector<amrl_msgs::ColoredArc2D> arcs;
-  std::vector<amrl_msgs::ColoredText> messages;
+  std::vector<ColoredTextNative> messages;
   QByteArray ToByteArray() const;
   static DataMessage FromRosMessages(
       const sensor_msgs::LaserScan& laser_msg,

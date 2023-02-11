@@ -96,6 +96,7 @@ RobotWebSocket::~RobotWebSocket() {
 
 void RobotWebSocket::onNewConnection() {
   QWebSocket *new_client = ws_server_->nextPendingConnection();
+  
   if (clients_.size() >= FLAGS_max_connections) {
     // We already have the max number of clients
     new_client->sendTextMessage(
@@ -179,7 +180,8 @@ DataMessage GenerateTestData(const MessageHeader& h) {
       msg.messages[i].start.y = 2.0 * i;
       msg.messages[i].color = (x << 16) | (x << 8) | x;
       msg.messages[i].size_em = 3.0 * i;
-      msg.messages[i].text = std::to_string(1.0 * i);
+      const char *s = std::to_string(i).c_str();
+      strncpy(msg.messages[i].text, s, i/10);
     }
   }
   return msg;
@@ -249,14 +251,28 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.num_lines = msg.lines.size();
   msg.header.num_arcs = msg.arcs.size();
 
-  msg.messages = local_msg.messages;
-  msg.header.num_messages = local_msg.messages.size();
-  msg.messages.insert(msg.messages.end(), 
-                      global_msg.messages.begin(), 
-                      global_msg.messages.end());
-  for(amrl_msgs::ColoredText message : msg.messages) {
-    msg.header.total_message_chars += message.text.length();
+  // msg.messages.resize(local_msg.messages.size() + global_msg.messages.size());
+  msg.header.num_local_messages = local_msg.messages.size();
+  msg.header.num_messages = local_msg.messages.size() + global_msg.messages.size();
+  for(amrl_msgs::ColoredText text : local_msg.messages) {
+    ColoredTextNative localText;
+    localText.start = text.start;
+    localText.color = text.color;
+    localText.size_em = text.size_em;
+    strncpy(localText.text, text.text.data(), 
+        std::min(sizeof(localText.text) - 1, text.text.size()));
+    msg.messages.push_back(localText);
   }
+for(amrl_msgs::ColoredText text : global_msg.messages) {
+    ColoredTextNative localText;
+    localText.start = text.start;
+    localText.color = text.color;
+    localText.size_em = text.size_em;
+    strncpy(localText.text, text.text.data(), 
+        std::min(sizeof(localText.text) - 1, text.text.size()));
+    msg.messages.push_back(localText);
+  }
+
 
   if (kDebug) {
     printf("nonce: %d "
@@ -342,10 +358,9 @@ void RobotWebSocket::ProcessCallback(const QJsonObject& json) {
 }
 
 void RobotWebSocket::processTextMessage(QString message) {
-  static const bool kSendTestMessage = true;
+  static const bool kSendTestMessage = false;
   QWebSocket *client = qobject_cast<QWebSocket *>(sender());
   CHECK_NOTNULL(client);
-  printf("%s\n", message.toStdString().c_str());
   QJsonDocument doc = QJsonDocument::fromJson(message.toLocal8Bit());
   QJsonObject json = doc.object();
   ProcessCallback(json);
@@ -359,7 +374,6 @@ void RobotWebSocket::processTextMessage(QString message) {
     header.num_laser_rays = 270 * 4;
     header.laser_min_angle = -135;
     header.laser_max_angle = 135;
-    header.total_message_chars = header.num_messages * 2;
     const DataMessage data_msg = GenerateTestData(header);
     printf("Test message data size: %lu\n", header.GetByteLength());
     client->sendBinaryMessage(data_msg.ToByteArray());
