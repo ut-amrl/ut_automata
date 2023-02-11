@@ -603,6 +603,12 @@
       ctx.stroke();
     }
 
+    function drawText(text, x, y, size) {
+      ctx.font = "30pt Arial";
+      const p = worldToCanvas({x, y})
+      ctx.fillText(text, x, y);
+    }
+
     function updateStatus(str) {
       let s = document.getElementById("status");
       s.innerHTML = str;
@@ -729,6 +735,7 @@
       drawPoints();
       drawLines();
       drawArcs();
+      drawTexts();
       if (mouseDown) {
         // console.log(mouseDownLoc);
         // console.log(curMouseLoc);
@@ -780,6 +787,17 @@
           p1 = robotToMap(p1);
         }
         drawLine(l.color, p0.x, p0.y, p1.x, p1.y);
+      });
+    }
+
+    function drawTexts() {
+      if (visMsg == undefined) return;
+      visMsg.messages.forEach(function (l, i) {
+        let p = l.p;
+        if(i < visMsg.header.num_local_messages) {
+          p = robotToMap(p);
+        }
+        drawText(l.text, p.x, p.y, 10);
       });
     }
 
