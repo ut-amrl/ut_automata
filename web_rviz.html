@@ -82,6 +82,8 @@
     var origin = { x: 0.5 * canvas.width, y: 0.5 * canvas.height };
     var prev_origin = { x: 0, y: 0 };
     var ctx = canvas.getContext("2d");
+    ctx.textAlign = "end";
+    ctx.textBaseline = "top";
     var mouseDownLoc;
     var curMouseLoc;
     var mouseDown = false;
@@ -603,10 +605,12 @@
       ctx.stroke();
     }
 
-    function drawText(text, x, y, size) {
-      ctx.font = "30pt Arial";
-      const p = worldToCanvas({x, y})
-      ctx.fillText(text, x, y);
+    function drawText(text, x, y, color, size_em) {
+      ctx.font = `${Math.round(size_em*12)}pt Arial`;
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      const p = worldToCanvas({x: x, y: y})
+      ctx.fillText(text, p.x, p.y);
     }
 
     function updateStatus(str) {
@@ -792,12 +796,12 @@
 
     function drawTexts() {
       if (visMsg == undefined) return;
-      visMsg.messages.forEach(function (l, i) {
-        let p = l.p;
+      visMsg.messages.forEach(function (m, i) {
+        let p = m.start;
         if(i < visMsg.header.num_local_messages) {
           p = robotToMap(p);
         }
-        drawText(l.text, p.x, p.y, 10);
+        drawText(m.str, p.x, p.y, m.color, m.size_em);
       });
     }
 
