@@ -259,20 +259,21 @@ DataMessage DataMessage::FromRosMessages(
     localText.start = text.start;
     localText.color = text.color;
     localText.size_em = text.size_em;
-    strncpy(localText.text, text.text.data(), 
-        std::min(sizeof(localText.text) - 1, text.text.size()));
+    size_t size = std::min(sizeof(localText.text) - 1, text.text.size());
+    strncpy(localText.text, text.text.data(), size);
+    localText.text[size] = 0;
     msg.messages.push_back(localText);
   }
-for(amrl_msgs::ColoredText text : global_msg.messages) {
+  for(amrl_msgs::ColoredText text : global_msg.messages) {
     ColoredTextNative localText;
     localText.start = text.start;
     localText.color = text.color;
     localText.size_em = text.size_em;
-    strncpy(localText.text, text.text.data(), 
-        std::min(sizeof(localText.text) - 1, text.text.size()));
+    size_t size = std::min(sizeof(localText.text) - 1, text.text.size());
+    strncpy(localText.text, text.text.data(), size);
+    localText.text[size] = 0;
     msg.messages.push_back(localText);
   }
-
 
   if (kDebug) {
     printf("nonce: %d "
