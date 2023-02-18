@@ -179,14 +179,12 @@
       readString() {
         let s = '';
         let end_of_str = false;
-        for (let i = 0; i < 32; i++) {
+        for (let i = 0; i < 32 & !end_of_str; i++) {
           const c = this.readUint8();
-          if(!end_of_str) {
-            if(c==0) {
-              end_of_str = true;
-            } else {
-              s += String.fromCharCode(c)
-            }
+          if(c==0) {
+            end_of_str = true;
+          } else {
+            s += String.fromCharCode(c)
           }
         }
         return s;
@@ -605,7 +603,7 @@
       ctx.stroke();
     }
 
-    function drawText(text, x, y, color, size_em) {
+    function drawTextAnnotation(text, x, y, color, size_em) {
       ctx.font = `${Math.round(size_em*12)}pt Arial`;
       ctx.fillStyle = color;
       ctx.strokeStyle = color;
@@ -739,7 +737,7 @@
       drawPoints();
       drawLines();
       drawArcs();
-      drawTexts();
+      drawTextAnnotations();
       if (mouseDown) {
         // console.log(mouseDownLoc);
         // console.log(curMouseLoc);
@@ -794,14 +792,14 @@
       });
     }
 
-    function drawTexts() {
+    function drawTextAnnotations() {
       if (visMsg == undefined) return;
       visMsg.messages.forEach(function (m, i) {
         let p = m.start;
         if(i < visMsg.header.num_local_messages) {
           p = robotToMap(p);
         }
-        drawText(m.str, p.x, p.y, m.color, m.size_em);
+        drawTextAnnotation(m.str, p.x, p.y, m.color, m.size_em);
       });
     }
 

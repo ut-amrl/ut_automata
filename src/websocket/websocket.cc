@@ -96,7 +96,6 @@ RobotWebSocket::~RobotWebSocket() {
 
 void RobotWebSocket::onNewConnection() {
   QWebSocket *new_client = ws_server_->nextPendingConnection();
-  
   if (clients_.size() >= FLAGS_max_connections) {
     // We already have the max number of clients
     new_client->sendTextMessage(
