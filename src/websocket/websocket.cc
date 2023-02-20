@@ -142,7 +142,7 @@ DataMessage GenerateTestData(const MessageHeader& h) {
   msg.points.resize(h.num_points);
   msg.lines.resize(h.num_lines);
   msg.arcs.resize(h.num_arcs);
-  msg.messages.resize(h.num_messages);
+  msg.text_annotations.resize(h.num_text_annotations);
   for (size_t i = 0; i < msg.laser_scan.size(); ++i) {
     msg.laser_scan[i] = 10 * i;
   }
@@ -174,13 +174,13 @@ DataMessage GenerateTestData(const MessageHeader& h) {
     const uint8_t x = static_cast<uint8_t>(i);
     msg.arcs[i].color = (x << 16) | (x << 8) | x;
 
-    for(size_t i = 0; i < msg.messages.size(); i++) {
-      msg.messages[i].start.x = 1.0 * i;
-      msg.messages[i].start.y = 2.0 * i;
-      msg.messages[i].color = (x << 16) | (x << 8) | x;
-      msg.messages[i].size_em = 3.0 * i;
+    for(size_t i = 0; i < msg.text_annotations.size(); i++) {
+      msg.text_annotations[i].start.x = 1.0 * i;
+      msg.text_annotations[i].start.y = 2.0 * i;
+      msg.text_annotations[i].color = (x << 16) | (x << 8) | x;
+      msg.text_annotations[i].size_em = 3.0 * i;
       const char *s = std::to_string(i).c_str();
-      strncpy(msg.messages[i].text, s, i/10);
+      strncpy(msg.text_annotations[i].text, s, i/10);
     }
   }
   return msg;
@@ -195,7 +195,7 @@ QByteArray DataMessage::ToByteArray() const {
   buf = WriteElementVector(points, buf);
   buf = WriteElementVector(lines, buf);
   buf = WriteElementVector(arcs, buf);
-  buf = WriteElementVector(messages, buf);
+  buf = WriteElementVector(text_annotations, buf);
   return data;
 }
 
@@ -250,10 +250,10 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.num_lines = msg.lines.size();
   msg.header.num_arcs = msg.arcs.size();
 
-  // msg.messages.resize(local_msg.messages.size() + global_msg.messages.size());
-  msg.header.num_local_messages = local_msg.messages.size();
-  msg.header.num_messages = local_msg.messages.size() + global_msg.messages.size();
-  for(amrl_msgs::ColoredText text : local_msg.messages) {
+  // msg.text_annotations.resize(local_msg.text_annotations.size() + global_msg.text_annotations.size());
+  msg.header.num_local_text_annotations = local_msg.text_annotations.size();
+  msg.header.num_text_annotations = local_msg.text_annotations.size() + global_msg.text_annotations.size();
+  for(amrl_msgs::ColoredText text : local_msg.text_annotations) {
     ColoredTextNative localText;
     localText.start = text.start;
     localText.color = text.color;
@@ -261,9 +261,9 @@ DataMessage DataMessage::FromRosMessages(
     size_t size = std::min(sizeof(localText.text) - 1, text.text.size());
     strncpy(localText.text, text.text.data(), size);
     localText.text[size] = 0;
-    msg.messages.push_back(localText);
+    msg.text_annotations.push_back(localText);
   }
-  for(amrl_msgs::ColoredText text : global_msg.messages) {
+  for(amrl_msgs::ColoredText text : global_msg.text_annotations) {
     ColoredTextNative localText;
     localText.start = text.start;
     localText.color = text.color;
@@ -271,7 +271,7 @@ DataMessage DataMessage::FromRosMessages(
     size_t size = std::min(sizeof(localText.text) - 1, text.text.size());
     strncpy(localText.text, text.text.data(), size);
     localText.text[size] = 0;
-    msg.messages.push_back(localText);
+    msg.text_annotations.push_back(localText);
   }
 
   if (kDebug) {
@@ -279,23 +279,23 @@ DataMessage DataMessage::FromRosMessages(
            "num_points: %d "
            "num_lines: %d "
            "num_arcs: %d "
-           "num_messages: %d "
+           "num_text_annotations: %d "
            "num_laser_rays: %d "
            "num_local_points: %d "
            "num_local_lines: %d "
            "num_local_arcs: %d "
-           "num_local_messages: %d\n"
+           "num_local_text_annotations: %d\n"
            ,
            msg.header.nonce,
            msg.header.num_points,
            msg.header.num_lines,
            msg.header.num_arcs,
-           msg.header.num_messages,
+           msg.header.num_text_annotations,
            msg.header.num_laser_rays,
            msg.header.num_local_points,
            msg.header.num_local_lines,
            msg.header.num_local_arcs,
-           msg.header.num_local_messages);
+           msg.header.num_local_text_annotations);
   }
   return msg;
 }
@@ -370,7 +370,7 @@ void RobotWebSocket::processTextMessage(QString message) {
     header.num_points = 40;
     header.num_lines = 100;
     header.num_arcs = 100;
-    header.num_messages = 5;
+    header.num_text_annotations = 5;
     header.num_laser_rays = 270 * 4;
     header.laser_min_angle = -135;
     header.laser_max_angle = 135;

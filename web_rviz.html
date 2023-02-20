@@ -122,12 +122,12 @@
           num_points: 0,
           num_lines: 0,
           num_arcs: 0,
-          num_messages: 0,
+          num_text_annotations: 0,
           num_laser_rays: 0,
           num_local_points: 0,
           num_local_lines: 0,
           num_local_arcs: 0,
-          num_local_messages: 0,
+          num_local_text_annotations: 0,
           laser_min_angle: 0,
           laser_max_angle: 0,
           robot_pose: { x: NaN, y: NaN, theta: NaN },
@@ -194,12 +194,12 @@
         this.header.num_points = this.readUint32();
         this.header.num_lines = this.readUint32();
         this.header.num_arcs = this.readUint32();
-        this.header.num_messages = this.readUint32();
+        this.header.num_text_annotations = this.readUint32();
         this.header.num_laser_rays = this.readUint32();
         this.header.num_local_points = this.readUint32();
         this.header.num_local_lines = this.readUint32();
         this.header.num_local_arcs = this.readUint32();
-        this.header.num_local_messages = this.readUint32();
+        this.header.num_local_text_annotations = this.readUint32();
         this.header.laser_min_angle = this.readFloat32();
         this.header.laser_max_angle = this.readFloat32();
         this.header.robot_pose = this.readPose();
@@ -301,7 +301,7 @@
           points: this.readMultiple(this.header.num_points, () => this.readPoint()),
           lines: this.readMultiple(this.header.num_lines, () => this.readLine()),
           arcs: this.readMultiple(this.header.num_arcs, () => this.readArc()),
-          messages: this.readMultiple(this.header.num_messages, () => this.readTextMessage()),
+          textAnnotations: this.readMultiple(this.header.num_text_annotations, () => this.readTextMessage()),
           robotPose: undefined
         }
         message.robotPose = message.header.robot_pose;
@@ -794,9 +794,9 @@
 
     function drawTextAnnotations() {
       if (visMsg == undefined) return;
-      visMsg.messages.forEach(function (m, i) {
+      visMsg.textAnnotations.forEach(function (m, i) {
         let p = m.start;
-        if(i < visMsg.header.num_local_messages) {
+        if(i < visMsg.header.num_local_text_annotations) {
           p = robotToMap(p);
         }
         drawTextAnnotation(m.str, p.x, p.y, m.color, m.size_em);
