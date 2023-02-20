@@ -34,6 +34,7 @@
 #include "amrl_msgs/ColoredPoint2D.h"
 #include "amrl_msgs/ColoredLine2D.h"
 #include "amrl_msgs/ColoredArc2D.h"
+#include "amrl_msgs/ColoredText.h"
 #include "amrl_msgs/VisualizationMsg.h"
 #include "sensor_msgs/LaserScan.h"
 
@@ -42,28 +43,38 @@ class QWebSocket;
 
 struct MessageHeader {
   MessageHeader() : nonce(42) {}
-  uint32_t nonce;                 // 1
-  uint32_t num_points;            // 2
-  uint32_t num_lines;             // 3
-  uint32_t num_arcs;              // 4
-  uint32_t num_laser_rays;        // 5
-  uint32_t num_local_points;      // 6
-  uint32_t num_local_lines;       // 7
-  uint32_t num_local_arcs;        // 8
-  float laser_min_angle;          // 9
-  float laser_max_angle;          // 10
-  float loc_x;                    // 11
-  float loc_y;                    // 12
-  float loc_r;                    // 13
-  char map[32];                   //
+  uint32_t nonce;                     // 1
+  uint32_t num_points;                // 2
+  uint32_t num_lines;                 // 3
+  uint32_t num_arcs;                  // 4
+  uint32_t num_text_annotations;      // 5 
+  uint32_t num_laser_rays;            // 6
+  uint32_t num_local_points;          // 7
+  uint32_t num_local_lines;           // 8
+  uint32_t num_local_arcs;            // 9
+  uint32_t num_local_text_annotations;// 10
+  float laser_min_angle;              // 11
+  float laser_max_angle;              // 12
+  float loc_x;                        // 13
+  float loc_y;                        // 14
+  float loc_r;                        // 15
+  char map[32];                       //
   size_t GetByteLength() const {
-    const size_t len = 13 * 4 + 32 +
+    const size_t len = 15 * 4 + 32 + // header fields + map data
         num_laser_rays * 4 +   // each ray is uint32_t
         num_points * 3 * 4 +   // x, y, color
         num_lines * 5 * 4 +    // x1, y1, x2, y2, color
-        num_arcs * 6 * 4;      // x, y, radius, start_angle, end_angle, color
+        num_arcs * 6 * 4 +      // x, y, radius, start_angle, end_angle, color
+        num_text_annotations * 4 * 4 * 32; // x, y, color, size, msg
     return len;
   }
+};
+
+struct ColoredTextNative {
+  amrl_msgs::Point2D start;
+  uint32_t color;
+  float size_em;
+  char text[32];
 };
 
 struct DataMessage {
@@ -72,6 +83,7 @@ struct DataMessage {
   std::vector<amrl_msgs::ColoredPoint2D> points;
   std::vector<amrl_msgs::ColoredLine2D> lines;
   std::vector<amrl_msgs::ColoredArc2D> arcs;
+  std::vector<ColoredTextNative> text_annotations;
   QByteArray ToByteArray() const;
   static DataMessage FromRosMessages(
       const sensor_msgs::LaserScan& laser_msg,
