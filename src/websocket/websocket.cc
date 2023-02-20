@@ -174,7 +174,7 @@ DataMessage GenerateTestData(const MessageHeader& h) {
     const uint8_t x = static_cast<uint8_t>(i);
     msg.arcs[i].color = (x << 16) | (x << 8) | x;
 
-    for(size_t i = 0; i < msg.text_annotations.size(); i++) {
+    for (size_t i = 0; i < msg.text_annotations.size(); i++) {
       msg.text_annotations[i].start.x = 1.0 * i;
       msg.text_annotations[i].start.y = 2.0 * i;
       msg.text_annotations[i].color = (x << 16) | (x << 8) | x;
@@ -218,7 +218,6 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.laser_min_angle = laser_msg.angle_min;
   msg.header.laser_max_angle = laser_msg.angle_max;
   msg.header.num_laser_rays = laser_msg.ranges.size();
-
   msg.laser_scan.resize(laser_msg.ranges.size());
   for (size_t i = 0; i < laser_msg.ranges.size(); ++i) {
     if (laser_msg.ranges[i] <= laser_msg.range_min || 
@@ -249,11 +248,9 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.num_points = msg.points.size();
   msg.header.num_lines = msg.lines.size();
   msg.header.num_arcs = msg.arcs.size();
-
-  // msg.text_annotations.resize(local_msg.text_annotations.size() + global_msg.text_annotations.size());
   msg.header.num_local_text_annotations = local_msg.text_annotations.size();
   msg.header.num_text_annotations = local_msg.text_annotations.size() + global_msg.text_annotations.size();
-  for(amrl_msgs::ColoredText text : local_msg.text_annotations) {
+  for (amrl_msgs::ColoredText text : local_msg.text_annotations) {
     ColoredTextNative localText;
     localText.start = text.start;
     localText.color = text.color;
@@ -263,7 +260,7 @@ DataMessage DataMessage::FromRosMessages(
     localText.text[size] = 0;
     msg.text_annotations.push_back(localText);
   }
-  for(amrl_msgs::ColoredText text : global_msg.text_annotations) {
+  for (amrl_msgs::ColoredText text : global_msg.text_annotations) {
     ColoredTextNative localText;
     localText.start = text.start;
     localText.color = text.color;
@@ -284,8 +281,7 @@ DataMessage DataMessage::FromRosMessages(
            "num_local_points: %d "
            "num_local_lines: %d "
            "num_local_arcs: %d "
-           "num_local_text_annotations: %d\n"
-           ,
+           "num_local_text_annotations: %d\n",
            msg.header.nonce,
            msg.header.num_points,
            msg.header.num_lines,

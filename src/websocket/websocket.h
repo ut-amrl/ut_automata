@@ -60,7 +60,7 @@ struct MessageHeader {
   float loc_r;                        // 15
   char map[32];                       //
   size_t GetByteLength() const {
-    const size_t len = 16 * 4 + 32 + //header fields + map data
+    const size_t len = 15 * 4 + 32 + // header fields + map data
         num_laser_rays * 4 +   // each ray is uint32_t
         num_points * 3 * 4 +   // x, y, color
         num_lines * 5 * 4 +    // x1, y1, x2, y2, color
