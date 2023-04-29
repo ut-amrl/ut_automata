@@ -175,9 +175,9 @@
       readString() {
         let s = '';
         let end_of_str = false;
-        for (let i = 0; i < 32 & !end_of_str; i++) {
+        for (let i = 0; i < 32; i++) {
           const c = this.readUint8();
-          if(c==0) {
+          if(c==0 || end_of_str) {
             end_of_str = true;
           } else {
             s += String.fromCharCode(c)
