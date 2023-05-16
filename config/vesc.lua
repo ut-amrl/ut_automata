@@ -10,7 +10,7 @@ speed_to_erpm_offset = 180.0; -- should be between 160-200
 steering_angle_to_servo_gain = -0.9015;
 steering_angle_to_servo_offset = 0.5; -- should be between 0.4-0.6
 -- erpm_speed_limit = 14000; -- 3250
-erpm_speed_limit = 22000; -- 3250
+erpm_speed_limit = 53740; -- gain (5356) * max_speed (10 m/s) + offset (180)
 servo_min = 0.05;
 servo_max = 0.95;
 
