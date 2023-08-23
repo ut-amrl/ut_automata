@@ -13,7 +13,7 @@ def get_machines(username):
             "ssh", 
             "-oStrictHostKeyChecking=no",
             f"{username}@linux.cs.utexas.edu", 
-            "cshosts pub"
+            "/lusr/bin/cshosts pub"
         ], stderr=subprocess.DEVNULL).decode("utf-8")
         machines = output.splitlines()
         shuffle(machines)
