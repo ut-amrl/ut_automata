@@ -63,6 +63,7 @@
     <option value="ASE1">ASE1</option>
     <option value="ASE4">ASE4</option>
     <option value="GDC_Track">GDC_Track</option>
+    <option value="Obstacle_Hallway">Obstacle_Hallway</option>
     <option value="EmptyMap">EmptyMap</option>
   </select>
   <br>
@@ -359,7 +360,7 @@
 
       onerror(error) {
         console.log(`[error] ${error.message}`);
-        if (this.callbacks.onerror) this.callbacks.onerror(e);
+        if (this.callbacks.onerror) this.callbacks.onerror(error);
       }
 
       // Connect to a host.
@@ -370,12 +371,7 @@
           console.error(`Error: Already connected to ${this.socket.url}`);
           return;
         }
-        try {
-          this.socket = new WebSocket("ws://" + hostname + ":10272");
-        } catch (error) {
-          this.onerror(error);
-          return;
-        }
+        this.socket = new WebSocket("ws://" + hostname + ":10272");
         this.socket.onopen = (e) => this.onopen(e);
         this.socket.onmessage = (e) => this.onmessage(e);
         this.socket.onclose = (e) => this.onclose(e);
@@ -627,7 +623,11 @@
       console.log('Robot interface closed.');
       robot_interface = undefined;
       document.getElementById("connect").value = "Connect";
-      updateStatus(`Disconnected`);
+      // If the disconnection is preceded by an error, preserve the error
+      // message.
+      if (document.getElementById("status").innerHTML.indexOf("Error") == -1) {
+        updateStatus(`Disconnected`);
+      }
     }
 
     function onopen(event) {
@@ -654,10 +654,16 @@
           onReceiveRobotData: receiveData,
           onReceiveJSON: processJsonData,
           onopen: onopen,
-          close: close
+          close: close,
+          onerror: (e) => updateStatus(`Error connecting to ${e.currentTarget.url}`)
         };
         robot_interface = new RobotInterface();
-        robot_interface.connect(ipaddr, callbacks);
+        try {
+          robot_interface.connect(ipaddr, callbacks);
+        } catch (e) {
+          console.log(e);
+          updateStatus(`Error connecting to ${ipaddr}: ${e}`);
+        }
       }
     }
 
