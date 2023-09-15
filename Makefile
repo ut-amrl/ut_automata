@@ -20,6 +20,12 @@ hardware: build build/CMakeLists.txt.copy
 	$(info build_mode is [${build_mode}])
 	$(MAKE) --no-print-directory -C build
 
+omega: build_mode=Omega
+omega: build build/CMakeLists.txt.copy
+	$(info build_type is [${build_type}])
+	$(info build_mode is [${build_mode}])
+	$(MAKE) --no-print-directory -C build
+
 clean:
 	rm -rf build bin lib msg_gen src/ut_automata
 

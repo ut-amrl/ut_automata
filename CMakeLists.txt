@@ -1,6 +1,8 @@
 PROJECT(ut_automata)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 MESSAGE(STATUS "Compilers found: ${CMAKE_CXX_COMPILER_LIST}")
 MESSAGE(STATUS "Using compiler: ${CMAKE_CXX_COMPILER}")
 MESSAGE(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
@@ -83,6 +85,13 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
     src/joystick/joystick.cc
     src/joystick/joystick_driver.cc)
   TARGET_LINK_LIBRARIES(joystick ${libs})
+ENDIF()
+
+IF(${CMAKE_BUILD_MODE} MATCHES "Omega")
+  ROSBUILD_ADD_EXECUTABLE(radio_driver
+    src/radio_driver/radio_driver_node.cpp
+    src/radio_driver/radio_driver.cpp)
+  TARGET_LINK_LIBRARIES(radio_driver ${libs})
 ENDIF()
 
 MESSAGE(STATUS "Building simulator")
