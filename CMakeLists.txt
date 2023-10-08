@@ -17,7 +17,7 @@ IF(CMAKE_VERSION VERSION_LESS "3.7.0")
     SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 ENDIF()
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -Wextra -g")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")
@@ -90,7 +90,8 @@ ENDIF()
 IF(${CMAKE_BUILD_MODE} MATCHES "Omega")
   ROSBUILD_ADD_EXECUTABLE(radio_driver
     src/radio_driver/radio_driver_node.cpp
-    src/radio_driver/radio_driver.cpp)
+    src/radio_driver/radio_driver.cpp
+    src/radio_driver/radio_interface.cpp)
   TARGET_LINK_LIBRARIES(radio_driver ${libs})
 ENDIF()
 
