@@ -4,21 +4,22 @@
 #include <nav_msgs/Odometry.h>
 #include <std_msgs/Bool.h>
 
+#include "config_reader/config_reader.h"
 #include "math/math_util.h"
 
 static const bool kDebug = false;
 
-// TODO: move these to config
-static const float kCommandRate = 20;
-static const float kCommandInterval = 1.0 / kCommandRate;
-static const float kCommandTimeout = 0.5;
-static const float kFullSpeed = 8.0;  // the fastest the car is capable of going at full throttle
-static const float kMaxSpeed = 2.0;   // the fastest we set the caw to be able to go
-static const float kSpeedToThrottle = 1.0 / kFullSpeed;  // speed * kSpeedToThrottle = throttle
-static const float kMaxAccel = 6.0;
-static const float kMaxDecel = 6.0;
-static const float kMaxCurvature = 1.5;
-static const float kCurvatureToSteering = 1.0 / kMaxCurvature;
+DEFINE_string(config_dir, "config", "Directory for config files");
+
+CONFIG_STRING(serial_port_, "serial_port");
+CONFIG_INT(baud_rate_, "baud_rate");
+CONFIG_FLOAT(command_rate_, "command_rate");
+CONFIG_FLOAT(command_timeout_, "command_timeout");
+CONFIG_FLOAT(full_speed_, "full_speed");
+CONFIG_FLOAT(max_speed_, "max_speed");
+CONFIG_FLOAT(max_accel_, "max_accel");
+CONFIG_FLOAT(max_decel_, "max_decel");
+CONFIG_FLOAT(max_curvature_, "max_curvature");
 
 namespace radio_driver {
 
@@ -35,6 +36,8 @@ static geometry_msgs::TwistStamped generateTwist(float velocity, float curvature
 }
 
 RadioDriver::RadioDriver(ros::NodeHandle nh) : drive_mode_(DriveMode::Disabled) {
+    config_reader::ConfigReader config({FLAGS_config_dir + "/radio.lua"});
+
     odom_msg_.header.stamp = ros::Time::now();
     odom_msg_.header.frame_id = "odom";
     odom_msg_.child_frame_id = "base_link";
@@ -62,13 +65,15 @@ RadioDriver::RadioDriver(ros::NodeHandle nh) : drive_mode_(DriveMode::Disabled) 
     odom_msg_.pose.pose.orientation.y = 0;
     odom_msg_.pose.pose.orientation.z = 0;
 
+    radio_interface_.connect(serial_port_, baud_rate_);
+
     odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
     drive_pub_ = nh.advertise<geometry_msgs::TwistStamped>("radio_drive", 1);
     autonomy_enabler_pub_ = nh.advertise<std_msgs::Bool>("autonomy_enabler", 1);
 
     joystick_sub_ = nh.subscribe("/joystick", 10, &RadioDriver::joystickCallback, this);
-    timer_ = nh.createSteadyTimer(ros::WallDuration(kCommandInterval), &RadioDriver::timerCallback,
-                                  this);
+    timer_ = nh.createSteadyTimer(ros::WallDuration(1.0 / command_rate_),
+                                  &RadioDriver::timerCallback, this);
 }
 
 void RadioDriver::ackermannCurvatureCallback(const amrl_msgs::AckermannCurvatureDriveMsg& msg) {
@@ -92,8 +97,8 @@ void RadioDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     // TODO: make this configurable
     // TODO: add turbo
     // TODO: check this is the right range
-    joystick_velocity_ = -msg.axes[4] * kMaxSpeed;
-    joystick_curvature_ = -msg.axes[0] * kMaxCurvature;
+    joystick_velocity_ = -msg.axes[4] * max_speed_;
+    joystick_curvature_ = -msg.axes[0] * max_curvature_;
 
     static std_msgs::Bool autonomy_enabler_msg;
     autonomy_enabler_msg.data =
@@ -103,6 +108,7 @@ void RadioDriver::joystickCallback(const sensor_msgs::Joy& msg) {
 
 void RadioDriver::timerCallback(const ros::SteadyTimerEvent& event) {
     static float throttle, steering;
+    // TODO: command timeout
 
     if (!radio_interface_.isConnected()) {
         return;
@@ -136,9 +142,8 @@ void RadioDriver::timerCallback(const ros::SteadyTimerEvent& event) {
         }
     }
 
-    // TODO: make sure this linearity is real + make this maybe easier to tune
-    throttle = vel * kSpeedToThrottle;
-    steering = curv * kCurvatureToSteering;
+    throttle = speedToThrottle(vel);
+    steering = curvatureToSteering(curv);
 
     updateOdometry();
     odom_pub_.publish(odom_msg_);
@@ -151,16 +156,27 @@ void RadioDriver::timerCallback(const ros::SteadyTimerEvent& event) {
     lastCurvature_ = curv;
 }
 
+float RadioDriver::speedToThrottle(float speed) const {
+    // TODO: make sure this linearity is real + make this maybe easier to tune
+    return speed / full_speed_;
+}
+
+float RadioDriver::curvatureToSteering(float curvature) const {
+    // TODO: make sure this linearity is real + make this maybe easier to tune
+    return curvature / max_curvature_;
+}
+
 float RadioDriver::clampVelocity(float velocity) const {
-    const float max_accel = lastSpeed_ > 0 ? kMaxAccel : kMaxDecel;
-    const float max_decel = lastSpeed_ > 0 ? kMaxDecel : kMaxAccel;
-    float accel_clamp = math_util::Clamp(velocity, -kMaxSpeed, kMaxSpeed);
-    return math_util::Clamp(accel_clamp, lastSpeed_ - max_decel * kCommandInterval,
-                            lastSpeed_ + max_accel * kCommandInterval);
+    const float command_interval = 1.0 / command_rate_;
+    const float max_accel = lastSpeed_ > 0 ? max_accel_ : max_decel_;
+    const float max_decel = lastSpeed_ > 0 ? max_decel_ : max_accel_;
+    float accel_clamp = math_util::Clamp(velocity, -max_speed_, max_speed_);
+    return math_util::Clamp(accel_clamp, lastSpeed_ - max_decel * command_interval,
+                            lastSpeed_ + max_accel * command_interval);
 }
 
 float RadioDriver::clampCurvature(float curvature) const {
-    return math_util::Clamp(curvature, -kMaxCurvature, kMaxCurvature);
+    return math_util::Clamp(curvature, -max_curvature_, max_curvature_);
 }
 
 void RadioDriver::updateOdometry() {

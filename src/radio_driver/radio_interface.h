@@ -10,6 +10,7 @@ class RadioInterface {
 
     ~RadioInterface();
 
+    bool connect(const std::string& port, int baud);
     bool isConnected() const;
 
     // send a command to the car via the radio
@@ -17,7 +18,6 @@ class RadioInterface {
     bool sendControl(float throttle, float steering);
 
    private:
-    bool connect(const std::string& port, int baud);
     void disconnect();
 
     // convert throttle and steering commands to ascii bytes in the format arduino expects

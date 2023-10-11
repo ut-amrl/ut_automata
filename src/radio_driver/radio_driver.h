@@ -38,6 +38,8 @@ class RadioDriver {
     float joystick_velocity_;
     float joystick_curvature_;
 
+    float speedToThrottle(float speed) const;
+    float curvatureToSteering(float curvature) const;
     float clampVelocity(float velocity) const;
     float clampCurvature(float curvature) const;
 
