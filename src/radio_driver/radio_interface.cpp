@@ -4,17 +4,11 @@
 
 namespace radio_driver {
 
-RadioInterface::RadioInterface() : connected_(false) {
+RadioInterface::RadioInterface() : buffer_size_(0), connected_(false) {
     buffer_ = new char[12];  // TODO: check if 12 is enough
 }
 
-RadioInterface::~RadioInterface() {
-    if (!disconnect()) {
-        LOG(ERROR) << "Failed to cleanly disconnect from radio on shutdown";
-    }
-
-    delete[] buffer_;
-}
+RadioInterface::~RadioInterface() { delete[] buffer_; }
 
 bool RadioInterface::isConnected() const { return connected_; }
 
@@ -25,20 +19,25 @@ bool RadioInterface::sendControl(float throttle, float steering) {
     }
 
     commandToBuffer(throttle, steering);
-    // TODO: send buf to serial device
-    return true;
+    if (buffer_size_) {
+        serial_.write(buffer_, buffer_size_);
+        return true;
+    } else {
+        return false;
+    }
 }
 
-bool RadioInterface::connect(const std::string& port) {
-    // TODO: actually connect to serial device
-    connected_ = true;
-    return true;
+bool RadioInterface::connect(const std::string& port, int baud) {
+    connected_ = serial_.open(port.c_str(), baud);
+    if (!connected_) {
+        LOG(ERROR) << "Failed to connect to radio on serial port " << port;
+    }
+    return connected_;
 }
 
-bool RadioInterface::disconnect() {
-    // TODO: actually disconnect from serial device
+void RadioInterface::disconnect() {
+    serial_.close();
     connected_ = false;
-    return true;
 }
 
 void RadioInterface::commandToBuffer(float throttle, float steering) {
@@ -56,7 +55,9 @@ void RadioInterface::commandToBuffer(float throttle, float steering) {
     } else {
         std::ostringstream ss;
         ss << throttle_pwm << "," << steering_pwm << "\n";
-        ss.str().copy(buffer_, ss.str().size());
+        std::string data = ss.str();
+        data.copy(buffer_, data.size());
+        buffer_size_ = data.size();
     }
 }
 

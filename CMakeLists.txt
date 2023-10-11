@@ -91,7 +91,8 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Omega")
   ROSBUILD_ADD_EXECUTABLE(radio_driver
     src/radio_driver/radio_driver_node.cpp
     src/radio_driver/radio_driver.cpp
-    src/radio_driver/radio_interface.cpp)
+    src/radio_driver/radio_interface.cpp
+    src/vesc_driver/serial.cc)
   TARGET_LINK_LIBRARIES(radio_driver ${libs})
 ENDIF()
 
