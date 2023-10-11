@@ -35,7 +35,32 @@ static geometry_msgs::TwistStamped generateTwist(float velocity, float curvature
 }
 
 RadioDriver::RadioDriver(ros::NodeHandle nh) : drive_mode_(DriveMode::Disabled) {
-    // TODO: init radio device
+    odom_msg_.header.stamp = ros::Time::now();
+    odom_msg_.header.frame_id = "odom";
+    odom_msg_.child_frame_id = "base_link";
+
+    odom_msg_.twist.twist.linear.x = 0;
+    odom_msg_.twist.twist.linear.y = 0;
+    odom_msg_.twist.twist.linear.z = 0;
+    odom_msg_.twist.twist.angular.x = 0;
+    odom_msg_.twist.twist.angular.y = 0;
+    odom_msg_.twist.twist.angular.z = 0;
+    odom_msg_.twist.covariance = {0.001, 0.0,       0.0, 0.0,       0.0, 0.0,   0.0, 0.001, 0.0,
+                                  0.0,   0.0,       0.0, 0.0,       0.0, 0.001, 0.0, 0.0,   0.0,
+                                  0.0,   0.0,       0.0, 1000000.0, 0.0, 0.0,   0.0, 0.0,   0.0,
+                                  0.0,   1000000.0, 0.0, 0.0,       0.0, 0.0,   0.0, 0.0,   0.03};
+
+    odom_msg_.pose.pose.position.x = 0;
+    odom_msg_.pose.pose.position.y = 0;
+    odom_msg_.pose.pose.position.z = 0;
+    odom_msg_.pose.covariance = {
+        0.001, 0.0, 0.0,       0.0, 0.0,       0.0, 0.0, 0.001, 0.0, 0.0,       0.0, 0.0,
+        0.0,   0.0, 1000000.0, 0.0, 0.0,       0.0, 0.0, 0.0,   0.0, 1000000.0, 0.0, 0.0,
+        0.0,   0.0, 0.0,       0.0, 1000000.0, 0.0, 0.0, 0.0,   0.0, 0.0,       0.0, 0.03};
+    odom_msg_.pose.pose.orientation.w = 1;
+    odom_msg_.pose.pose.orientation.x = 0;
+    odom_msg_.pose.pose.orientation.y = 0;
+    odom_msg_.pose.pose.orientation.z = 0;
 
     odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
     drive_pub_ = nh.advertise<geometry_msgs::TwistStamped>("radio_drive", 1);
@@ -111,11 +136,12 @@ void RadioDriver::timerCallback(const ros::SteadyTimerEvent& event) {
         }
     }
 
-    // TODO: make sure this linearity is real
+    // TODO: make sure this linearity is real + make this maybe easier to tune
     throttle = vel * kSpeedToThrottle;
     steering = curv * kCurvatureToSteering;
 
-    // TODO: odometry updates
+    updateOdometry();
+    odom_pub_.publish(odom_msg_);
     radio_interface_.sendControl(throttle, steering);
     drive_pub_.publish(generateTwist(vel, curv));
 
@@ -135,6 +161,45 @@ float RadioDriver::clampVelocity(float velocity) const {
 
 float RadioDriver::clampCurvature(float curvature) const {
     return math_util::Clamp(curvature, -kMaxCurvature, kMaxCurvature);
+}
+
+void RadioDriver::updateOdometry() {
+    static float x = 0;
+    static float y = 0;
+    static float theta = 0;
+    static ros::Time lastTime = ros::Time::now();
+
+    float lin_vel = lastSpeed_;
+    if (lin_vel <= 0.01) {
+        lin_vel = 0;
+    }
+
+    float turn_radius = 0;
+    float rot_vel = 0;
+    if (std::abs(lastCurvature_) >= 1e-4) {
+        turn_radius = 1.0 / lastCurvature_;
+        rot_vel = lin_vel / turn_radius;
+    }
+
+    double dt = (ros::Time::now() - lastTime).toSec();
+
+    float dx = lin_vel * dt * std::cos(theta);
+    float dy = lin_vel * dt * std::sin(theta);
+    float dtheta = rot_vel * dt;
+
+    x += dx;
+    y += dy;
+    theta = math_util::AngleMod(theta + dtheta);
+
+    odom_msg_.header.stamp = ros::Time::now();
+    odom_msg_.pose.pose.position.x = x;
+    odom_msg_.pose.pose.position.y = y;
+    odom_msg_.pose.pose.orientation.w = std::cos(theta / 2);
+    odom_msg_.pose.pose.orientation.z = std::sin(theta / 2);
+    odom_msg_.twist.twist.linear.x = lin_vel;
+    odom_msg_.twist.twist.angular.z = rot_vel;
+
+    lastTime = ros::Time::now();
 }
 
 }  // namespace radio_driver

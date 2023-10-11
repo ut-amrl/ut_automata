@@ -1,4 +1,5 @@
 #include <amrl_msgs/AckermannCurvatureDriveMsg.h>
+#include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Joy.h>
 
@@ -39,6 +40,10 @@ class RadioDriver {
 
     float clampVelocity(float velocity) const;
     float clampCurvature(float curvature) const;
+
+    void updateOdometry();
+
+    nav_msgs::Odometry odom_msg_;
 
     DriveMode drive_mode_;
     RadioInterface radio_interface_;
