@@ -1,6 +1,8 @@
 PROJECT(ut_automata)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 MESSAGE(STATUS "Compilers found: ${CMAKE_CXX_COMPILER_LIST}")
 MESSAGE(STATUS "Using compiler: ${CMAKE_CXX_COMPILER}")
 MESSAGE(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
@@ -15,7 +17,7 @@ IF(CMAKE_VERSION VERSION_LESS "3.7.0")
     SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 ENDIF()
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -Wextra -g")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")
@@ -78,6 +80,20 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
         Qt5::Widgets
         Qt5::OpenGL
         ${libs} ${OPENGL_LIBRARY} GL)
+
+  ROSBUILD_ADD_EXECUTABLE(joystick
+    src/joystick/joystick.cc
+    src/joystick/joystick_driver.cc)
+  TARGET_LINK_LIBRARIES(joystick ${libs})
+ENDIF()
+
+IF(${CMAKE_BUILD_MODE} MATCHES "Omega")
+  ROSBUILD_ADD_EXECUTABLE(radio_driver
+    src/radio_driver/radio_driver_node.cpp
+    src/radio_driver/radio_driver.cpp
+    src/radio_driver/radio_interface.cpp
+    src/vesc_driver/serial.cc)
+  TARGET_LINK_LIBRARIES(radio_driver ${libs})
 
   ROSBUILD_ADD_EXECUTABLE(joystick
     src/joystick/joystick.cc
