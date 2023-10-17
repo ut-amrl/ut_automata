@@ -94,6 +94,11 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Omega")
     src/radio_driver/radio_interface.cpp
     src/vesc_driver/serial.cc)
   TARGET_LINK_LIBRARIES(radio_driver ${libs})
+
+  ROSBUILD_ADD_EXECUTABLE(joystick
+    src/joystick/joystick.cc
+    src/joystick/joystick_driver.cc)
+  TARGET_LINK_LIBRARIES(joystick ${libs})
 ENDIF()
 
 MESSAGE(STATUS "Building simulator")

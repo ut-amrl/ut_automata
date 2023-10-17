@@ -46,7 +46,8 @@ void RadioInterface::commandToBuffer(float throttle, float steering) {
 
     // TODO: print these to see if they are correct
     uint32_t throttle_pwm = (throttle + 1) * (max_val - min_val) / 2 + min_val;
-    uint32_t steering_pwm = (steering + 1) * (max_val - min_val) / 2 + min_val;
+    uint32_t steering_pwm = (-steering + 1) * (max_val - min_val) / 2 + min_val;
+    LOG(INFO) << "Throttle: " << throttle_pwm << ", Steering: " << steering_pwm;
 
     if (throttle_pwm < min_val || throttle_pwm > max_val) {
         LOG(ERROR) << "Throttle command out of range: " << throttle_pwm;

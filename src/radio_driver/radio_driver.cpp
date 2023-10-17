@@ -96,8 +96,7 @@ void RadioDriver::joystickCallback(const sensor_msgs::Joy& msg) {
 
     // TODO: make this configurable
     // TODO: add turbo
-    // TODO: check this is the right range
-    joystick_velocity_ = -msg.axes[4] * max_speed_;
+    joystick_velocity_ = -msg.axes[3] * max_speed_;
     joystick_curvature_ = -msg.axes[0] * max_curvature_;
 
     static std_msgs::Bool autonomy_enabler_msg;
@@ -142,6 +141,7 @@ void RadioDriver::timerCallback(const ros::SteadyTimerEvent& event) {
         }
     }
 
+    // TODO: braking
     throttle = speedToThrottle(vel);
     steering = curvatureToSteering(curv);
 
