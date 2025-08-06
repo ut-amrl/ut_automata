@@ -73,7 +73,6 @@ VescDriver::VescDriver(ros::NodeHandle nh,
       FLAGS_config_dir + "/vesc.lua"
     });
   }
-  state_msg_.header.seq = 0;
   state_msg_.header.frame_id = "base_link";
   car_status_msg_.header = state_msg_.header;
 

@@ -62,7 +62,6 @@ int main(int argc, char** argv) {
   vector<float> axes;
   Joy msg;
   msg.header.frame_id = "joystick";
-  msg.header.seq = 0;
 
   RateLoop rate_loop(30);
   while (ros::ok()) {

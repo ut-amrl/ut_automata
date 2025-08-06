@@ -1,6 +1,8 @@
 build/
 bin/
+install/
 lib/
+log/
 msg_gen/
 src/f1tenth_course/
 src/ut_automata/

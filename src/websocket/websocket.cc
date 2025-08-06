@@ -37,23 +37,23 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
 
-#include "amrl_msgs/Localization2DMsg.h"
-#include "amrl_msgs/Point2D.h"
-#include "amrl_msgs/ColoredPoint2D.h"
-#include "amrl_msgs/ColoredLine2D.h"
-#include "amrl_msgs/ColoredArc2D.h"
-#include "amrl_msgs/ColoredText.h"
-#include "amrl_msgs/VisualizationMsg.h"
-#include "sensor_msgs/LaserScan.h"
+#include "amrl_msgs/msg/localization2_d_msg.hpp"
+#include "amrl_msgs/msg/point2_d.hpp"
+#include "amrl_msgs/msg/colored_point2_d.hpp"
+#include "amrl_msgs/msg/colored_line2_d.hpp"
+#include "amrl_msgs/msg/colored_arc2_d.hpp"
+#include "amrl_msgs/msg/colored_text.hpp"
+#include "amrl_msgs/msg/visualization_msg.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
 
-using amrl_msgs::Localization2DMsg;
-using amrl_msgs::Point2D;
-using amrl_msgs::ColoredArc2D;
-using amrl_msgs::ColoredLine2D;
-using amrl_msgs::ColoredPoint2D;
-using amrl_msgs::ColoredText;
-using amrl_msgs::VisualizationMsg;
-using sensor_msgs::LaserScan;
+using amrl_msgs::msg::Localization2DMsg;
+using amrl_msgs::msg::Point2D;
+using amrl_msgs::msg::ColoredArc2D;
+using amrl_msgs::msg::ColoredLine2D;
+using amrl_msgs::msg::ColoredPoint2D;
+using amrl_msgs::msg::ColoredText;
+using amrl_msgs::msg::VisualizationMsg;
+using sensor_msgs::msg::LaserScan;
 using std::vector;
 
 DEFINE_uint64(max_connections, 4, "Maximum number of websocket connections");
@@ -64,8 +64,7 @@ RobotWebSocket::RobotWebSocket(uint16_t port) :
     QObject(nullptr),
     ws_server_(new QWebSocketServer(("Robot Websocket Server"),
         QWebSocketServer::NonSecureMode, this)) {
-  localization_.header.stamp = ros::Time(0);
-  localization_.header.seq = 0;
+  localization_.header.stamp = rclcpp::Time(0, 0, RCL_ROS_TIME);
   localization_.pose.x = 0;
   localization_.pose.y = 0;
   localization_.pose.theta = 0;
@@ -250,7 +249,7 @@ DataMessage DataMessage::FromRosMessages(
   msg.header.num_arcs = msg.arcs.size();
   msg.header.num_local_text_annotations = local_msg.text_annotations.size();
   msg.header.num_text_annotations = local_msg.text_annotations.size() + global_msg.text_annotations.size();
-  for (amrl_msgs::ColoredText text : local_msg.text_annotations) {
+  for (amrl_msgs::msg::ColoredText text : local_msg.text_annotations) {
     ColoredTextNative localText;
     localText.start = text.start;
     localText.color = text.color;
@@ -260,7 +259,7 @@ DataMessage DataMessage::FromRosMessages(
     localText.text[size] = 0;
     msg.text_annotations.push_back(localText);
   }
-  for (amrl_msgs::ColoredText text : global_msg.text_annotations) {
+  for (amrl_msgs::msg::ColoredText text : global_msg.text_annotations) {
     ColoredTextNative localText;
     localText.start = text.start;
     localText.color = text.color;
