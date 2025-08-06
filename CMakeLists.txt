@@ -1,11 +1,22 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.8)
 PROJECT(ut_automata)
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 MESSAGE(STATUS "Compilers found: ${CMAKE_CXX_COMPILER_LIST}")
 MESSAGE(STATUS "Using compiler: ${CMAKE_CXX_COMPILER}")
 MESSAGE(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 MESSAGE(STATUS "Build Mode: ${CMAKE_BUILD_MODE}")
 MESSAGE(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}")
+
+# Set CMake policies
+cmake_policy(SET CMP0071 NEW)
+
+# Configure RPATH for proper library linking
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 SET(CMAKE_AUTOMOC ON)
 SET(CMAKE_AUTORCC ON)
@@ -26,10 +37,23 @@ ELSEIF(${CMAKE_BUILD_TYPE} MATCHES "Debug")
   SET(BUILD_SPECIFIC_LIBRARIES "")
 ENDIF()
 
-INCLUDE($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
-ROSBUILD_INIT()
-SET(ROS_BUILD_STATIC_LIBS true)
-SET(ROS_BUILD_SHARED_LIBS false)
+message(STATUS "Building with ROS 2")
+add_compile_definitions(ROS2)
+find_package(rclcpp REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(ament_cmake REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(amrl_msgs REQUIRED)
+find_package(amrl_maps REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 FIND_PACKAGE(Qt5 COMPONENTS Core Widgets Gui WebSockets OpenGL REQUIRED)
 SET(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -48,30 +72,39 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/include)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/submodules/config_reader/include)
 
-ROSBUILD_GENMSG()
+# Generate ROS 2 messages
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/VescState.msg"
+  "msg/VescStateStamped.msg"
+  "msg/CarStatusMsg.msg"
+  DEPENDENCIES geometry_msgs std_msgs sensor_msgs visualization_msgs nav_msgs
+)
 
 ADD_SUBDIRECTORY(src/shared)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/shared)
 
-SET(libs roslib roscpp glog gflags amrl_shared_lib
-    ${BUILD_SPECIFIC_LIBRARIES} rosbag X11 lua5.1 boost_system)
+SET(libs glog gflags amrl_shared_lib
+    ${BUILD_SPECIFIC_LIBRARIES} X11 lua5.1 boost_system)
 
 IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
   MESSAGE(STATUS "Building hardware drivers")
-  rosbuild_add_executable(vesc_driver
-                          src/vesc_driver/serial.cc
-                          src/vesc_driver/vesc_driver_node.cpp
-                          src/vesc_driver/vesc_driver.cpp
-                          src/vesc_driver/vesc_interface.cpp
-                          src/vesc_driver/vesc_packet.cpp
-                          src/vesc_driver/vesc_packet_factory.cpp)
+
+  add_executable(vesc_driver
+                 src/vesc_driver/serial.cc
+                 src/vesc_driver/vesc_driver_node.cpp
+                 src/vesc_driver/vesc_driver.cpp
+                 src/vesc_driver/vesc_interface.cpp
+                 src/vesc_driver/vesc_packet.cpp
+                 src/vesc_driver/vesc_packet_factory.cpp)
+  ament_target_dependencies(vesc_driver rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs)
   target_link_libraries(vesc_driver ${libs})
 
-  ROSBUILD_ADD_EXECUTABLE(gui
+  add_executable(gui
         src/gui/gui_main.cc
         src/gui/gui_mainwindow.cc
         src/gui/vector_display.cc
         ${GUI_MOC_SRCS})
+  ament_target_dependencies(gui rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs)
   TARGET_LINK_LIBRARIES(gui
         Qt5::Core
         Qt5::Gui
@@ -79,33 +112,62 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
         Qt5::OpenGL
         ${libs} ${OPENGL_LIBRARY} GL)
 
-  ROSBUILD_ADD_EXECUTABLE(joystick
+  add_executable(joystick
     src/joystick/joystick.cc
     src/joystick/joystick_driver.cc)
-  TARGET_LINK_LIBRARIES(joystick ${libs})
+  ament_target_dependencies(joystick rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs)
+  target_link_libraries(joystick ${libs})
+
+  # Install hardware executables for ROS 2
+  install(TARGETS
+    vesc_driver
+    gui
+    joystick
+    DESTINATION lib/${PROJECT_NAME})
 ENDIF()
 
 MESSAGE(STATUS "Building simulator")
 
-ROSBUILD_ADD_EXECUTABLE(simulator
+add_executable(simulator
     src/simulator/simulator.cc
     src/simulator/vector_map.cc
     src/simulator/simulator_main.cc)
-TARGET_LINK_LIBRARIES(simulator ${libs})
+ament_target_dependencies(simulator rclcpp ament_index_cpp std_msgs geometry_msgs nav_msgs sensor_msgs visualization_msgs amrl_msgs tf2 tf2_geometry_msgs tf2_ros)
+target_link_libraries(simulator ${libs})
 
-ROSBUILD_ADD_EXECUTABLE(step_simulator
+add_executable(step_simulator
     src/simulator/simulator.cc
     src/simulator/vector_map.cc
     src/simulator/step_simulator_main.cc)
-TARGET_LINK_LIBRARIES(step_simulator ${libs})
+ament_target_dependencies(step_simulator rclcpp ament_index_cpp std_msgs geometry_msgs nav_msgs sensor_msgs visualization_msgs amrl_msgs tf2 tf2_geometry_msgs tf2_ros)
+target_link_libraries(step_simulator ${libs})
 
-ROSBUILD_ADD_EXECUTABLE(websocket
+add_executable(websocket
     src/websocket/websocket_main.cc
     src/websocket/websocket.cc
 )
-TARGET_LINK_LIBRARIES(websocket
+ament_target_dependencies(websocket rclcpp ament_index_cpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs)
+target_link_libraries(websocket
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets
     Qt5::WebSockets
     ${libs})
+
+# Install executables for ROS 2
+install(TARGETS
+  simulator
+  step_simulator
+  websocket
+  DESTINATION lib/${PROJECT_NAME})
+
+# ROS 2 package finalization
+# Install launch files, config files, etc.
+install(DIRECTORY
+  launch
+  config
+  DESTINATION share/${PROJECT_NAME}
+  OPTIONAL)
+
+ament_export_dependencies(rosidl_default_runtime)
+ament_package()
