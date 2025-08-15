@@ -161,6 +161,12 @@ install(TARGETS
   websocket
   DESTINATION lib/${PROJECT_NAME})
 
+# Copy simulator configs
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}
+  OPTIONAL)
+
 # ROS 2 package finalization
 # Install launch files, config files, etc.
 install(DIRECTORY

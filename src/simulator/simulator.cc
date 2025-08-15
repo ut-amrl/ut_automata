@@ -70,6 +70,7 @@ using vector_map::VectorMap;
 DEFINE_bool(localize, false, "Publish localization");
 
 const string kAmrlMapsDir = ament_index_cpp::get_package_share_directory("amrl_maps");
+const string kConfigDir = ament_index_cpp::get_package_share_directory("ut_automata");
 
 CONFIG_STRING(cMapName, "map_name");
 CONFIG_FLOAT(cCarLength, "car_length");
@@ -93,7 +94,8 @@ CONFIG_FLOAT(cAngularErrorRate, "angular_error_rate");
 CONFIG_FLOAT(cMaxLaserRange, "max_laser_range");
 CONFIG_FLOAT(cLaserAngleIncrement, "laser_angle_increment");
 CONFIG_FLOAT(cLaserFOV, "laser_fov");
-config_reader::ConfigReader reader({"config/simulator.lua"});
+
+config_reader::ConfigReader reader({kConfigDir + "/config/simulator.lua"});
 
 string MapNameToFile(const string& map) {
   return kAmrlMapsDir + "/" + map + "/" + map + ".vectormap.txt";
