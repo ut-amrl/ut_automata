@@ -46,10 +46,9 @@
 #include <QGroupBox>
 #include <QTabWidget>
 
-#include <ros/master.h>
-#include <ros/package.h>
+#include "rclcpp/rclcpp.hpp"
 
-#include "std_msgs/String.h"
+#include "std_msgs/msg/string.hpp"
 
 #include "vector_display.h"
 
@@ -350,7 +349,7 @@ void MainWindow::UpdateIP() {
     s = s + ip + "\n";
   }
   ipaddr_label_->setText(QString::fromUtf8(s.c_str()));
-  ros_led_->SetStatus(ros::master::check());
+  ros_led_->SetStatus(rclcpp::ok());
 }
 
 void MainWindow::UpdateStatus(int mode, 

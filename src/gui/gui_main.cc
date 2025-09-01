@@ -27,69 +27,75 @@
 #include <QApplication>
 #include <QPushButton>
 #include <QMetaType>
+#include <memory>
+#include <atomic>
 
-#include "ros/ros.h"
-#include "sensor_msgs/LaserScan.h"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
 
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
-#include "ut_automata/CarStatusMsg.h"
+#include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
+#include "ut_automata/msg/car_status_msg.hpp"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
-using amrl_msgs::AckermannCurvatureDriveMsg;
-using ut_automata::CarStatusMsg;
+using amrl_msgs::msg::AckermannCurvatureDriveMsg;
+using ut_automata::msg::CarStatusMsg;
+using sensor_msgs::msg::LaserScan;
 
 namespace {
 ut_automata_gui::MainWindow* main_window_ = nullptr;
-bool run_ = true;
-bool lidar_okay_ = false;
-bool camera_okay_ = false;
-bool vesc_okay_ = false;
-float battery_voltage_ = 0.0;
-int drive_mode_ = 0;
-float throttle_ = 0;
-float steering_ = 0;
+std::atomic_bool run_{true};
+std::atomic_bool lidar_okay_{false};
+std::atomic_bool camera_okay_{false};
+std::atomic_bool vesc_okay_{false};
+std::atomic<float> battery_voltage_{0.0f};
+std::atomic_int drive_mode_{0};
+std::atomic<float> throttle_{0.0f};
+std::atomic<float> steering_{0.0f};
 }  // namespace
 
-void StatusCallback(const CarStatusMsg& msg) {
-  if (!run_ || main_window_ == nullptr) return;
-  drive_mode_ = msg.status;
-  battery_voltage_ = msg.battery_voltage;
-  vesc_okay_ = true;
+void StatusCallback(const CarStatusMsg::SharedPtr msg) {
+  if (!run_.load() || main_window_ == nullptr) return;
+  drive_mode_.store(msg->status);
+  battery_voltage_.store(msg->battery_voltage);
+  vesc_okay_.store(true);
 }
 
-void LidarCallback(const sensor_msgs::LaserScan& msg) {
-  lidar_okay_  = true;
+void LidarCallback(const LaserScan::SharedPtr /*msg*/) {
+  lidar_okay_.store(true);
 }
 
-void DriveCallback(const AckermannCurvatureDriveMsg& msg) {
-  throttle_ = msg.velocity;
-  steering_ = msg.curvature;
+void DriveCallback(const AckermannCurvatureDriveMsg::SharedPtr msg) {
+  throttle_.store(msg->velocity);
+  steering_.store(msg->curvature);
 }
 
 void* RosThread(void* arg) {
   pthread_detach(pthread_self());
 
-  ros::NodeHandle n;
-  ros::Subscriber status_sub =
-      n.subscribe("car_status", 1, &StatusCallback);
-  ros::Subscriber lidar_sub =
-      n.subscribe("scan", 1, &LidarCallback);
-  ros::Subscriber drive_sub =
-      n.subscribe("ackermann_curvature_drive", 1, &DriveCallback);
+  auto node = rclcpp::Node::make_shared("ut_automata_gui");
+  auto status_sub = node->create_subscription<CarStatusMsg>(
+      "car_status", 10u, &StatusCallback);
+  auto lidar_sub = node->create_subscription<LaserScan>(
+      "scan", 10u, &LidarCallback);
+  auto drive_sub = node->create_subscription<AckermannCurvatureDriveMsg>(
+      "ackermann_curvature_drive", 10u, &DriveCallback);
 
   RateLoop loop(5.0);
-  while(ros::ok() && run_) {
-    throttle_ = steering_ = 0;
-    vesc_okay_ = lidar_okay_ = camera_okay_ = false;
-    ros::spinOnce();
-    main_window_->UpdateStatus(drive_mode_,
-                               battery_voltage_,
-                               vesc_okay_,
-                               lidar_okay_,
-                               camera_okay_,
-                               throttle_,
-                               steering_);
+  while (rclcpp::ok() && run_.load()) {
+    throttle_.store(0.0f);
+    steering_.store(0.0f);
+    vesc_okay_.store(false);
+    lidar_okay_.store(false);
+    camera_okay_.store(false);
+    rclcpp::spin_some(node);
+    main_window_->UpdateStatus(drive_mode_.load(),
+                               battery_voltage_.load(),
+                               vesc_okay_.load(),
+                               lidar_okay_.load(),
+                               camera_okay_.load(),
+                               throttle_.load(),
+                               steering_.load());
     loop.Sleep();
   }
 
@@ -98,7 +104,9 @@ void* RosThread(void* arg) {
 }
 
 void SignalHandler(int num) {
-  run_ = false;
+  run_.store(false);
+  // shutdown rclcpp if initialized
+  if (rclcpp::ok()) rclcpp::shutdown();
   if (num == SIGINT) {
     exit(0);
   } else {
@@ -107,7 +115,7 @@ void SignalHandler(int num) {
 }
 
 int main(int argc, char *argv[]) {
-  ros::init(argc, argv, "ut_automata_gui", ros::init_options::NoSigintHandler);
+  rclcpp::init(argc, argv);
   signal(SIGINT, &SignalHandler);
   qRegisterMetaType<std::vector<std::string> >("std::vector<std::string>");
 
@@ -118,9 +126,10 @@ int main(int argc, char *argv[]) {
   pthread_t ptid = 0;
   pthread_create(&ptid, NULL, &RosThread, NULL);
   const int retval = app.exec();
-  run_ = false;
+  run_.store(false);
   // Waiting for the created thread to terminate
   pthread_join(ptid, NULL);
   delete main_window_;
+  if (rclcpp::ok()) rclcpp::shutdown();
   return retval;
 }

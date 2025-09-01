@@ -5,17 +5,23 @@
 
 #include <atomic>
 #include <string>
+#include <memory>
 
-#include "ros/ros.h"
-#include "std_msgs/Float64.h"
+#include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/float64.hpp"
 #include "boost/optional.hpp"
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
-#include "nav_msgs/Odometry.h"
-#include "sensor_msgs/Joy.h"
-#include "std_msgs/Bool.h"
+#include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
+#include "nav_msgs/msg/odometry.hpp"
+#include "sensor_msgs/msg/joy.hpp"
+#include "std_msgs/msg/bool.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
+#include "ut_automata/msg/vesc_state_stamped.hpp"
+#include "ut_automata/msg/car_status_msg.hpp"
 
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
+#include "ut_automata/msg/vesc_state_stamped.hpp"
+#include "ut_automata/msg/car_status_msg.hpp"
 
 namespace vesc_driver
 {
@@ -24,24 +30,28 @@ class VescDriver
 {
 public:
 
-  VescDriver(ros::NodeHandle nh,
-             ros::NodeHandle private_nh);
+  VescDriver(rclcpp::Node::SharedPtr nh,
+             rclcpp::Node::SharedPtr private_nh);
 
 private:
   // interface to the VESC
   VescInterface vesc_;
   void vescPacketCallback(const boost::shared_ptr<VescPacket const>& packet);
-  void timerCallback(const ros::SteadyTimerEvent& event);
+  void timerCallback();
+
+  // node handles
+  rclcpp::Node::SharedPtr nh_;
+  rclcpp::Node::SharedPtr private_nh_;
 
   // ROS services
-  ros::Publisher state_pub_;
-  ros::Publisher odom_pub_;
-  ros::Publisher drive_pub_;
-  ros::Publisher car_status_pub_;
-  ros::Publisher autonomy_enabler_pub_;
-  ros::Subscriber ackermann_curvature_sub_;
-  ros::Subscriber joystick_sub_;
-  ros::SteadyTimer timer_;
+  rclcpp::Publisher<ut_automata::msg::VescStateStamped>::SharedPtr state_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr drive_pub_;
+  rclcpp::Publisher<ut_automata::msg::CarStatusMsg>::SharedPtr car_status_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr autonomy_enabler_pub_;
+  rclcpp::Subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>::SharedPtr ackermann_curvature_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joystick_sub_;
+  rclcpp::TimerBase::SharedPtr timer_;
 
   // driver modes (possible states)
   typedef enum {
@@ -84,7 +94,7 @@ private:
   float last_steering_angle_;
 
   // Create an odometry message
-  nav_msgs::Odometry odom_msg_;
+  nav_msgs::msg::Odometry odom_msg_;
 
   // Convert curvature commands to steering angle.
   float CalculateSteeringAngle(float lin_vel, float rot_vel);
@@ -97,8 +107,8 @@ private:
 
   // ROS callbacks
   void ackermannCurvatureCallback(
-      const amrl_msgs::AckermannCurvatureDriveMsg& cmd);
-  void joystickCallback(const sensor_msgs::Joy& msg);
+      const amrl_msgs::msg::AckermannCurvatureDriveMsg::SharedPtr cmd);
+  void joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg);
 
   void updateOdometry(float rpm, float steering_angle);
   
