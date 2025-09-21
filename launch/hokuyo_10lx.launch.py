@@ -14,7 +14,7 @@ def generate_launch_description():
 
     ld.add_action(Node(
         package='urg_node',
-        executable='urg_node',
+        executable='urg_node_driver',
         name='urg_node',
         output='screen',
         parameters=[{
