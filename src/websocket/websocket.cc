@@ -92,6 +92,17 @@ RobotWebSocket::~RobotWebSocket() {
   clients_.clear();
 }
 
+void RobotWebSocket::close() {
+  ws_server_->close();
+  if(clients_.size() > 0) {
+    for (auto c : clients_) {
+      c->close();
+      delete c;
+    }
+  }
+  clients_.clear();
+}
+
 
 void RobotWebSocket::onNewConnection() {
   QWebSocket *new_client = ws_server_->nextPendingConnection();
@@ -421,5 +432,11 @@ void RobotWebSocket::Send(const VisualizationMsg& local_vis,
   laser_scan_ = laser_scan;
   data_mutex_.unlock();
   SendDataSignal();
+}
+
+void RobotWebSocket::handleShutdownRequest() {
+  printf("Websocket shutdown requested, closing server...\n");
+  close();
+  emit closed();
 }
 

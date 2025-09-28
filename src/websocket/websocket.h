@@ -103,12 +103,14 @@ public:
             const amrl_msgs::msg::VisualizationMsg& global_vis,
             const sensor_msgs::msg::LaserScan& laser_scan,
             const amrl_msgs::msg::Localization2DMsg& localization);
+  void close();
 
 Q_SIGNALS:
   void closed();
   void SendDataSignal();
   void SetInitialPoseSignal(float x, float y, float theta, QString map);
   void SetNavGoalSignal(float x, float y, float theta, QString map);
+  void shutdownRequested();
 
 private Q_SLOTS:
   void onNewConnection();
@@ -116,6 +118,7 @@ private Q_SLOTS:
   void processBinaryMessage(QByteArray message);
   void socketDisconnected();
   void SendDataSlot();
+  void handleShutdownRequest();
 
 private:
   void ProcessCallback(const QJsonObject& json);

@@ -220,6 +220,24 @@ void *RosThread(void *arg) {
     loop.Sleep();
   }
 
+  // Clean shutdown when ROS2 signals shutdown
+  printf("ROS2 shutdown detected, exiting gracefully.\n");
+  
+  // Clean up ROS2 resources first
+  init_loc_pub_.reset();
+  nav_goal_pub_.reset();
+  amrl_init_loc_pub_.reset();
+  amrl_nav_goal_pub_.reset();
+  laser_sub.reset();
+  vis_sub.reset();
+  localization_sub.reset();
+  node.reset();
+  
+  // Signal the main thread to shutdown the websocket server
+  if (server_ != nullptr) {
+    QMetaObject::invokeMethod(server_, "handleShutdownRequest", Qt::QueuedConnection);
+  }
+
   pthread_exit(NULL);
   return nullptr;
 }
@@ -258,6 +276,7 @@ void InitMessage() {
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   google::ParseCommandLineFlags(&argc, &argv, false);
+  
   QCoreApplication a(argc, argv);
   server_ = new RobotWebSocket(10272);
   QObject::connect(
@@ -270,5 +289,13 @@ int main(int argc, char *argv[]) {
   run_ = false;
   // Waiting for the created thread to terminate
   pthread_join(ros_thread_id, NULL);
+  
+  // Clean up server
+  delete server_;
+  server_ = nullptr;
+  
+  // Shutdown ROS2
+  rclcpp::shutdown();
+  
   return retval;
 }
