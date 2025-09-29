@@ -35,6 +35,7 @@ CONFIG_FLOAT(max_accel_, "max_acceleration");
 CONFIG_FLOAT(max_decel_, "max_deceleration");
 CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
 CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
+CONFIG_STRING(joystick_mode_, "joystick_mode");
 CONFIG_STRING(serial_port_, "serial_port");
 
 DEFINE_string(config_dir, "/home/orin/roboracer_ws/src/ut_automata/config", 
@@ -71,7 +72,8 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     // Load config.
     config_reader::ConfigReader reader({
       FLAGS_config_dir + "/car.lua",
-      FLAGS_config_dir + "/vesc.lua"
+      FLAGS_config_dir + "/vesc.lua",
+      FLAGS_config_dir + "/joystick.lua"
     });
   }
   state_msg_.header.frame_id = "base_link";
@@ -227,16 +229,51 @@ void VescDriver::joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
     mux_steering_angle_ = 0;
   }
   if (drive_mode_ == kJoystickDrive) {
-    if (msg->axes.size() < 5) return;
-    const float steer_joystick = -msg->axes[0];
-    const float drive_joystick = -msg->axes[4];
+    // Check minimum axes requirement based on mode
+    size_t min_axes = 5; // Default for "both" mode (needs axes 0 and 4)
+    if (joystick_mode_ == "left") {
+      min_axes = 2;  // Needs axes 0 and 1
+    } else if (joystick_mode_ == "right") {
+      min_axes = 5;  // Needs axes 3 and 4
+    }
+    
+    if (msg->axes.size() < min_axes) {
+      if (kDebug) printf("Insufficient axes for joystick mode '%s': need %zu, have %zu\n", 
+                         joystick_mode_.c_str(), min_axes, msg->axes.size());
+      return;
+    }
+    
+    float steer_joystick = 0.0;
+    float drive_joystick = 0.0;
+    
+    // Parse joystick mode configuration
+    if (joystick_mode_ == "both") {
+      // Default mode: left stick for steering, right stick for drive
+      steer_joystick = -msg->axes[0];  // Left stick horizontal
+      drive_joystick = -msg->axes[4];  // Right stick vertical
+    } else if (joystick_mode_ == "left") {
+      // Left stick only: horizontal for steering, vertical for drive
+      steer_joystick = -msg->axes[0];  // Left stick horizontal
+      drive_joystick = -msg->axes[1];  // Left stick vertical
+    } else if (joystick_mode_ == "right") {
+      // Right stick only: horizontal for steering, vertical for drive
+      steer_joystick = -msg->axes[3];  // Right stick horizontal
+      drive_joystick = -msg->axes[4];  // Right stick vertical
+    } else {
+      // Default to both mode if invalid configuration
+      if (kDebug) printf("Invalid joystick_mode '%s', using default 'both'\n", joystick_mode_.c_str());
+      steer_joystick = -msg->axes[0];  // Left stick horizontal
+      drive_joystick = -msg->axes[4];  // Right stick vertical
+    }
+    
     const bool turbo_mode = (msg->axes[2] >= 0.9);
     const float max_speed = (turbo_mode ? turbo_speed_ : normal_speed_);
     float speed = drive_joystick * max_speed;
     float steering_angle = steer_joystick * kMaxTurnRate;
     mux_drive_speed_ = speed;
     mux_steering_angle_ = steering_angle;
-    if (kDebug) printf("%7.2f %.1f\u00b0\n", speed, math_util::RadToDeg(steering_angle));
+    if (kDebug) printf("Mode: %s, Speed: %7.2f, Steering: %.1f\u00b0\n", 
+                       joystick_mode_.c_str(), speed, math_util::RadToDeg(steering_angle));
   }
 
   if (drive_mode_ == kAutonomousDrive || 
