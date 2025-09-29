@@ -126,22 +126,21 @@ void CameraDisplay::UpdateImage(const QPixmap& pixmap) {
   
   // Get the current widget size for scaling
   QSize widget_size = size();
-  QSize image_size = pixmap.size();
-  
+
   // Scale the image to fit the widget while maintaining aspect ratio
   QPixmap scaled_pixmap = pixmap.scaled(widget_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
   
-  // Debug output (print occasionally to avoid spam)
-  static int update_count = 0;
-  update_count++;
-  if (update_count % 50 == 1) {  // Print every 50th update
-    printf("Camera image: original=%dx%d, widget=%dx%d, scaled=%dx%d\n",
-           image_size.width(), image_size.height(),
-           widget_size.width(), widget_size.height(), 
-           scaled_pixmap.width(), scaled_pixmap.height());
-  }
-  
   setPixmap(scaled_pixmap);
+}
+
+void CameraDisplay::resizeEvent(QResizeEvent* event) {
+  QLabel::resizeEvent(event);
+  
+  // If we have a current image, rescale it to the new size
+  if (!current_image_.isNull()) {
+    QPixmap scaled_pixmap = current_image_.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    setPixmap(scaled_pixmap);
+  }
 }
 
 StatusLed::StatusLed(QString name) : led_(nullptr) {

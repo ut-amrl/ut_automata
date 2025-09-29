@@ -30,6 +30,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QPixmap>
+#include <QResizeEvent>
 
 class QVBoxLayout;
 class QTabWidget;
@@ -50,6 +51,9 @@ class CameraDisplay : public QLabel {
  public:
   CameraDisplay(QWidget* parent = nullptr);
   void UpdateImage(const QPixmap& pixmap);
+
+ protected:
+  void resizeEvent(QResizeEvent* event) override;
 
  private:
   QPixmap current_image_;
