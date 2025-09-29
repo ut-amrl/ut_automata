@@ -28,8 +28,9 @@
 #include <QFrame>
 #include <QPainter>
 #include <QWidget>
+#include <QLabel>
+#include <QPixmap>
 
-class QLabel;
 class QVBoxLayout;
 class QTabWidget;
 
@@ -42,6 +43,17 @@ namespace ut_automata_gui {
 class TouchVectorDisplay;
 class AdminPassword;
 class HumanInteraction;
+
+class CameraDisplay : public QLabel {
+  Q_OBJECT
+
+ public:
+  CameraDisplay(QWidget* parent = nullptr);
+  void UpdateImage(const QPixmap& pixmap);
+
+ private:
+  QPixmap current_image_;
+};
 
 class Led : public QWidget {
   Q_OBJECT
@@ -108,13 +120,15 @@ class MainWindow : public QWidget {
 
 public:
   MainWindow(QWidget *parent = 0);
+  ~MainWindow();
   void UpdateStatus(int mode, 
                     float battery,
                     bool drive_okay,
                     bool lidar_okay,
-                    bool camera_okay,
+                    bool joystick_okay,
                     float throttle,
                     float steering);
+  void UpdateCamera(const QPixmap& image);
 
 public slots:
   void closeWindow();
@@ -127,9 +141,10 @@ public slots:
                         float battery,
                         bool drive_okay,
                         bool lidar_okay,
-                        bool camera_okay,
+                        bool joystick_okay,
                         float throttle,
                         float steering);
+  void UpdateCameraSlot(const QPixmap& image);
 
 signals:
   void UpdateQuestion(std::string question,
@@ -139,9 +154,10 @@ signals:
                           float battery,
                           bool drive_okay,
                           bool lidar_okay,
-                          bool camera_okay,
+                          bool joystick_okay,
                           float throttle,
                           float steering);
+  void UpdateCameraSignal(const QPixmap& image);
 
 private:
 
@@ -151,8 +167,8 @@ private:
   // Vector display.
   QTabWidget* tab_widget_;
 
-  // Robot name display.
-  QLabel* robot_label_;
+  // Camera image display.
+  CameraDisplay* camera_display_;
 
   // Main layout of the window.
   QVBoxLayout* main_layout_;

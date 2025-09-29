@@ -45,8 +45,12 @@
 #include <QWidget>
 #include <QGroupBox>
 #include <QTabWidget>
+#include <QPixmap>
 
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "cv_bridge/cv_bridge.h"
+#include <opencv2/opencv.hpp>
 
 #include "std_msgs/msg/string.hpp"
 
@@ -60,7 +64,7 @@ namespace {
 
 ut_automata_gui::StatusLed* ros_led_ = nullptr;
 ut_automata_gui::StatusLed* drive_led_ = nullptr;
-ut_automata_gui::StatusLed* camera_led_ = nullptr;
+ut_automata_gui::StatusLed* joystick_led_ = nullptr;
 ut_automata_gui::StatusLed* lidar_led_ = nullptr;
 ut_automata_gui::RealStatus* throttle_status_ = nullptr;
 ut_automata_gui::RealStatus* steering_status_ = nullptr;
@@ -100,6 +104,45 @@ vector<string> GetIPAddresses(bool ignore_lo) {
 }  // namespace
 
 namespace ut_automata_gui {
+
+CameraDisplay::CameraDisplay(QWidget* parent) : QLabel(parent) {
+  setMinimumSize(400, 300);
+  setScaledContents(false);  // We'll handle scaling manually for better control
+  setAlignment(Qt::AlignCenter);
+  setStyleSheet("border: 2px solid black; background-color: #f0f0f0;");
+  setText("Waiting for Camera Feed...");
+  setWordWrap(true);
+  
+  QFont font("Arial");
+  font.setPointSize(16);
+  setFont(font);
+  
+  // Allow the widget to expand
+  setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+}
+
+void CameraDisplay::UpdateImage(const QPixmap& pixmap) {
+  current_image_ = pixmap;
+  
+  // Get the current widget size for scaling
+  QSize widget_size = size();
+  QSize image_size = pixmap.size();
+  
+  // Scale the image to fit the widget while maintaining aspect ratio
+  QPixmap scaled_pixmap = pixmap.scaled(widget_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+  
+  // Debug output (print occasionally to avoid spam)
+  static int update_count = 0;
+  update_count++;
+  if (update_count % 50 == 1) {  // Print every 50th update
+    printf("Camera image: original=%dx%d, widget=%dx%d, scaled=%dx%d\n",
+           image_size.width(), image_size.height(),
+           widget_size.width(), widget_size.height(), 
+           scaled_pixmap.width(), scaled_pixmap.height());
+  }
+  
+  setPixmap(scaled_pixmap);
+}
 
 StatusLed::StatusLed(QString name) : led_(nullptr) {
   QFont font("Arial");
@@ -185,21 +228,18 @@ void RealStatus::paintEvent(QPaintEvent *event) {
 MainWindow::MainWindow(QWidget* parent) :
     ipaddr_label_(nullptr),
     tab_widget_(nullptr),
-    robot_label_(nullptr),
+    camera_display_(nullptr),
     main_layout_(nullptr),
     display_(nullptr),
     status_label_(nullptr) {
   this->setWindowTitle("UT AUTOmataGUI");
-  robot_label_ = new QLabel("UT AUTOmata");
-  QFont font("Arial");
-  font.setPointSize(50);
-  robot_label_->setFont(font);
-  robot_label_->setAlignment(Qt::AlignCenter);
-
+  camera_display_ = new CameraDisplay();
+  
   QPushButton* close_button = new QPushButton("Close");
   close_button->setFocusPolicy(Qt::NoFocus);
   close_button->setFixedHeight(60);
   QHBoxLayout* top_bar = new QHBoxLayout();
+  QFont font("Arial");
   font.setPointSize(20);
   ipaddr_label_ = new QLabel();
   ipaddr_label_->setWordWrap(true);
@@ -248,16 +288,16 @@ MainWindow::MainWindow(QWidget* parent) :
     ros_led_ = new StatusLed("ROS");
     drive_led_ = new StatusLed("Drive");
     lidar_led_ = new StatusLed("LIDAR");
-    camera_led_ = new StatusLed("Camera");
+    joystick_led_ = new StatusLed("Joystick");
     throttle_status_ = new RealStatus(false);
     steering_status_ = new RealStatus(true);
 
     QGridLayout* main_layout = new QGridLayout();
-    main_layout->addWidget(robot_label_, 0, 0, 4, 4);
+    main_layout->addWidget(camera_display_, 0, 0, 4, 4);
     main_layout->addWidget(ros_led_, 0, 5, 1, 1);
     main_layout->addWidget(drive_led_, 0, 6, 1, 1);
     main_layout->addWidget(lidar_led_, 1, 5, 1, 1);
-    main_layout->addWidget(camera_led_, 1, 6, 1, 1);
+    main_layout->addWidget(joystick_led_, 1, 6, 1, 1);
     main_layout->addWidget(throttle_status_, 0, 7, 3, 1);
     main_layout->addWidget(steering_status_, 3, 5, 1, 3);
     main_widget->setLayout(main_layout);
@@ -281,6 +321,15 @@ MainWindow::MainWindow(QWidget* parent) :
   connect(this,
           SIGNAL(UpdateStatusSignal(int, float, bool, bool, bool, float, float)),
           SLOT(UpdateStatusSlot(int, float, bool, bool, bool, float, float)));
+  
+  connect(this,
+          SIGNAL(UpdateCameraSignal(const QPixmap&)),
+          SLOT(UpdateCameraSlot(const QPixmap&)));
+}
+
+MainWindow::~MainWindow() {
+  // Clean shutdown - the main thread should have already signaled shutdown
+  // but we ensure the GUI elements are properly cleaned up
 }
 
 std::vector<std::string> Split(const std::string& s) {
@@ -320,7 +369,7 @@ void Exec(const string& cmd) {
 }
 
 void MainWindow::StartCar() {
-  Exec("roslaunch ut_automata start_car.launch start_gui:=false");
+  Exec("cd $HOME/roboracer_ws/tmux/teleop && tmuxinator");
 }
 
 void MainWindow::StartRos() {
@@ -339,7 +388,7 @@ void MainWindow::StopAll() {
 }
 
 void MainWindow::closeWindow() {
-  close();
+  QApplication::quit();
 }
 
 void MainWindow::UpdateIP() {
@@ -356,18 +405,22 @@ void MainWindow::UpdateStatus(int mode,
                               float battery,
                               bool drive_okay,
                               bool lidar_okay,
-                              bool camera_okay,
+                              bool joystick_okay,
                               float throttle,
                               float steering) {
   UpdateStatusSignal(
-      mode, battery, drive_okay, lidar_okay, camera_okay, throttle, steering);
+      mode, battery, drive_okay, lidar_okay, joystick_okay, throttle, steering);
+}
+
+void MainWindow::UpdateCamera(const QPixmap& image) {
+  UpdateCameraSignal(image);
 }
 
 void MainWindow::UpdateStatusSlot(int mode,
                                   float battery,
                                   bool vesc_okay,
                                   bool lidar_okay,
-                                  bool camera_okay,
+                                  bool joystick_okay,
                                   float throttle,
                                   float steering) {
   QString status("Status: ");
@@ -392,12 +445,16 @@ void MainWindow::UpdateStatusSlot(int mode,
   status_label_->setText(status);
   drive_led_->SetStatus(vesc_okay);
   lidar_led_->SetStatus(lidar_okay);
-  camera_led_->SetStatus(camera_okay);
+  joystick_led_->SetStatus(joystick_okay);
   throttle_status_->SetValue(throttle);
   steering_status_->SetValue(-steering);
   // drive_led_->update();
   // lidar_led_->update();
-  // camera_led_->update();
+  // joystick_led_->update();
+}
+
+void MainWindow::UpdateCameraSlot(const QPixmap& image) {
+  camera_display_->UpdateImage(image);
 }
 
 

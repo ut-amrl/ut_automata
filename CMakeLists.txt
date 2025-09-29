@@ -53,6 +53,8 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(amrl_msgs REQUIRED)
 find_package(amrl_maps REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(rosidl_default_runtime REQUIRED)
 
@@ -125,7 +127,7 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
         src/gui/gui_mainwindow.cc
         src/gui/vector_display.cc
         ${GUI_MOC_SRCS})
-  ament_target_dependencies(gui rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime)
+  ament_target_dependencies(gui rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs cv_bridge OpenCV rosidl_default_runtime)
   target_include_directories(gui PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
   TARGET_LINK_LIBRARIES(gui
@@ -133,6 +135,7 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
         Qt5::Gui
         Qt5::Widgets
         Qt5::OpenGL
+        ${OpenCV_LIBS}
   ${libs} ${OPENGL_LIBRARY} GL ${UT_AUTOMATA_TYPESUPPORT_LINK})
 
   add_executable(joystick
