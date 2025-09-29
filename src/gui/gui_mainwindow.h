@@ -175,7 +175,6 @@ public slots:
   void UpdateTmuxConfigurations();
   void StartTmuxConfiguration();
   void StopTmuxConfiguration();
-  void ShutdownCar();
 
 signals:
   void UpdateQuestion(std::string question,

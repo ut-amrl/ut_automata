@@ -393,14 +393,8 @@ MainWindow::MainWindow(QWidget* parent) :
     stop_config_button_->setEnabled(false);  // Initially disabled
     connect(stop_config_button_, SIGNAL(clicked()), this, SLOT(StopTmuxConfiguration()));
     
-    QPushButton* shutdown_button = new QPushButton("Shutdown Car");
-    shutdown_button->setFont(font);
-    shutdown_button->setSizePolicy(expanding_policy);
-    connect(shutdown_button, SIGNAL(clicked()), this, SLOT(ShutdownCar()));
-    
     right_layout->addWidget(stop_config_button_);
-    right_layout->addStretch();  // Gap in the middle
-    right_layout->addWidget(shutdown_button);
+    right_layout->addStretch();  // Fill remaining space
     right_widget->setLayout(right_layout);
     
     // Add left and right widgets to main layout
@@ -742,26 +736,5 @@ void MainWindow::StopTmuxConfiguration() {
     }
   }
 }
-
-void MainWindow::ShutdownCar() {
-  // Show confirmation dialog
-  QMessageBox::StandardButton reply = QMessageBox::question(
-    this,
-    "Confirm Shutdown",
-    "Are you sure you want to shutdown the car?\n\nThis will:\n- Stop all running configurations\n- Stop all ROS nodes\n- Power off the system",
-    QMessageBox::Yes | QMessageBox::No,
-    QMessageBox::No  // Default to No for safety
-  );
-  
-  if (reply == QMessageBox::Yes) {
-    // Stop all tmux sessions
-    StopTmuxConfiguration();
-    
-    // Shutdown the PC
-    Exec("sudo shutdown -h now");
-  }
-}
-
-
 
 }  // namespace ut_automata_gui
