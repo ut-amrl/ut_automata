@@ -37,7 +37,7 @@ CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
 CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
 CONFIG_STRING(serial_port_, "serial_port");
 
-DEFINE_string(config_dir, "config", 
+DEFINE_string(config_dir, "/home/orin/roboracer_ws/src/ut_automata/config", 
     "Directory containing the car.lua and vesc.lua config files.");
 
 using ut_automata::msg::CarStatusMsg;
