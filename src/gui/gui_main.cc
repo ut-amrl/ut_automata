@@ -107,14 +107,7 @@ void CameraCallback(const Image::SharedPtr msg) {
 // Joystick callback - marks joystick as okay when messages are received
 void JoystickCallback(const Joy::SharedPtr msg) {
   if (!run_.load() || !rclcpp::ok()) return;
-  // If we receive a joystick message, the joystick is connected and working
-  static int message_count = 0;
-  message_count++;
-  if (message_count % 50 == 0) {  // Print every 50th message to avoid spam
-    printf("Joystick message received (#%d): %zu axes, %zu buttons\n", 
-           message_count, msg->axes.size(), msg->buttons.size());
-  }
-  
+
   // Update the last joystick message timestamp
   last_joystick_time_.store(std::chrono::steady_clock::now());
   joystick_okay_.store(true);
