@@ -29,9 +29,13 @@
 #include <mutex>
 #include <errno.h>
 #include <time.h>
+#include <sys/file.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <QApplication>
 #include <QPushButton>
 #include <QMetaType>
+#include <QMessageBox>
 #include <memory>
 #include <atomic>
 
@@ -39,6 +43,7 @@
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/joy.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include "cv_bridge/cv_bridge.h"
 #include <opencv2/opencv.hpp>
 #include <QPixmap>
@@ -53,6 +58,7 @@ using ut_automata::msg::CarStatusMsg;
 using sensor_msgs::msg::LaserScan;
 using sensor_msgs::msg::Image;
 using sensor_msgs::msg::Joy;
+using sensor_msgs::msg::Imu;
 
 namespace {
 ut_automata_gui::MainWindow* main_window_ = nullptr;
@@ -60,12 +66,15 @@ std::atomic_bool run_{true};
 std::atomic_bool lidar_okay_{false};
 std::atomic_bool joystick_okay_{false};
 std::atomic_bool vesc_okay_{false};
+std::atomic_bool imu_okay_{false};
 std::atomic<float> battery_voltage_{0.0f};
 std::atomic_int drive_mode_{0};
 std::atomic<float> throttle_{0.0f};
 std::atomic<float> steering_{0.0f};
 // Track last joystick message time for timeout detection
 std::atomic<std::chrono::steady_clock::time_point> last_joystick_time_{std::chrono::steady_clock::time_point{}};
+// Track last IMU message time for timeout detection
+std::atomic<std::chrono::steady_clock::time_point> last_imu_time_{std::chrono::steady_clock::time_point{}};
 // ROS node and subscriptions for proper cleanup
 std::shared_ptr<rclcpp::Node> ros_node_ = nullptr;
 rclcpp::Subscription<CarStatusMsg>::SharedPtr status_sub_ = nullptr;
@@ -73,8 +82,52 @@ rclcpp::Subscription<LaserScan>::SharedPtr lidar_sub_ = nullptr;
 rclcpp::Subscription<AckermannCurvatureDriveMsg>::SharedPtr drive_sub_ = nullptr;
 rclcpp::Subscription<Image>::SharedPtr camera_sub_ = nullptr;
 rclcpp::Subscription<Joy>::SharedPtr joystick_sub_ = nullptr;
+rclcpp::Subscription<Imu>::SharedPtr imu_sub_ = nullptr;
 std::mutex cleanup_mutex_;
+int lock_fd_ = -1;  // File descriptor for the lock file
 }  // namespace
+
+// Function to check if another instance is already running
+bool IsAnotherInstanceRunning() {
+  const char* lock_file_path = "/tmp/ut_automata_gui.lock";
+  
+  lock_fd_ = open(lock_file_path, O_CREAT | O_RDWR, 0666);
+  if (lock_fd_ == -1) {
+    printf("Error: Could not create lock file\n");
+    return false;  // Assume no other instance if we can't create lock file
+  }
+  
+  // Try to acquire an exclusive lock (non-blocking)
+  if (flock(lock_fd_, LOCK_EX | LOCK_NB) == -1) {
+    if (errno == EWOULDBLOCK) {
+      //printf("Another instance of the GUI is already running\n");
+      close(lock_fd_);
+      lock_fd_ = -1;
+      return true;
+    } else {
+      printf("Error acquiring lock: %s\n", strerror(errno));
+      close(lock_fd_);
+      lock_fd_ = -1;
+      return false;  // Assume no other instance on error
+    }
+  }
+  
+  // Write PID to lock file
+  char pid_str[32];
+  snprintf(pid_str, sizeof(pid_str), "%d\n", getpid());
+  write(lock_fd_, pid_str, strlen(pid_str));
+  
+  return false;  // No other instance running
+}
+
+// Function to release the instance lock
+void ReleaseInstanceLock() {
+  if (lock_fd_ != -1) {
+    close(lock_fd_);  // This automatically releases the flock
+    unlink("/tmp/ut_automata_gui.lock");  // Remove the lock file
+    lock_fd_ = -1;
+  }
+}
 
 void StatusCallback(const CarStatusMsg::SharedPtr msg) {
   std::lock_guard<std::mutex> lock(cleanup_mutex_);
@@ -127,6 +180,16 @@ void JoystickCallback(const Joy::SharedPtr msg) {
   joystick_okay_.store(true);
 }
 
+// IMU callback - marks IMU as okay when messages are received
+void ImuCallback(const Imu::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
+  if (!run_.load() || !rclcpp::ok()) return;
+
+  // Update the last IMU message timestamp
+  last_imu_time_.store(std::chrono::steady_clock::now());
+  imu_okay_.store(true);
+}
+
 void* RosThread(void* arg) {
   // Don't detach - we need to properly join the thread
   // pthread_detach(pthread_self());
@@ -144,6 +207,8 @@ void* RosThread(void* arg) {
       "/camera_0/image_raw", 10u, &CameraCallback);
   joystick_sub_ = ros_node_->create_subscription<Joy>(
       "joystick", 10u, &JoystickCallback);
+  imu_sub_ = ros_node_->create_subscription<Imu>(
+      "/imu", 10u, &ImuCallback);
 
   RateLoop loop(5.0);
   while (rclcpp::ok() && run_.load()) {
@@ -168,6 +233,19 @@ void* RosThread(void* arg) {
       // If we received a message within the timeout, joystick_okay_ is already set to true in the callback
     }
     
+    // Check IMU timeout - fail if no message received in the last 1 second
+    auto last_imu = last_imu_time_.load();
+    if (last_imu.time_since_epoch().count() == 0) {
+      // No IMU message ever received
+      imu_okay_.store(false);
+    } else {
+      auto time_since_last_imu = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_imu).count();
+      if (time_since_last_imu > 1000) {  // 1 second timeout
+        imu_okay_.store(false);
+      }
+      // If we received a message within the timeout, imu_okay_ is already set to true in the callback
+    }
+    
     try {
       rclcpp::spin_some(ros_node_);
     } catch (const std::exception& e) {
@@ -182,6 +260,7 @@ void* RosThread(void* arg) {
                                  vesc_okay_.load(),
                                  lidar_okay_.load(),
                                  joystick_okay_.load(),
+                                 imu_okay_.load(),
                                  throttle_.load(),
                                  steering_.load());
     }
@@ -219,6 +298,10 @@ void* RosThread(void* arg) {
           joystick_sub_.reset();
           printf("Joystick subscription cleaned up\n");
         }
+        if (imu_sub_) {
+          imu_sub_.reset();
+          printf("IMU subscription cleaned up\n");
+        }
       } catch (const std::exception& e) {
         printf("Exception during subscription cleanup: %s\n", e.what());
       }
@@ -243,6 +326,7 @@ void* RosThread(void* arg) {
       drive_sub_.reset();
       camera_sub_.reset();
       joystick_sub_.reset();
+      imu_sub_.reset();
       ros_node_.reset();
     }
   }
@@ -257,6 +341,9 @@ void SignalHandler(int num) {
   printf("\nReceived signal %d, shutting down gracefully...\n", num);
   run_.store(false);
   
+  // Release the instance lock
+  ReleaseInstanceLock();
+  
   // Give the ROS thread time to process the shutdown signal
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
   
@@ -269,6 +356,18 @@ void SignalHandler(int num) {
 }
 
 int main(int argc, char *argv[]) {
+  // Check if another instance is already running
+  if (IsAnotherInstanceRunning()) {
+    //// Create a minimal QApplication to show the message box
+    //QApplication app(argc, argv);
+    //QMessageBox::warning(nullptr, 
+    //                    "UT Automata GUI", 
+    //                    "Another instance of the GUI is already running.\n"
+    //                    "Only one instance is allowed at a time.",
+    //                    QMessageBox::Ok);
+    return 1;
+  }
+  
   rclcpp::init(argc, argv);
   signal(SIGINT, &SignalHandler);
   qRegisterMetaType<std::vector<std::string> >("std::vector<std::string>");
@@ -325,6 +424,9 @@ int main(int argc, char *argv[]) {
   } else {
     printf("rclcpp already shut down.\n");
   }
+  
+  // Release the instance lock before exiting
+  ReleaseInstanceLock();
   
   return retval;
 }

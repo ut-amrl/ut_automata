@@ -105,6 +105,23 @@ class StatusLed : public QFrame {
   Led* led_;
 };
 
+class DiskSpaceBar : public QWidget {
+  Q_OBJECT
+
+ public:
+  explicit DiskSpaceBar(QWidget* parent = nullptr);
+  void UpdateDiskSpace(float used_gb, float total_gb);
+
+ protected:
+  void paintEvent(QPaintEvent* event) override;
+
+ private:
+  float used_gb_;
+  float total_gb_;
+  QLabel* used_label_;
+  QLabel* available_label_;
+};
+
 class RealStatus : public QFrame {
   Q_OBJECT
 
@@ -135,6 +152,7 @@ public:
                     bool drive_okay,
                     bool lidar_okay,
                     bool joystick_okay,
+                    bool imu_okay,
                     float throttle,
                     float steering);
   void UpdateCamera(const QPixmap& image);
@@ -151,6 +169,7 @@ public slots:
                         bool drive_okay,
                         bool lidar_okay,
                         bool joystick_okay,
+                        bool imu_okay,
                         float throttle,
                         float steering);
   void UpdateCameraSlot(const QPixmap& image);
@@ -168,6 +187,7 @@ signals:
                           bool drive_okay,
                           bool lidar_okay,
                           bool joystick_okay,
+                          bool imu_okay,
                           float throttle,
                           float steering);
   void UpdateCameraSignal(const QPixmap& image);
@@ -194,6 +214,9 @@ private:
 
   // Robot status display.
   QLabel* status_label_;
+  
+  // Disk space indicator
+  DiskSpaceBar* disk_space_bar_;
   
   // Tmux configuration widgets
   std::vector<QPushButton*> tmux_config_buttons_;

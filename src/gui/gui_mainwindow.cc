@@ -27,6 +27,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/statvfs.h>
 
 #include "gui_mainwindow.h"
 
@@ -72,7 +73,7 @@ using vector_display::VectorDisplay;
 
 namespace {
 
-ut_automata_gui::StatusLed* ros_led_ = nullptr;
+ut_automata_gui::StatusLed* imu_led_ = nullptr;
 ut_automata_gui::StatusLed* drive_led_ = nullptr;
 ut_automata_gui::StatusLed* joystick_led_ = nullptr;
 ut_automata_gui::StatusLed* lidar_led_ = nullptr;
@@ -170,6 +171,79 @@ void StatusLed::SetStatus(bool value) {
   led_->SetStatus(value);
 }
 
+DiskSpaceBar::DiskSpaceBar(QWidget* parent) 
+    : QWidget(parent), used_gb_(0.0f), total_gb_(0.0f) {
+  setFixedHeight(24); // 12pt font tall, with some padding
+  
+  QHBoxLayout* layout = new QHBoxLayout(this);
+  layout->setContentsMargins(5, 2, 5, 2);
+  
+  used_label_ = new QLabel("0 GB");
+  available_label_ = new QLabel("0 GB");
+  
+  QFont font("Arial", 8); // Small font for compact display
+  used_label_->setFont(font);
+  available_label_->setFont(font);
+  
+  layout->addWidget(used_label_);
+  layout->addStretch();
+  layout->addWidget(available_label_);
+  
+  setLayout(layout);
+  
+  // Get initial disk space
+  struct statvfs stat;
+  if (statvfs("/home", &stat) == 0) {
+    total_gb_ = (stat.f_blocks * stat.f_frsize) / (1024.0 * 1024.0 * 1024.0);
+    used_gb_ = ((stat.f_blocks - stat.f_bavail) * stat.f_frsize) / (1024.0 * 1024.0 * 1024.0);
+    float available_gb = (stat.f_bavail * stat.f_frsize) / (1024.0 * 1024.0 * 1024.0);
+    
+    used_label_->setText(QString::number(used_gb_, 'f', 1) + " GB");
+    available_label_->setText(QString::number(available_gb, 'f', 1) + " GB");
+  }
+}
+
+void DiskSpaceBar::UpdateDiskSpace(float used_gb, float total_gb) {
+  used_gb_ = used_gb;
+  total_gb_ = total_gb;
+  float available_gb = total_gb_ - used_gb_;
+  
+  used_label_->setText(QString::number(used_gb_, 'f', 1) + " GB");
+  available_label_->setText(QString::number(available_gb, 'f', 1) + " GB");
+  
+  update(); // Trigger repaint
+}
+
+void DiskSpaceBar::paintEvent(QPaintEvent* event) {
+  QPainter painter(this);
+  
+  // Draw background
+  painter.fillRect(rect(), QColor(240, 240, 240));
+  
+  // Draw border
+  painter.setPen(QPen(Qt::black, 1));
+  painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  
+  if (total_gb_ > 0) {
+    float usage_ratio = used_gb_ / total_gb_;
+    int bar_width = width() - 2; // Account for border
+    int used_width = static_cast<int>(bar_width * usage_ratio);
+    
+    // Choose color based on usage
+    QColor bar_color;
+    if (usage_ratio < 0.8) {
+      bar_color = QColor(0, 200, 0); // Green
+    } else if (usage_ratio < 0.9) {
+      bar_color = QColor(255, 165, 0); // Orange
+    } else {
+      bar_color = QColor(255, 0, 0); // Red
+    }
+    
+    // Draw usage bar
+    painter.fillRect(1, 1, used_width, height() - 2, bar_color);
+  }
+}
+
 RealStatus::RealStatus(bool horizontal) : horizontal_(horizontal), value_(0) {
   if (horizontal) {
     setFixedHeight(48);
@@ -241,6 +315,7 @@ MainWindow::MainWindow(QWidget* parent) :
     main_layout_(nullptr),
     display_(nullptr),
     status_label_(nullptr),
+    disk_space_bar_(nullptr),
     stop_config_button_(nullptr) {
   this->setWindowTitle("UT AUTOmataGUI");
   camera_display_ = new CameraDisplay();
@@ -331,7 +406,7 @@ MainWindow::MainWindow(QWidget* parent) :
     
     // Grid layout
     QWidget* main_widget = new QWidget();
-    ros_led_ = new StatusLed("ROS");
+    imu_led_ = new StatusLed("IMU");
     drive_led_ = new StatusLed("Drive");
     lidar_led_ = new StatusLed("LIDAR");
     joystick_led_ = new StatusLed("Joystick");
@@ -340,7 +415,7 @@ MainWindow::MainWindow(QWidget* parent) :
 
     QGridLayout* main_layout = new QGridLayout();
     main_layout->addWidget(camera_display_, 0, 0, 4, 4);
-    main_layout->addWidget(ros_led_, 0, 5, 1, 1);
+    main_layout->addWidget(imu_led_, 0, 5, 1, 1);
     main_layout->addWidget(drive_led_, 0, 6, 1, 1);
     main_layout->addWidget(lidar_led_, 1, 5, 1, 1);
     main_layout->addWidget(joystick_led_, 1, 6, 1, 1);
@@ -356,6 +431,10 @@ MainWindow::MainWindow(QWidget* parent) :
   setLayout(main_layout_);
   main_layout_->addLayout(top_bar, Qt::AlignTop);
   main_layout_->addWidget(tab_widget_);
+  
+  // Add disk space indicator at the bottom
+  disk_space_bar_ = new DiskSpaceBar();
+  main_layout_->addWidget(disk_space_bar_);
 
   connect(close_button, SIGNAL(clicked()), this, SLOT(closeWindow()));
 
@@ -365,8 +444,8 @@ MainWindow::MainWindow(QWidget* parent) :
   UpdateIP();
 
   connect(this,
-          SIGNAL(UpdateStatusSignal(int, float, bool, bool, bool, float, float)),
-          SLOT(UpdateStatusSlot(int, float, bool, bool, bool, float, float)));
+          SIGNAL(UpdateStatusSignal(int, float, bool, bool, bool, bool, float, float)),
+          SLOT(UpdateStatusSlot(int, float, bool, bool, bool, bool, float, float)));
   
   connect(this,
           SIGNAL(UpdateCameraSignal(const QPixmap&)),
@@ -436,7 +515,15 @@ void MainWindow::UpdateIP() {
     s = s + ip + "\n";
   }
   ipaddr_label_->setText(QString::fromUtf8(s.c_str()));
-  ros_led_->SetStatus(rclcpp::ok());
+  
+  // Update disk space
+  struct statvfs stat;
+  if (statvfs("/home", &stat) == 0) {
+    float total_gb = (stat.f_blocks * stat.f_frsize) / (1024.0 * 1024.0 * 1024.0);
+    float used_gb = ((stat.f_blocks - stat.f_bavail) * stat.f_frsize) / (1024.0 * 1024.0 * 1024.0);
+    disk_space_bar_->UpdateDiskSpace(used_gb, total_gb);
+  }
+  
   UpdateTmuxConfigurations();
 }
 
@@ -445,10 +532,11 @@ void MainWindow::UpdateStatus(int mode,
                               bool drive_okay,
                               bool lidar_okay,
                               bool joystick_okay,
+                              bool imu_okay,
                               float throttle,
                               float steering) {
   UpdateStatusSignal(
-      mode, battery, drive_okay, lidar_okay, joystick_okay, throttle, steering);
+      mode, battery, drive_okay, lidar_okay, joystick_okay, imu_okay, throttle, steering);
 }
 
 void MainWindow::UpdateCamera(const QPixmap& image) {
@@ -460,6 +548,7 @@ void MainWindow::UpdateStatusSlot(int mode,
                                   bool vesc_okay,
                                   bool lidar_okay,
                                   bool joystick_okay,
+                                  bool imu_okay,
                                   float throttle,
                                   float steering) {
   QString status("Status: ");
@@ -485,6 +574,7 @@ void MainWindow::UpdateStatusSlot(int mode,
   drive_led_->SetStatus(vesc_okay);
   lidar_led_->SetStatus(lidar_okay);
   joystick_led_->SetStatus(joystick_okay);
+  imu_led_->SetStatus(imu_okay);
   throttle_status_->SetValue(throttle);
   steering_status_->SetValue(-steering);
   // drive_led_->update();
