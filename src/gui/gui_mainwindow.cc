@@ -32,6 +32,7 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include <QApplication>
 #include <QDesktopWidget>
@@ -46,6 +47,15 @@
 #include <QGroupBox>
 #include <QTabWidget>
 #include <QPixmap>
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QSizePolicy>
+#include <QProcess>
+#include <QDir>
+#include <QTextStream>
+#include <QFile>
+#include <QTemporaryFile>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
@@ -230,7 +240,8 @@ MainWindow::MainWindow(QWidget* parent) :
     camera_display_(nullptr),
     main_layout_(nullptr),
     display_(nullptr),
-    status_label_(nullptr) {
+    status_label_(nullptr),
+    stop_config_button_(nullptr) {
   this->setWindowTitle("UT AUTOmataGUI");
   camera_display_ = new CameraDisplay();
   
@@ -259,28 +270,64 @@ MainWindow::MainWindow(QWidget* parent) :
     QSizePolicy expanding_policy;
     expanding_policy.setVerticalPolicy(QSizePolicy::Expanding);
     expanding_policy.setHorizontalPolicy(QSizePolicy::Expanding);
-    QPushButton* start_ros = new QPushButton("Start roscore");
-    QPushButton* start_camera = new QPushButton("Start Camera");
-    QPushButton* start_car = new QPushButton("Start Car");
-    QPushButton* stop_all = new QPushButton("Stop all nodes");
-    start_ros->setFont(font);
-    start_camera->setFont(font);
-    start_car->setFont(font);
-    stop_all->setFont(font);
-    start_ros->setSizePolicy(expanding_policy);
-    start_camera->setSizePolicy(expanding_policy);
-    start_car->setSizePolicy(expanding_policy);
-    stop_all->setSizePolicy(expanding_policy);
-    connect(start_car, SIGNAL(clicked()), this, SLOT(StartCar()));
-    connect(start_ros, SIGNAL(clicked()), this, SLOT(StartRos()));
-    connect(start_camera, SIGNAL(clicked()), this, SLOT(StartCamera()));
-    connect(stop_all, SIGNAL(clicked()), this, SLOT(StopAll()));
-    QVBoxLayout* vbox = new QVBoxLayout();
-    vbox->addWidget(start_ros);
-    vbox->addWidget(start_camera);
-    vbox->addWidget(start_car);
-    vbox->addWidget(stop_all);
-    ros_group->setLayout(vbox);
+    
+    // Create main horizontal layout
+    QHBoxLayout* main_config_layout = new QHBoxLayout();
+    
+    // Left side - Tmux configurations
+    QWidget* left_widget = new QWidget();
+    QVBoxLayout* left_layout = new QVBoxLayout();
+    QLabel* config_label = new QLabel("Available Configurations:");
+    config_label->setFont(font);
+    left_layout->addWidget(config_label);
+    
+    // Get tmux configuration names (excluding "sim")
+    tmux_config_names_.clear();
+    tmux_config_buttons_.clear();
+    QDir tmux_dir("/home/orin/roboracer_ws/tmux");
+    QStringList subdirs = tmux_dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    
+    for (const QString& subdir : subdirs) {
+      if (subdir != "sim") {
+        tmux_config_names_.push_back(subdir.toStdString());
+        QPushButton* config_button = new QPushButton(subdir);
+        config_button->setFont(font);
+        config_button->setSizePolicy(expanding_policy);
+        config_button->setCheckable(true);
+        connect(config_button, SIGNAL(clicked()), this, SLOT(StartTmuxConfiguration()));
+        tmux_config_buttons_.push_back(config_button);
+        left_layout->addWidget(config_button);
+      }
+    }
+    
+    left_layout->addStretch();
+    left_widget->setLayout(left_layout);
+    
+    // Right side - Control buttons
+    QWidget* right_widget = new QWidget();
+    QVBoxLayout* right_layout = new QVBoxLayout();
+    
+    stop_config_button_ = new QPushButton("Stop Configuration");
+    stop_config_button_->setFont(font);
+    stop_config_button_->setSizePolicy(expanding_policy);
+    stop_config_button_->setEnabled(false);  // Initially disabled
+    connect(stop_config_button_, SIGNAL(clicked()), this, SLOT(StopTmuxConfiguration()));
+    
+    QPushButton* shutdown_button = new QPushButton("Shutdown Car");
+    shutdown_button->setFont(font);
+    shutdown_button->setSizePolicy(expanding_policy);
+    connect(shutdown_button, SIGNAL(clicked()), this, SLOT(ShutdownCar()));
+    
+    right_layout->addWidget(stop_config_button_);
+    right_layout->addStretch();  // Gap in the middle
+    right_layout->addWidget(shutdown_button);
+    right_widget->setLayout(right_layout);
+    
+    // Add left and right widgets to main layout
+    main_config_layout->addWidget(left_widget, 2);  // Give more space to left side
+    main_config_layout->addWidget(right_widget, 1);
+    
+    ros_group->setLayout(main_config_layout);
     
     // Grid layout
     QWidget* main_widget = new QWidget();
@@ -302,7 +349,7 @@ MainWindow::MainWindow(QWidget* parent) :
     main_widget->setLayout(main_layout);
 
     tab_widget_->addTab(main_widget, "Main");
-    tab_widget_->addTab(ros_group, tr("Startup / Shutdown"));
+    tab_widget_->addTab(ros_group, tr("Configurations"));
   }
 
   main_layout_ = new QVBoxLayout(this);
@@ -347,19 +394,11 @@ std::vector<std::string> Split(const std::string& s) {
 }
 
 void Exec(const string& cmd) {
-  auto params = Split(cmd);
-  if (params.empty()) return;
-  vector<const char*> param_ptrs;
-  for (string& s : params) {
-    param_ptrs.push_back(s.c_str());
-    printf("'%s',", s.c_str());
-  }
-  param_ptrs.push_back(NULL);
-  printf("\n");
+  if (cmd.empty()) return;
+  printf("Executing: %s\n", cmd.c_str());
   const int pid = fork();
   if (pid == 0) {
-    if (execv(param_ptrs[0], 
-              const_cast<char* const*>( param_ptrs.data())) == -1) {
+    if (execl("/bin/bash", "bash", "-c", cmd.c_str(), NULL) == -1) {
       perror("Error executing command");
       exit(1);
     }
@@ -398,6 +437,7 @@ void MainWindow::UpdateIP() {
   }
   ipaddr_label_->setText(QString::fromUtf8(s.c_str()));
   ros_led_->SetStatus(rclcpp::ok());
+  UpdateTmuxConfigurations();
 }
 
 void MainWindow::UpdateStatus(int mode, 
@@ -454,6 +494,156 @@ void MainWindow::UpdateStatusSlot(int mode,
 
 void MainWindow::UpdateCameraSlot(const QPixmap& image) {
   camera_display_->UpdateImage(image);
+}
+
+void MainWindow::UpdateTmuxConfigurations() {
+  // Get list of running tmux sessions
+  QProcess process;
+  process.start("tmux", QStringList() << "ls");
+  process.waitForFinished(1000);
+  
+  std::vector<std::string> running_sessions;
+  bool any_session_running = false;
+  
+  if (process.exitCode() == 0) {
+    QString output = process.readAllStandardOutput();
+    QStringList sessions = output.split('\n', Qt::SkipEmptyParts);
+    
+    for (const QString& session : sessions) {
+      // Session name is everything before the first colon
+      QString session_name = session.split(':').first();
+      running_sessions.push_back(session_name.toStdString());
+      any_session_running = true;
+    }
+  }
+  
+  // Update button states
+  for (size_t i = 0; i < tmux_config_buttons_.size(); ++i) {
+    bool is_running = std::find(running_sessions.begin(), running_sessions.end(), 
+                               tmux_config_names_[i]) != running_sessions.end();
+    tmux_config_buttons_[i]->setChecked(is_running);
+    
+    // Change button text to indicate running state
+    QString button_text = QString::fromStdString(tmux_config_names_[i]);
+    if (is_running) {
+      button_text += " (Running)";
+    }
+    tmux_config_buttons_[i]->setText(button_text);
+  }
+  
+  // Enable/disable stop button based on whether any session is running
+  stop_config_button_->setEnabled(any_session_running);
+}
+
+bool MainWindow::IsGuiNodeRunning() {
+  QProcess process;
+  process.start("ros2", QStringList() << "node" << "list");
+  process.waitForFinished(3000);
+  
+  if (process.exitCode() == 0) {
+    QString output = process.readAllStandardOutput();
+    return output.contains("/ut_automata_gui");
+  }
+  return false;
+}
+
+std::string MainWindow::CreateTmuxConfigWithoutGui(const std::string& config_name) {
+  QString original_path = QString("/home/orin/roboracer_ws/tmux/%1/.tmuxinator.yaml").arg(QString::fromStdString(config_name));
+  
+  QFile original_file(original_path);
+  if (!original_file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return ""; // Return empty string on error
+  }
+  
+  QTextStream in(&original_file);
+  QString content = in.readAll();
+  original_file.close();
+  
+  // Remove lines containing "ros2 run ut_automata gui"
+  QStringList lines = content.split('\n');
+  QStringList filtered_lines;
+  
+  for (const QString& line : lines) {
+    if (!line.contains("ros2 run ut_automata gui")) {
+      filtered_lines.append(line);
+    }
+  }
+  
+  // Create temporary file
+  QTemporaryFile* temp_file = new QTemporaryFile();
+  temp_file->setFileTemplate(QString("/tmp/tmux_%1_nogui_XXXXXX.yaml").arg(QString::fromStdString(config_name)));
+  temp_file->setAutoRemove(false); // We'll clean it up manually later
+  
+  if (!temp_file->open()) {
+    delete temp_file;
+    return "";
+  }
+  
+  QTextStream out(temp_file);
+  out << filtered_lines.join('\n');
+  temp_file->close();
+  
+  std::string temp_path = temp_file->fileName().toStdString();
+  delete temp_file;
+  return temp_path;
+}
+
+void MainWindow::StartTmuxConfiguration() {
+  QPushButton* button = qobject_cast<QPushButton*>(sender());
+  if (!button) return;
+  
+  // Find which configuration was clicked
+  for (size_t i = 0; i < tmux_config_buttons_.size(); ++i) {
+    if (tmux_config_buttons_[i] == button) {
+      std::string config_name = tmux_config_names_[i];
+      
+      // Check if GUI node is already running
+      bool gui_running = IsGuiNodeRunning();
+      
+      if (gui_running) {
+        // Create a temporary config without GUI
+        std::string temp_config_path = CreateTmuxConfigWithoutGui(config_name);
+        if (!temp_config_path.empty()) {
+          std::string command = "tmuxinator start -p " + temp_config_path + 
+                               " --name " + config_name + 
+                               " && rm " + temp_config_path; // Clean up temp file
+          Exec(command);
+        } else {
+          printf("Error: Could not create temporary config without GUI\n");
+        }
+      } else {
+        // Use original config
+        std::string command = "cd /home/orin/roboracer_ws/tmux/" + config_name + " && tmuxinator start";
+        Exec(command);
+      }
+      break;
+    }
+  }
+}
+
+void MainWindow::StopTmuxConfiguration() {
+  // Get list of running tmux sessions and kill each one individually
+  QProcess process;
+  process.start("tmux", QStringList() << "ls");
+  process.waitForFinished(1000);
+  
+  if (process.exitCode() == 0) {
+    QString output = process.readAllStandardOutput();
+    QStringList sessions = output.split('\n', Qt::SkipEmptyParts);
+    
+    for (const QString& session : sessions) {
+      // Session name is everything before the first colon
+      QString session_name = session.split(':').first();
+      std::string kill_command = "tmux kill-session -t " + session_name.toStdString();
+      Exec(kill_command);
+    }
+  }
+}
+
+void MainWindow::ShutdownCar() {
+  // Stop all tmux sessions and shutdown ROS nodes
+  StopTmuxConfiguration();
+  StopAll();
 }
 
 

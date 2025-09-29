@@ -31,9 +31,14 @@
 #include <QLabel>
 #include <QPixmap>
 #include <QResizeEvent>
+#include <QPushButton>
 
 class QVBoxLayout;
 class QTabWidget;
+class QHBoxLayout;
+class QGridLayout;
+class QProcess;
+class QDir;
 
 namespace vector_display {
 class VectorDisplay;
@@ -149,6 +154,10 @@ public slots:
                         float throttle,
                         float steering);
   void UpdateCameraSlot(const QPixmap& image);
+  void UpdateTmuxConfigurations();
+  void StartTmuxConfiguration();
+  void StopTmuxConfiguration();
+  void ShutdownCar();
 
 signals:
   void UpdateQuestion(std::string question,
@@ -185,6 +194,15 @@ private:
 
   // Robot status display.
   QLabel* status_label_;
+  
+  // Tmux configuration widgets
+  std::vector<QPushButton*> tmux_config_buttons_;
+  QPushButton* stop_config_button_;
+  std::vector<std::string> tmux_config_names_;
+  
+  // Helper functions for GUI-aware tmux configuration
+  bool IsGuiNodeRunning();
+  std::string CreateTmuxConfigWithoutGui(const std::string& config_name);
 };
 
 
