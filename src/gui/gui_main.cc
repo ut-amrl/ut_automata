@@ -26,6 +26,9 @@
 #include <signal.h>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <errno.h>
+#include <time.h>
 #include <QApplication>
 #include <QPushButton>
 #include <QMetaType>
@@ -63,11 +66,18 @@ std::atomic<float> throttle_{0.0f};
 std::atomic<float> steering_{0.0f};
 // Track last joystick message time for timeout detection
 std::atomic<std::chrono::steady_clock::time_point> last_joystick_time_{std::chrono::steady_clock::time_point{}};
-// ROS node shared pointer for proper cleanup
+// ROS node and subscriptions for proper cleanup
 std::shared_ptr<rclcpp::Node> ros_node_ = nullptr;
+rclcpp::Subscription<CarStatusMsg>::SharedPtr status_sub_ = nullptr;
+rclcpp::Subscription<LaserScan>::SharedPtr lidar_sub_ = nullptr;
+rclcpp::Subscription<AckermannCurvatureDriveMsg>::SharedPtr drive_sub_ = nullptr;
+rclcpp::Subscription<Image>::SharedPtr camera_sub_ = nullptr;
+rclcpp::Subscription<Joy>::SharedPtr joystick_sub_ = nullptr;
+std::mutex cleanup_mutex_;
 }  // namespace
 
 void StatusCallback(const CarStatusMsg::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
   if (!run_.load() || main_window_ == nullptr || !rclcpp::ok()) return;
   drive_mode_.store(msg->status);
   battery_voltage_.store(msg->battery_voltage);
@@ -75,17 +85,20 @@ void StatusCallback(const CarStatusMsg::SharedPtr msg) {
 }
 
 void LidarCallback(const LaserScan::SharedPtr /*msg*/) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
   if (!run_.load() || !rclcpp::ok()) return;
   lidar_okay_.store(true);
 }
 
 void DriveCallback(const AckermannCurvatureDriveMsg::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
   if (!run_.load() || !rclcpp::ok()) return;
   throttle_.store(msg->velocity);
   steering_.store(msg->curvature);
 }
 
 void CameraCallback(const Image::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
   if (!run_.load() || main_window_ == nullptr || !rclcpp::ok()) return;
   
   try {
@@ -106,6 +119,7 @@ void CameraCallback(const Image::SharedPtr msg) {
 
 // Joystick callback - marks joystick as okay when messages are received
 void JoystickCallback(const Joy::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
   if (!run_.load() || !rclcpp::ok()) return;
 
   // Update the last joystick message timestamp
@@ -118,15 +132,17 @@ void* RosThread(void* arg) {
   // pthread_detach(pthread_self());
 
   ros_node_ = rclcpp::Node::make_shared("ut_automata_gui");
-  auto status_sub = ros_node_->create_subscription<CarStatusMsg>(
+  
+  // Store subscriptions as shared pointers for proper cleanup
+  status_sub_ = ros_node_->create_subscription<CarStatusMsg>(
       "car_status", 10u, &StatusCallback);
-  auto lidar_sub = ros_node_->create_subscription<LaserScan>(
+  lidar_sub_ = ros_node_->create_subscription<LaserScan>(
       "scan", 10u, &LidarCallback);
-  auto drive_sub = ros_node_->create_subscription<AckermannCurvatureDriveMsg>(
+  drive_sub_ = ros_node_->create_subscription<AckermannCurvatureDriveMsg>(
       "ackermann_curvature_drive", 10u, &DriveCallback);
-  auto camera_sub = ros_node_->create_subscription<Image>(
+  camera_sub_ = ros_node_->create_subscription<Image>(
       "/camera_0/image_raw", 10u, &CameraCallback);
-  auto joystick_sub = ros_node_->create_subscription<Joy>(
+  joystick_sub_ = ros_node_->create_subscription<Joy>(
       "joystick", 10u, &JoystickCallback);
 
   RateLoop loop(5.0);
@@ -174,12 +190,63 @@ void* RosThread(void* arg) {
 
   // Clean up subscriptions and node before exiting thread
   printf("ROS thread shutting down, cleaning up resources...\n");
-  status_sub.reset();
-  lidar_sub.reset();
-  drive_sub.reset();
-  camera_sub.reset();
-  joystick_sub.reset();
-  ros_node_.reset();
+  
+  // Lock to prevent callbacks from running during cleanup
+  {
+    std::lock_guard<std::mutex> lock(cleanup_mutex_);
+    
+    // First check if rclcpp is still okay before attempting cleanup
+    if (rclcpp::ok() && ros_node_) {
+      // Reset subscriptions one by one with error handling
+      try {
+        if (status_sub_) {
+          status_sub_.reset();
+          printf("Status subscription cleaned up\n");
+        }
+        if (lidar_sub_) {
+          lidar_sub_.reset();
+          printf("Lidar subscription cleaned up\n");
+        }
+        if (drive_sub_) {
+          drive_sub_.reset();
+          printf("Drive subscription cleaned up\n");
+        }
+        if (camera_sub_) {
+          camera_sub_.reset();
+          printf("Camera subscription cleaned up\n");
+        }
+        if (joystick_sub_) {
+          joystick_sub_.reset();
+          printf("Joystick subscription cleaned up\n");
+        }
+      } catch (const std::exception& e) {
+        printf("Exception during subscription cleanup: %s\n", e.what());
+      }
+      
+      // Small delay to ensure all cleanup operations complete
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      
+      // Reset the node after all subscriptions are cleaned up
+      try {
+        if (ros_node_) {
+          ros_node_.reset();
+          printf("Node cleaned up\n");
+        }
+      } catch (const std::exception& e) {
+        printf("Exception during node cleanup: %s\n", e.what());
+      }
+    } else {
+      printf("ROS2 context already shut down, skipping subscription cleanup\n");
+      // Just reset the pointers without attempting ROS cleanup
+      status_sub_.reset();
+      lidar_sub_.reset();
+      drive_sub_.reset();
+      camera_sub_.reset();
+      joystick_sub_.reset();
+      ros_node_.reset();
+    }
+  }
+  
   printf("ROS thread cleanup complete.\n");
 
   pthread_exit(NULL);
@@ -190,14 +257,10 @@ void SignalHandler(int num) {
   printf("\nReceived signal %d, shutting down gracefully...\n", num);
   run_.store(false);
   
-  // Give the ROS thread a moment to clean up
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  // Give the ROS thread time to process the shutdown signal
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
   
-  // Shutdown rclcpp if initialized
-  if (rclcpp::ok()) {
-    rclcpp::shutdown();
-  }
-  
+  // Force exit for signals that require immediate shutdown
   if (num == SIGINT) {
     exit(0);
   } else {
@@ -220,22 +283,47 @@ int main(int argc, char *argv[]) {
   
   const int retval = app.exec();
   
-  // Signal shutdown and wait for ROS thread to finish
-  printf("Application exiting, signaling ROS thread to stop...\n");
+  // Application is closing - initiate shutdown sequence
+  printf("Application exiting, initiating clean shutdown...\n");
   run_.store(false);
-  pthread_join(ptid, NULL);
-  printf("ROS thread joined successfully.\n");
   
-  // Clean up GUI before shutting down ROS
+  // Wait for ROS thread to finish with a timeout
+  printf("Waiting for ROS thread to complete...\n");
+  struct timespec timeout;
+  clock_gettime(CLOCK_REALTIME, &timeout);
+  timeout.tv_sec += 5; // Increased timeout to 5 seconds
+  
+  int join_result = pthread_timedjoin_np(ptid, NULL, &timeout);
+  if (join_result == ETIMEDOUT) {
+    printf("ROS thread join timed out, forcing shutdown...\n");
+    pthread_cancel(ptid);
+    pthread_join(ptid, NULL); // Wait for cancellation to complete
+  } else if (join_result == 0) {
+    printf("ROS thread joined successfully.\n");
+  } else {
+    printf("ROS thread join failed with error: %d\n", join_result);
+  }
+  
+  // Clean up GUI first
+  printf("Cleaning up GUI...\n");
   delete main_window_;
   main_window_ = nullptr;
   printf("Main window deleted.\n");
   
-  // Shutdown ROS2 cleanly
+  // Add a small delay to ensure all cleanup operations are complete
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  
+  // Final ROS2 shutdown - only if still initialized
   if (rclcpp::ok()) {
     printf("Shutting down rclcpp...\n");
-    rclcpp::shutdown();
-    printf("rclcpp shutdown complete.\n");
+    try {
+      rclcpp::shutdown();
+      printf("rclcpp shutdown complete.\n");
+    } catch (const std::exception& e) {
+      printf("Exception during rclcpp shutdown: %s\n", e.what());
+    }
+  } else {
+    printf("rclcpp already shut down.\n");
   }
   
   return retval;

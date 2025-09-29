@@ -327,8 +327,8 @@ MainWindow::MainWindow(QWidget* parent) :
 }
 
 MainWindow::~MainWindow() {
-  // Clean shutdown - the main thread should have already signaled shutdown
-  // but we ensure the GUI elements are properly cleaned up
+  // Clean shutdown - ensure Qt widgets are properly cleaned up
+  // The main thread should handle ROS cleanup before destroying the GUI
 }
 
 std::vector<std::string> Split(const std::string& s) {
