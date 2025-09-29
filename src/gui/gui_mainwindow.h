@@ -163,7 +163,6 @@ public slots:
   void StartRos();
   void StartCar();
   void StartCamera();
-  void StopAll();
   void UpdateStatusSlot(int mode, 
                         float battery,
                         bool drive_okay,

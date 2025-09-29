@@ -57,6 +57,7 @@
 #include <QTextStream>
 #include <QFile>
 #include <QTemporaryFile>
+#include <QMessageBox>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
@@ -117,7 +118,6 @@ vector<string> GetIPAddresses(bool ignore_lo) {
 namespace ut_automata_gui {
 
 CameraDisplay::CameraDisplay(QWidget* parent) : QLabel(parent) {
-  setMinimumSize(400, 300);
   setScaledContents(false);  // We'll handle scaling manually for better control
   setAlignment(Qt::AlignCenter);
   setStyleSheet("border: 2px solid black; background-color: #f0f0f0;");
@@ -318,6 +318,11 @@ MainWindow::MainWindow(QWidget* parent) :
     disk_space_bar_(nullptr),
     stop_config_button_(nullptr) {
   this->setWindowTitle("UT AUTOmataGUI");
+  
+  // Ensure window takes full screen space
+  setMinimumSize(800, 480);  // Set a reasonable minimum size
+  setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  
   camera_display_ = new CameraDisplay();
   
   QPushButton* close_button = new QPushButton("Close");
@@ -414,6 +419,8 @@ MainWindow::MainWindow(QWidget* parent) :
     steering_status_ = new RealStatus(true);
 
     QGridLayout* main_layout = new QGridLayout();
+    main_layout->setContentsMargins(5, 5, 5, 5);  // Minimal margins
+    main_layout->setSpacing(5);  // Minimal spacing
     main_layout->addWidget(camera_display_, 0, 0, 4, 4);
     main_layout->addWidget(imu_led_, 0, 5, 1, 1);
     main_layout->addWidget(drive_led_, 0, 6, 1, 1);
@@ -421,6 +428,17 @@ MainWindow::MainWindow(QWidget* parent) :
     main_layout->addWidget(joystick_led_, 1, 6, 1, 1);
     main_layout->addWidget(throttle_status_, 0, 7, 3, 1);
     main_layout->addWidget(steering_status_, 3, 5, 1, 3);
+    
+    // Set column stretch factors to ensure proper expansion
+    main_layout->setColumnStretch(0, 4);  // Camera takes most space
+    main_layout->setColumnStretch(1, 4);
+    main_layout->setColumnStretch(2, 4);
+    main_layout->setColumnStretch(3, 4);
+    main_layout->setColumnStretch(4, 0);  // Control columns get minimal space
+    main_layout->setColumnStretch(5, 1);
+    main_layout->setColumnStretch(6, 1);
+    main_layout->setColumnStretch(7, 1);
+    
     main_widget->setLayout(main_layout);
 
     tab_widget_->addTab(main_widget, "Main");
@@ -428,13 +446,15 @@ MainWindow::MainWindow(QWidget* parent) :
   }
 
   main_layout_ = new QVBoxLayout(this);
+  main_layout_->setContentsMargins(5, 5, 5, 5);  // Minimal margins
+  main_layout_->setSpacing(5);  // Minimal spacing between elements
   setLayout(main_layout_);
-  main_layout_->addLayout(top_bar, Qt::AlignTop);
-  main_layout_->addWidget(tab_widget_);
+  main_layout_->addLayout(top_bar, 0);  // Top bar gets minimal space
+  main_layout_->addWidget(tab_widget_, 1);  // Tab widget gets most space (stretch factor 1)
   
   // Add disk space indicator at the bottom
   disk_space_bar_ = new DiskSpaceBar();
-  main_layout_->addWidget(disk_space_bar_);
+  main_layout_->addWidget(disk_space_bar_, 0);  // Bottom bar gets minimal space
 
   connect(close_button, SIGNAL(clicked()), this, SLOT(closeWindow()));
 
@@ -495,13 +515,6 @@ void MainWindow::StartRos() {
 
 void MainWindow::StartCamera() {
   Exec("roslaunch astra_camera astra.launch > /dev/null &");
-}
-
-void MainWindow::StopAll() {
-  // two seperate kills to ensure that both
-  // autostart and manual start will be stopped
-  Exec("/opt/ros/melodic/bin/rosnode kill -a");
-  Exec("/usr/bin/pkill roslaunch");
 }
 
 void MainWindow::closeWindow() {
@@ -731,9 +744,22 @@ void MainWindow::StopTmuxConfiguration() {
 }
 
 void MainWindow::ShutdownCar() {
-  // Stop all tmux sessions and shutdown ROS nodes
-  StopTmuxConfiguration();
-  StopAll();
+  // Show confirmation dialog
+  QMessageBox::StandardButton reply = QMessageBox::question(
+    this,
+    "Confirm Shutdown",
+    "Are you sure you want to shutdown the car?\n\nThis will:\n- Stop all running configurations\n- Stop all ROS nodes\n- Power off the system",
+    QMessageBox::Yes | QMessageBox::No,
+    QMessageBox::No  // Default to No for safety
+  );
+  
+  if (reply == QMessageBox::Yes) {
+    // Stop all tmux sessions
+    StopTmuxConfiguration();
+    
+    // Shutdown the PC
+    Exec("sudo shutdown -h now");
+  }
 }
 
 
