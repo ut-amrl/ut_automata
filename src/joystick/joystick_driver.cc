@@ -79,6 +79,11 @@ bool IsJetsonDevice() {
 
 // Forward declarations
 bool IsBluetoothControllerConnected();
+string GetPairedControllerMAC();
+string GetConnectedControllerMAC();
+bool ConnectToController(const string& mac_address);
+void SaveControllerMAC(const string& mac_address);
+string LoadSavedControllerMAC();
 void EnableBluetoothPairingMode();
 bool WaitForBluetoothController(int timeout_seconds);
 
@@ -196,6 +201,93 @@ void PrintJoystickList(const vector<JoystickInfo>& joysticks) {
   }
 }
 
+// Function to get the MAC address of a paired controller
+string GetPairedControllerMAC() {
+  FILE* pipe = popen("bluetoothctl devices Paired 2>/dev/null | grep -i -E '(controller|gamepad|joystick|xbox|playstation|dualshock|dualsense|joy-con|nintendo|wireless controller)' | head -n 1 | awk '{print $2}'", "r");
+  if (!pipe) return "";
+  
+  char buffer[128];
+  string result = "";
+  if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+    result = buffer;
+    // Remove trailing newline
+    result.erase(result.find_last_not_of(" \n\r\t") + 1);
+  }
+  pclose(pipe);
+  return result;
+}
+
+// Function to get the MAC address of a connected controller
+string GetConnectedControllerMAC() {
+  FILE* pipe = popen("bluetoothctl devices Connected 2>/dev/null | grep -i -E '(controller|gamepad|joystick|xbox|playstation|dualshock|dualsense|joy-con|nintendo|wireless controller)' | head -n 1 | awk '{print $2}'", "r");
+  if (!pipe) return "";
+  
+  char buffer[128];
+  string result = "";
+  if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+    result = buffer;
+    // Remove trailing newline
+    result.erase(result.find_last_not_of(" \n\r\t") + 1);
+  }
+  pclose(pipe);
+  return result;
+}
+
+// Function to connect to a specific controller by MAC address
+bool ConnectToController(const string& mac_address) {
+  if (mac_address.empty()) return false;
+  
+  std::cout << "Attempting to connect to saved controller: " << mac_address << std::endl;
+  
+  // Trust the device to ensure automatic connection
+  string trust_cmd = "bluetoothctl trust " + mac_address + " 2>/dev/null";
+  system(trust_cmd.c_str());
+  
+  // Try to connect
+  string connect_cmd = "bluetoothctl connect " + mac_address + " 2>/dev/null";
+  int ret = system(connect_cmd.c_str());
+  
+  if (ret == 0) {
+    std::cout << "Successfully connected to controller." << std::endl;
+    // Disable discoverable mode to prevent other controllers from connecting
+    system("bluetoothctl discoverable off 2>/dev/null");
+    return true;
+  }
+  
+  return false;
+}
+
+// Function to save the controller MAC address to a file
+void SaveControllerMAC(const string& mac_address) {
+  if (mac_address.empty()) return;
+  
+  string config_file = string(getenv("HOME")) + "/roboracer_ws/car/joystick_controller_mac.txt";
+  std::ofstream file(config_file);
+  if (file.is_open()) {
+    file << mac_address << std::endl;
+    file.close();
+    std::cout << "Saved controller MAC address: " << mac_address << std::endl;
+  }
+}
+
+// Function to load the saved controller MAC address from a file
+string LoadSavedControllerMAC() {
+  string config_file = string(getenv("HOME")) + "/roboracer_ws/car/joystick_controller_mac.txt";
+  std::ifstream file(config_file);
+  if (file.is_open()) {
+    string mac_address;
+    std::getline(file, mac_address);
+    file.close();
+    // Remove any whitespace
+    mac_address.erase(mac_address.find_last_not_of(" \n\r\t") + 1);
+    if (!mac_address.empty()) {
+      std::cout << "Found saved controller MAC address: " << mac_address << std::endl;
+      return mac_address;
+    }
+  }
+  return "";
+}
+
 // Function to check if any Bluetooth controllers are connected
 bool IsBluetoothControllerConnected() {
   // Check if any connected Bluetooth devices appear to be controllers
@@ -240,6 +332,8 @@ void EnableBluetoothPairingMode() {
   std::cout << "For PS4/PS5 controllers: Hold Share + PS button until light flashes." << std::endl;
   std::cout << "For Xbox controllers: Hold Xbox + Connect button until light flashes." << std::endl;
   std::cout << "Waiting for controller connection..." << std::endl;
+  std::cout << "\nNOTE: Once paired, this computer will remember THIS controller only." << std::endl;
+  std::cout << "To pair a different controller, delete: ~/roboracer_ws/car/joystick_controller_mac.txt" << std::endl;
 }
 
 // Function to wait for a Bluetooth controller to connect
@@ -252,6 +346,22 @@ bool WaitForBluetoothController(int timeout_seconds = 60) {
   while (std::chrono::steady_clock::now() - start_time < timeout_duration) {
     if (IsBluetoothControllerConnected()) {
       std::cout << "Bluetooth controller connected successfully!" << std::endl;
+      
+      // Get the MAC address of the newly connected controller
+      string mac_address = GetConnectedControllerMAC();
+      if (!mac_address.empty()) {
+        // Save it for future use
+        SaveControllerMAC(mac_address);
+        
+        // Trust this controller for automatic reconnection
+        string trust_cmd = "bluetoothctl trust " + mac_address + " 2>/dev/null";
+        system(trust_cmd.c_str());
+        
+        // Disable discoverable mode to prevent other controllers from pairing
+        system("bluetoothctl discoverable off 2>/dev/null");
+        std::cout << "Discoverable mode disabled. This computer will only connect to this controller." << std::endl;
+      }
+      
       // Give it a moment to create the joystick device
       std::this_thread::sleep_for(std::chrono::milliseconds(2000));
       return true;
@@ -281,17 +391,49 @@ int main(int argc, char** argv) {
   if (is_jetson) {
     std::cout << "Running on Jetson device - checking for Bluetooth controllers..." << std::endl;
     
-    // Check if a Bluetooth controller is already connected
-    if (!IsBluetoothControllerConnected()) {
-      std::cout << "No Bluetooth controller connected." << std::endl;
-      EnableBluetoothPairingMode();
+    // First, check if we have a saved controller MAC address
+    string saved_mac = LoadSavedControllerMAC();
+    
+    if (!saved_mac.empty()) {
+      // We have a saved controller - try to connect to it specifically
+      std::cout << "This computer is configured to use controller: " << saved_mac << std::endl;
       
-      // Wait for a controller to connect
-      if (!WaitForBluetoothController()) {
-        std::cout << "Proceeding to check for wired controllers..." << std::endl;
+      if (!IsBluetoothControllerConnected()) {
+        std::cout << "Saved controller not connected. Attempting to reconnect..." << std::endl;
+        
+        // Try to connect to the saved controller
+        if (ConnectToController(saved_mac)) {
+          std::cout << "Successfully reconnected to saved controller." << std::endl;
+        } else {
+          std::cout << "Could not reconnect to saved controller." << std::endl;
+          std::cout << "Make sure the controller is powered on and in range." << std::endl;
+          std::cout << "To pair a different controller, delete: ~/roboracer_ws/car/joystick_controller_mac.txt" << std::endl;
+        }
+      } else {
+        std::cout << "Saved controller is already connected." << std::endl;
+        // Ensure discoverable mode is off to prevent other controllers from connecting
+        system("bluetoothctl discoverable off 2>/dev/null");
       }
     } else {
-      std::cout << "Bluetooth controller already connected." << std::endl;
+      // No saved controller - check if one is already connected or enable pairing
+      if (!IsBluetoothControllerConnected()) {
+        std::cout << "No saved controller found and no controller connected." << std::endl;
+        EnableBluetoothPairingMode();
+        
+        // Wait for a controller to connect
+        if (!WaitForBluetoothController()) {
+          std::cout << "Proceeding to check for wired controllers..." << std::endl;
+        }
+      } else {
+        // A controller is connected but not saved - save it now
+        std::cout << "Bluetooth controller already connected." << std::endl;
+        string connected_mac = GetConnectedControllerMAC();
+        if (!connected_mac.empty()) {
+          SaveControllerMAC(connected_mac);
+          system("bluetoothctl discoverable off 2>/dev/null");
+          std::cout << "Saved this controller for future use." << std::endl;
+        }
+      }
     }
   }
   
