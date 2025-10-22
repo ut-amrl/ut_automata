@@ -6,6 +6,9 @@
 #include <cassert>
 #include <cmath>
 #include <sstream>
+#include <fstream>
+#include <unistd.h>
+#include <regex>
 
 #include "boost/bind.hpp"
 #include "gflags/gflags.h"
@@ -69,9 +72,37 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     t_last_command_(0),
     t_last_joystick_(0) {
   {
-    // Load config.
+    // Load config. Ensure car.lua exists; if it doesn't, create it using
+    // the hostname. Hostnames like "orin07" will produce car_name = "car07".
+    std::string car_path = FLAGS_config_dir + "/car.lua";
+    {
+      std::ifstream car_in(car_path);
+      if (!car_in.good()) {
+        char hn[256] = {0};
+        if (gethostname(hn, sizeof(hn)) != 0) {
+          LOG(WARNING) << "Failed to get hostname; defaulting car number to 00";
+        }
+        std::string hs(hn);
+        std::smatch m;
+        std::regex r("([0-9]+)$");
+        std::string digits = "00";
+        if (std::regex_search(hs, m, r) && m.size() > 1) {
+          digits = m[1];
+        }
+        std::string car_name = "car" + digits;
+        std::ofstream car_out(car_path);
+        if (car_out) {
+          car_out << "car_name = \"" << car_name << "\";\n";
+          car_out.close();
+          LOG(INFO) << "Generated " << car_path << " with car_name " << car_name;
+        } else {
+          LOG(WARNING) << "Unable to create " << car_path << "; proceeding without it.";
+        }
+      }
+    }
+
     config_reader::ConfigReader reader({
-      FLAGS_config_dir + "/car.lua",
+      car_path,
       FLAGS_config_dir + "/vesc.lua",
       FLAGS_config_dir + "/joystick.lua"
     });
