@@ -30,5 +30,4 @@ jobs:
         run: |
           cd $HOME/roboracer_sim_ws
           source /opt/ros/humble/setup.bash
-          source $HOME/roboracer_sim_ws/install/setup.bash
           colcon build --cmake-args -DCMAKE_BUILD_MODE="Software"
