@@ -10,9 +10,10 @@ jobs:
     name: Build test
     container:
       image: natester/roboracer_sim:latest
+      options: --user root
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: 'recursive'
       - name: Get amrl_msgs
