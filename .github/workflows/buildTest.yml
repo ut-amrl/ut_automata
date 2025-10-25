@@ -28,5 +28,7 @@ jobs:
           git clone -b ros2 https://github.com/ut-amrl/amrl_maps.git
       - name: Run build
         run: |
-          cd $HOME/roboracer_ros_ws
+          cd $HOME/roboracer_sim_ws
+          source /opt/ros/humble/setup.bash
+          source $HOME/roboracer_sim_ws/install/setup.bash
           colcon build --cmake-args -DCMAKE_BUILD_MODE="Software"
