@@ -18,15 +18,17 @@ jobs:
           submodules: 'recursive'
       - name: Get amrl_msgs
         run: |
+          mkdir -p $HOME/roboracer_ros_ws/src
           cd $HOME/roboracer_ros_ws/src
           git clone -b ros2 https://github.com/ut-amrl/amrl_msgs.git
           cd amrl_msgs
           make
       - name: Get amrl_maps
         run: |
+          mkdir -p $HOME/roboracer_ros_ws/src
           cd $HOME/roboracer_ros_ws/src
           git clone -b master https://github.com/ut-amrl/amrl_maps.git
       - name: Run build
         run: |
           cd $HOME/roboracer_ros_ws
-          olcon build --cmake-args -DCMAKE_BUILD_MODE="Software"
+          colcon build --cmake-args -DCMAKE_BUILD_MODE="Software"
