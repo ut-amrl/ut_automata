@@ -18,13 +18,13 @@ jobs:
           submodules: 'recursive'
       - name: Get amrl_msgs
         run: |
-          mkdir -p $HOME/roboracer_ros_ws/src
-          cd $HOME/roboracer_ros_ws/src
+          mkdir -p $HOME/roboracer_sim_ws/src
+          cd $HOME/roboracer_sim_ws/src
           git clone -b master https://github.com/ut-amrl/amrl_msgs.git
       - name: Get amrl_maps
         run: |
-          mkdir -p $HOME/roboracer_ros_ws/src
-          cd $HOME/roboracer_ros_ws/src
+          mkdir -p $HOME/roboracer_sim_ws/src
+          cd $HOME/roboracer_sim_ws/src
           git clone -b ros2 https://github.com/ut-amrl/amrl_maps.git
       - name: Run build
         run: |
