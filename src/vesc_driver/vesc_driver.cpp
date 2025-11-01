@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <regex>
 
-#include "boost/bind.hpp"
+#include "boost/bind/bind.hpp"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "ut_automata/msg/car_status_msg.hpp"
@@ -18,9 +18,13 @@
 #include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "tf2_ros/transform_broadcaster.h"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 
 #include "config_reader/config_reader.h"
 #include "shared/math/math_util.h"
+
+using namespace boost::placeholders;
 
 static const bool kDebug = false;
 static const float kCommandRate = 20;
@@ -159,6 +163,7 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   odom_pub_ = nh_->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(10));
   drive_pub_ = nh_->create_publisher<geometry_msgs::msg::TwistStamped>("vesc_drive", rclcpp::QoS(10));
   car_status_pub_ = nh_->create_publisher<ut_automata::msg::CarStatusMsg>("car_status", rclcpp::QoS(10));
+  tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(nh_);
 
   ackermann_curvature_sub_ = nh_->create_subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>(
     "/ackermann_curvature_drive", rclcpp::QoS(10),
@@ -470,7 +475,25 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
     position_y = position_y + del_y;
     orientation = math_util::AngleMod(orientation + del_theta);
 
+    // Create and publish tf2 transform
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.stamp = current_frame_time;
+    transform.header.frame_id = "odom";
+    transform.child_frame_id = "base_link";
+    
+    transform.transform.translation.x = position_x;
+    transform.transform.translation.y = position_y;
+    transform.transform.translation.z = 0.0;
+    
+    transform.transform.rotation.w = cos(0.5 * orientation);
+    transform.transform.rotation.x = 0.0;
+    transform.transform.rotation.y = 0.0;
+    transform.transform.rotation.z = sin(0.5 * orientation);
+    
+    tf_broadcaster_->sendTransform(transform);
+    
     // Create an odometry message
+    odom_msg_.header.stamp = current_frame_time;
     odom_msg_.twist.twist.linear.x = lin_vel;
     odom_msg_.twist.twist.angular.z = rot_vel;
     odom_msg_.pose.pose.position.x = position_x;

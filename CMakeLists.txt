@@ -117,7 +117,7 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
                  src/vesc_driver/vesc_interface.cpp
                  src/vesc_driver/vesc_packet.cpp
                  src/vesc_driver/vesc_packet_factory.cpp)
-  ament_target_dependencies(vesc_driver rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime)
+  ament_target_dependencies(vesc_driver rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime tf2_ros)
   target_include_directories(vesc_driver PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
   target_link_libraries(vesc_driver ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK})

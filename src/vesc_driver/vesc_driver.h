@@ -17,6 +17,7 @@
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "ut_automata/msg/vesc_state_stamped.hpp"
 #include "ut_automata/msg/car_status_msg.hpp"
+#include "tf2_ros/transform_broadcaster.h"
 
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
@@ -52,6 +53,7 @@ private:
   rclcpp::Subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>::SharedPtr ackermann_curvature_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joystick_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   // driver modes (possible states)
   typedef enum {
