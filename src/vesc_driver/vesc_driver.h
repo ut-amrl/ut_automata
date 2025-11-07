@@ -13,6 +13,7 @@
 #include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/joy.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "ut_automata/msg/vesc_state_stamped.hpp"
@@ -21,6 +22,8 @@
 
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
+#include "vesc_driver/ekf_fusion.h"
+#include "mpu6050driver/mpu6050sensor.h"
 #include "ut_automata/msg/vesc_state_stamped.hpp"
 #include "ut_automata/msg/car_status_msg.hpp"
 
@@ -50,6 +53,7 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr drive_pub_;
   rclcpp::Publisher<ut_automata::msg::CarStatusMsg>::SharedPtr car_status_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr autonomy_enabler_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>::SharedPtr ackermann_curvature_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joystick_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
@@ -97,6 +101,12 @@ private:
 
   // Create an odometry message
   nav_msgs::msg::Odometry odom_msg_;
+
+  // EKF for IMU fusion
+  std::unique_ptr<EKFFusion> ekf_;
+  std::unique_ptr<MPU6050Sensor> mpu6050_;
+  bool fuse_imu_ = true;
+  bool imu_available_;
 
   // Convert curvature commands to steering angle.
   float CalculateSteeringAngle(float lin_vel, float rot_vel);

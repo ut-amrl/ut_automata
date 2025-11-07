@@ -26,7 +26,7 @@ IF(CMAKE_VERSION VERSION_LESS "3.7.0")
     SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 ENDIF()
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -march=native -Werror -Wall -g -Wno-error=class-memaccess")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")
@@ -57,6 +57,7 @@ find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(rosidl_default_runtime REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 FIND_PACKAGE(Qt5 COMPONENTS Core Widgets Gui WebSockets OpenGL REQUIRED)
 SET(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -116,11 +117,14 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
                  src/vesc_driver/vesc_driver.cpp
                  src/vesc_driver/vesc_interface.cpp
                  src/vesc_driver/vesc_packet.cpp
-                 src/vesc_driver/vesc_packet_factory.cpp)
-  ament_target_dependencies(vesc_driver rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime tf2_ros)
+                 src/vesc_driver/vesc_packet_factory.cpp
+                 src/vesc_driver/ekf_fusion.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/../mpu6050driver/src/mpu6050sensor.cpp)
+  ament_target_dependencies(vesc_driver rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime tf2_ros Eigen3)
   target_include_directories(vesc_driver PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
-  target_link_libraries(vesc_driver ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK})
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>
+    ${CMAKE_CURRENT_SOURCE_DIR}/../mpu6050driver/include)
+  target_link_libraries(vesc_driver ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK} i2c)
 
   add_executable(gui
         src/gui/gui_main.cc

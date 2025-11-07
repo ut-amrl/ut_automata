@@ -17,6 +17,7 @@
 #include "ut_automata/msg/vesc_state_stamped.hpp"
 #include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -44,6 +45,12 @@ CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
 CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
 CONFIG_STRING(joystick_mode_, "joystick_mode");
 CONFIG_STRING(serial_port_, "serial_port");
+CONFIG_BOOL(fuse_imu_, "fuse_imu");
+CONFIG_INT(i2c_bus_number_, "i2c_bus_number");
+CONFIG_BOOL(calibrate_imu_, "calibrate_imu");
+CONFIG_INT(imu_gyro_range_, "imu_gyro_range");
+CONFIG_INT(imu_accel_range_, "imu_accel_range");
+CONFIG_INT(imu_dlpf_bandwidth_, "imu_dlpf_bandwidth");
 
 DEFINE_string(config_dir, "/home/orin/roboracer_ws/src/ut_automata/config", 
     "Directory containing the car.lua and vesc.lua config files.");
@@ -74,43 +81,80 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     fw_version_major_(-1),
     fw_version_minor_(-1),
     t_last_command_(0),
-    t_last_joystick_(0) {
+    t_last_joystick_(0),
+    imu_available_(false) {
+  // Load config. Ensure car.lua exists; if it doesn't, create it using
+  // the hostname. Hostnames like "orin07" will produce car_name = "car07".
+  std::string car_path = FLAGS_config_dir + "/car.lua";
   {
-    // Load config. Ensure car.lua exists; if it doesn't, create it using
-    // the hostname. Hostnames like "orin07" will produce car_name = "car07".
-    std::string car_path = FLAGS_config_dir + "/car.lua";
-    {
-      std::ifstream car_in(car_path);
-      if (!car_in.good()) {
-        char hn[256] = {0};
-        if (gethostname(hn, sizeof(hn)) != 0) {
-          LOG(WARNING) << "Failed to get hostname; defaulting car number to 00";
-        }
-        std::string hs(hn);
-        std::smatch m;
-        std::regex r("([0-9]+)$");
-        std::string digits = "00";
-        if (std::regex_search(hs, m, r) && m.size() > 1) {
-          digits = m[1];
-        }
-        std::string car_name = "car" + digits;
-        std::ofstream car_out(car_path);
-        if (car_out) {
-          car_out << "car_name = \"" << car_name << "\";\n";
-          car_out.close();
-          LOG(INFO) << "Generated " << car_path << " with car_name " << car_name;
-        } else {
-          LOG(WARNING) << "Unable to create " << car_path << "; proceeding without it.";
-        }
+    std::ifstream car_in(car_path);
+    if (!car_in.good()) {
+      char hn[256] = {0};
+      if (gethostname(hn, sizeof(hn)) != 0) {
+        LOG(WARNING) << "Failed to get hostname; defaulting car number to 00";
+      }
+      std::string hs(hn);
+      std::smatch m;
+      std::regex r("([0-9]+)$");
+      std::string digits = "00";
+      if (std::regex_search(hs, m, r) && m.size() > 1) {
+        digits = m[1];
+      }
+      std::string car_name = "car" + digits;
+      std::ofstream car_out(car_path);
+      if (car_out) {
+        car_out << "car_name = \"" << car_name << "\";\n";
+        car_out.close();
+        LOG(INFO) << "Generated " << car_path << " with car_name " << car_name;
+      } else {
+        LOG(WARNING) << "Unable to create " << car_path << "; proceeding without it.";
       }
     }
-
-    config_reader::ConfigReader reader({
-      car_path,
-      FLAGS_config_dir + "/vesc.lua",
-      FLAGS_config_dir + "/joystick.lua"
-    });
   }
+
+  RCLCPP_INFO(nh_->get_logger(), "Loading configuration files:");
+  RCLCPP_INFO(nh_->get_logger(), "  car.lua: %s", car_path.c_str());
+  RCLCPP_INFO(nh_->get_logger(), "  vesc.lua: %s", (FLAGS_config_dir + "/vesc.lua").c_str());
+  RCLCPP_INFO(nh_->get_logger(), "  joystick.lua: %s", (FLAGS_config_dir + "/joystick.lua").c_str());
+  
+  // DEBUG: Check value before config reader
+  RCLCPP_INFO(nh_->get_logger(), "BEFORE ConfigReader: fuse_imu = %s", fuse_imu_ ? "true" : "false");
+  
+  config_reader::ConfigReader reader({
+    car_path,
+    FLAGS_config_dir + "/vesc.lua",
+    FLAGS_config_dir + "/joystick.lua",
+  });
+  
+  // DEBUG: Check value immediately after config reader
+  RCLCPP_INFO(nh_->get_logger(), "AFTER ConfigReader: fuse_imu = %s", fuse_imu_ ? "true" : "false");
+  
+  // Debug: Print ALL configuration values loaded from Lua files
+  RCLCPP_INFO(nh_->get_logger(), "=== Configuration Values Loaded ===");
+  RCLCPP_INFO(nh_->get_logger(), "From vesc.lua:");
+  RCLCPP_INFO(nh_->get_logger(), "  serial_port = %s", serial_port_.c_str());
+  RCLCPP_INFO(nh_->get_logger(), "  speed_to_erpm_gain = %.2f", speed_to_erpm_gain_);
+  RCLCPP_INFO(nh_->get_logger(), "  speed_to_erpm_offset = %.2f", speed_to_erpm_offset_);
+  RCLCPP_INFO(nh_->get_logger(), "  steering_angle_to_servo_gain = %.4f", steering_to_servo_gain_);
+  RCLCPP_INFO(nh_->get_logger(), "  steering_angle_to_servo_offset = %.2f", steering_to_servo_offset_);
+  RCLCPP_INFO(nh_->get_logger(), "  erpm_speed_limit = %.2f", erpm_speed_limit_);
+  RCLCPP_INFO(nh_->get_logger(), "  servo_min = %.2f", servo_min_);
+  RCLCPP_INFO(nh_->get_logger(), "  servo_max = %.2f", servo_max_);
+  RCLCPP_INFO(nh_->get_logger(), "  wheelbase = %.3f", wheelbase_);
+  RCLCPP_INFO(nh_->get_logger(), "  max_acceleration = %.2f", max_accel_);
+  RCLCPP_INFO(nh_->get_logger(), "  max_deceleration = %.2f", max_decel_);
+  RCLCPP_INFO(nh_->get_logger(), "  fuse_imu = %s", fuse_imu_ ? "true" : "false");
+  RCLCPP_INFO(nh_->get_logger(), "  i2c_bus_number = %d", i2c_bus_number_);
+  RCLCPP_INFO(nh_->get_logger(), "  calibrate_imu = %s", calibrate_imu_ ? "true" : "false");
+  RCLCPP_INFO(nh_->get_logger(), "  imu_gyro_range = %d", imu_gyro_range_);
+  RCLCPP_INFO(nh_->get_logger(), "  imu_accel_range = %d", imu_accel_range_);
+  RCLCPP_INFO(nh_->get_logger(), "  imu_dlpf_bandwidth = %d", imu_dlpf_bandwidth_);
+  RCLCPP_INFO(nh_->get_logger(), "From joystick.lua:");
+  RCLCPP_INFO(nh_->get_logger(), "  joystick_normal_speed = %.2f", normal_speed_);
+  RCLCPP_INFO(nh_->get_logger(), "  joystick_turbo_speed = %.2f", turbo_speed_);
+  RCLCPP_INFO(nh_->get_logger(), "  joystick_mode = %s", joystick_mode_.c_str());
+  RCLCPP_INFO(nh_->get_logger(), "===================================");
+  
   state_msg_.header.frame_id = "base_link";
   car_status_msg_.header = state_msg_.header;
 
@@ -163,6 +207,7 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   odom_pub_ = nh_->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(10));
   drive_pub_ = nh_->create_publisher<geometry_msgs::msg::TwistStamped>("vesc_drive", rclcpp::QoS(10));
   car_status_pub_ = nh_->create_publisher<ut_automata::msg::CarStatusMsg>("car_status", rclcpp::QoS(10));
+  imu_pub_ = nh_->create_publisher<sensor_msgs::msg::Imu>("imu", rclcpp::QoS(10));
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(nh_);
 
   ackermann_curvature_sub_ = nh_->create_subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>(
@@ -170,6 +215,38 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     std::bind(&VescDriver::ackermannCurvatureCallback, this, std::placeholders::_1));
   joystick_sub_ = nh_->create_subscription<sensor_msgs::msg::Joy>(
     "joystick", rclcpp::QoS(10), std::bind(&VescDriver::joystickCallback, this, std::placeholders::_1));
+
+  // Initialize EKF and MPU6050 if IMU fusion is enabled
+  if (fuse_imu_) {
+    ekf_ = std::make_unique<EKFFusion>(wheelbase_);
+    
+    try {
+      // Initialize MPU6050 sensor
+      mpu6050_ = std::make_unique<MPU6050Sensor>(i2c_bus_number_);
+      
+      // Configure sensor
+      mpu6050_->setGyroscopeRange(static_cast<MPU6050Sensor::GyroRange>(imu_gyro_range_));
+      mpu6050_->setAccelerometerRange(static_cast<MPU6050Sensor::AccelRange>(imu_accel_range_));
+      mpu6050_->setDlpfBandwidth(static_cast<MPU6050Sensor::DlpfBandwidth>(imu_dlpf_bandwidth_));
+      
+      // Calibrate if requested
+      if (calibrate_imu_) {
+        RCLCPP_INFO(nh_->get_logger(), "Calibrating MPU6050...");
+        mpu6050_->calibrate();
+      }
+      
+      mpu6050_->printConfig();
+      mpu6050_->printOffsets();
+      imu_available_ = true;
+      RCLCPP_INFO(nh_->get_logger(), "IMU fusion enabled with direct MPU6050 sensor reading on I2C bus %d", i2c_bus_number_);
+    } catch (const std::exception& e) {
+      RCLCPP_ERROR(nh_->get_logger(), "Failed to initialize MPU6050: %s. IMU fusion disabled.", e.what());
+      imu_available_ = false;
+      mpu6050_.reset();
+    }
+  } else {
+    RCLCPP_INFO(nh_->get_logger(), "IMU fusion disabled");
+  }
 
   if (kDebug) printf("TIMER START\n");
   // create a 50Hz timer, used for state machine & polling VESC telemetry
@@ -441,20 +518,6 @@ void VescDriver::timerCallback() {
 void VescDriver::updateOdometry(float rpm, float steering_angle) {
   // TODO: calculate speed based on tachometer as opposed to rpm
 
-  // Calcuate linear velocity
-  float lin_vel = (rpm - speed_to_erpm_offset_) / speed_to_erpm_gain_;
-  // Clamp velocity to zero for minuscule values - a VESC drift issue.
-  if (fabs(lin_vel) < 0.01) {
-    lin_vel = 0.0;
-  }
-  // Calculate angular velocity
-  float turn_radius = 0;
-  float rot_vel = 0;
-  if (steering_angle != 0) {
-    turn_radius = wheelbase_ / tan(steering_angle);
-    rot_vel = lin_vel / turn_radius;
-  }
-
   static float position_x = 0;
   static float position_y = 0;
   static float orientation = 0; // theta
@@ -464,16 +527,94 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
 
   // Update the estimated pose
   double del_t = current_frame_time_sec - last_frame_time;
+  
+  float lin_vel = 0;
+  float rot_vel = 0;
+
+  // Use EKF fusion if enabled and IMU is available
+  if (fuse_imu_ && ekf_ && imu_available_ && mpu6050_) {
+    // Enforce monotonically increasing time stamps
+    if (del_t >= 0 && del_t < 1.0) {
+      // Prediction step with odometry model
+      ekf_->predict(del_t, rpm, steering_angle, speed_to_erpm_gain_, speed_to_erpm_offset_);
+      
+      // Read IMU angular velocity directly from sensor
+      try {
+        // MPU6050 returns angular velocity in degrees/sec, convert to rad/s
+        static const float deg_to_rad = 0.0174533f;
+        float imu_angular_velocity_z = mpu6050_->getAngularVelocityZ() * deg_to_rad;
+        
+        // Update step with IMU measurement
+        ekf_->updateIMU(imu_angular_velocity_z, true);
+        
+        // Publish IMU message
+        auto imu_msg = sensor_msgs::msg::Imu();
+        imu_msg.header.stamp = current_frame_time;
+        imu_msg.header.frame_id = "imu";
+        
+        // Linear acceleration
+        imu_msg.linear_acceleration.x = mpu6050_->getAccelerationX();
+        imu_msg.linear_acceleration.y = mpu6050_->getAccelerationY();
+        imu_msg.linear_acceleration.z = mpu6050_->getAccelerationZ();
+        imu_msg.linear_acceleration_covariance = {0};
+        
+        // Angular velocity
+        imu_msg.angular_velocity.x = mpu6050_->getAngularVelocityX() * deg_to_rad;
+        imu_msg.angular_velocity.y = mpu6050_->getAngularVelocityY() * deg_to_rad;
+        imu_msg.angular_velocity.z = imu_angular_velocity_z;
+        imu_msg.angular_velocity_covariance[0] = {0};
+        
+        // Invalidate quaternion (not calculated)
+        imu_msg.orientation_covariance[0] = -1;
+        imu_msg.orientation.x = 0;
+        imu_msg.orientation.y = 0;
+        imu_msg.orientation.z = 0;
+        imu_msg.orientation.w = 0;
+        
+        imu_pub_->publish(imu_msg);
+        
+        if (kDebug) {
+          printf("IMU: angular_velocity_z = %.3f rad/s\n", imu_angular_velocity_z);
+        }
+      } catch (const std::exception& e) {
+        // If sensor read fails, continue with prediction only
+        if (kDebug) {
+          printf("Failed to read IMU: %s\n", e.what());
+        }
+      }
+      
+      // Get fused state estimate
+      ekf_->getState(position_x, position_y, orientation, lin_vel, rot_vel);
+    }
+  } else {
+    // Standard odometry without EKF fusion
+    // Calcuate linear velocity
+    lin_vel = (rpm - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+    // Clamp velocity to zero for minuscule values - a VESC drift issue.
+    if (fabs(lin_vel) < 0.01) {
+      lin_vel = 0.0;
+    }
+    // Calculate angular velocity
+    float turn_radius = 0;
+    if (steering_angle != 0) {
+      turn_radius = wheelbase_ / tan(steering_angle);
+      rot_vel = lin_vel / turn_radius;
+    }
+
+    // Enforce monotonically increasing time stamps
+    if (del_t >= 0) {
+      float del_x = lin_vel * del_t * cos(orientation);
+      float del_y = lin_vel * del_t * sin(orientation);
+      float del_theta = rot_vel * del_t;
+
+      position_x = position_x + del_x;
+      position_y = position_y + del_y;
+      orientation = math_util::AngleMod(orientation + del_theta);
+    }
+  }
 
   // Enforce monotonically increasing time stamps
   if (del_t >= 0) {
-    float del_x = lin_vel * del_t * cos(orientation);
-    float del_y = lin_vel * del_t * sin(orientation);
-    float del_theta = rot_vel * del_t;
-
-    position_x = position_x + del_x;
-    position_y = position_y + del_y;
-    orientation = math_util::AngleMod(orientation + del_theta);
 
     // Create and publish tf2 transform
     geometry_msgs::msg::TransformStamped transform;

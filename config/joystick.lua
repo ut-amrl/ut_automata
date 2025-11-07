@@ -9,7 +9,3 @@ joystick_name="Sony_DualShock_4"
 -- "left": left stick only (horizontal for steering, vertical for drive)
 -- "right": right stick only (horizontal for steering, vertical for drive)
 joystick_mode = "both"
-
-
-
-
