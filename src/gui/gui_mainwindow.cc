@@ -634,19 +634,19 @@ void MainWindow::UpdateStatusSlot(int mode,
   QString status("Status: ");
   switch (mode) {
     case 0: {
-      status += "Stopped\n";
+      status += "Stop\n";
     } break;
     case 1: {
-      status += "Joystick\n";
+      status += "Joy \n";
     } break;
     case 2: {
-      status += "Autonomous\n";
+      status += "Auto\n";
     } break;
     case 3: {
-      status += "Autonomous\n";
+      status += "Auto\n";
     } break;
     default: {
-      status += "UNKNOWN\n";
+      status += "UNKN\n";
     } break;
   }
   status += "Battery: " + QString::number(battery, 'g', 4) + "V";

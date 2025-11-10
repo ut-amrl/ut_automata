@@ -121,8 +121,8 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   RCLCPP_INFO(nh_->get_logger(), "BEFORE ConfigReader: fuse_imu = %s", fuse_imu_ ? "true" : "false");
   
   config_reader::ConfigReader reader({
-    car_path,
     FLAGS_config_dir + "/vesc.lua",
+    car_path,
     FLAGS_config_dir + "/joystick.lua",
   });
   

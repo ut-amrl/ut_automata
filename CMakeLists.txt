@@ -206,15 +206,21 @@ install(DIRECTORY
   OPTIONAL)
 
 # ROS 2 package finalization
-# Install launch files, config files, etc.
+# Install launch files, config files, scripts, etc.
 install(DIRECTORY
   launch
   config
   DESTINATION share/${PROJECT_NAME}
   OPTIONAL)
 
+# Install scripts directory with proper permissions
+install(DIRECTORY
+  scripts/
+  DESTINATION share/${PROJECT_NAME}/scripts
+  USE_SOURCE_PERMISSIONS
+  OPTIONAL)
+
 ament_export_dependencies(rosidl_default_runtime)
-ament_package()
 
 # Generate car.lua from the hostname at build time and install it.
 # The generated file will be written to the build tree and then installed
@@ -235,3 +241,6 @@ add_custom_target(generate_car_lua ALL DEPENDS ${GENERATED_CAR_LUA})
 # Install the generated file into the package share directory so it's available
 # after 'colcon build' under $(ros2 pkg prefix ut_automata)/share/ut_automata/config/car.lua
 install(FILES ${GENERATED_CAR_LUA} DESTINATION share/${PROJECT_NAME}/config)
+
+# ament_package() MUST be the last line
+ament_package()
