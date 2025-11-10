@@ -50,6 +50,7 @@
 
 #include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
 #include "ut_automata/msg/car_status_msg.hpp"
+#include "std_msgs/msg/int32.hpp"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
@@ -59,6 +60,7 @@ using sensor_msgs::msg::LaserScan;
 using sensor_msgs::msg::Image;
 using sensor_msgs::msg::Joy;
 using sensor_msgs::msg::Imu;
+using std_msgs::msg::Int32;
 
 namespace {
 ut_automata_gui::MainWindow* main_window_ = nullptr;
@@ -71,6 +73,7 @@ std::atomic<float> battery_voltage_{0.0f};
 std::atomic_int drive_mode_{0};
 std::atomic<float> throttle_{0.0f};
 std::atomic<float> steering_{0.0f};
+std::atomic_bool is_recording_{false};
 // Track last joystick message time for timeout detection
 std::atomic<std::chrono::steady_clock::time_point> last_joystick_time_{std::chrono::steady_clock::time_point{}};
 // Track last IMU message time for timeout detection
@@ -83,6 +86,7 @@ rclcpp::Subscription<AckermannCurvatureDriveMsg>::SharedPtr drive_sub_ = nullptr
 rclcpp::Subscription<Image>::SharedPtr camera_sub_ = nullptr;
 rclcpp::Subscription<Joy>::SharedPtr joystick_sub_ = nullptr;
 rclcpp::Subscription<Imu>::SharedPtr imu_sub_ = nullptr;
+rclcpp::Subscription<Int32>::SharedPtr recording_sub_ = nullptr;
 std::mutex cleanup_mutex_;
 int lock_fd_ = -1;  // File descriptor for the lock file
 }  // namespace
@@ -190,6 +194,15 @@ void ImuCallback(const Imu::SharedPtr msg) {
   imu_okay_.store(true);
 }
 
+// Recording status callback
+void RecordingCallback(const Int32::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
+  if (!run_.load() || main_window_ == nullptr || !rclcpp::ok()) return;
+  
+  bool recording = (msg->data == 1);
+  is_recording_.store(recording);
+}
+
 void* RosThread(void* arg) {
   // Don't detach - we need to properly join the thread
   // pthread_detach(pthread_self());
@@ -209,6 +222,8 @@ void* RosThread(void* arg) {
       "joystick", 10u, &JoystickCallback);
   imu_sub_ = ros_node_->create_subscription<Imu>(
       "/imu", 10u, &ImuCallback);
+  recording_sub_ = ros_node_->create_subscription<Int32>(
+      "/recording", 10u, &RecordingCallback);
 
   RateLoop loop(5.0);
   while (rclcpp::ok() && run_.load()) {
@@ -263,6 +278,7 @@ void* RosThread(void* arg) {
                                  imu_okay_.load(),
                                  throttle_.load(),
                                  steering_.load());
+      main_window_->UpdateRecordingStatus(is_recording_.load());
     }
     loop.Sleep();
   }
@@ -302,6 +318,10 @@ void* RosThread(void* arg) {
           imu_sub_.reset();
           printf("IMU subscription cleaned up\n");
         }
+        if (recording_sub_) {
+          recording_sub_.reset();
+          printf("Recording subscription cleaned up\n");
+        }
       } catch (const std::exception& e) {
         printf("Exception during subscription cleanup: %s\n", e.what());
       }
@@ -327,6 +347,7 @@ void* RosThread(void* arg) {
       camera_sub_.reset();
       joystick_sub_.reset();
       imu_sub_.reset();
+      recording_sub_.reset();
       ros_node_.reset();
     }
   }

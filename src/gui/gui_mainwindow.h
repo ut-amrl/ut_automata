@@ -68,7 +68,7 @@ class Led : public QWidget {
   Q_OBJECT
   
  public:
-  Led() : status_on_(false) {}
+  Led(bool is_recording_led = false) : status_on_(false), is_recording_led_(is_recording_led) {}
   void SetStatus(bool value) {
     if (status_on_ == value) return;
     status_on_ = value;
@@ -79,25 +79,38 @@ class Led : public QWidget {
   void paintEvent(QPaintEvent *event) override {
     static const QBrush kGreenBrush = QBrush(QColor(0, 225, 0));
     static const QBrush kRedBrush = QBrush(QColor(255, 0, 0));
+    static const QBrush kGreyBrush = QBrush(QColor(128, 128, 128));
     QPainter painter;
     painter.begin(this);
-    if (status_on_) {
-      painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+    
+    if (is_recording_led_) {
+      // Recording LED: Red when recording (on), Grey when not recording (off)
+      if (status_on_) {
+        painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+      } else {
+        painter.fillRect(QRectF(0, 0, width(), height()), kGreyBrush);
+      }
     } else {
-      painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+      // Normal status LED: Green when okay (on), Red when not okay (off)
+      if (status_on_) {
+        painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+      } else {
+        painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+      }
     }
     painter.end();
   }
 
  private:
   bool status_on_;
+  bool is_recording_led_;
 };
 
 class StatusLed : public QFrame {
   Q_OBJECT
   
  public:
-  explicit StatusLed(QString name);
+  explicit StatusLed(QString name, bool is_recording_led = false);
   void SetStatus(bool value);
 
  private:
@@ -156,6 +169,7 @@ public:
                     float throttle,
                     float steering);
   void UpdateCamera(const QPixmap& image);
+  void UpdateRecordingStatus(bool recording);
 
 public slots:
   void closeWindow();
@@ -175,6 +189,9 @@ public slots:
   void UpdateTmuxConfigurations();
   void StartTmuxConfiguration();
   void StopTmuxConfiguration();
+  void UpdateRecordingStatusSlot(bool recording);
+  void UpdateTopicsToRecord();
+  void ToggleTopicRecording();
 
 signals:
   void UpdateQuestion(std::string question,
@@ -189,6 +206,7 @@ signals:
                           float throttle,
                           float steering);
   void UpdateCameraSignal(const QPixmap& image);
+  void UpdateRecordingStatusSignal(bool recording);
 
 private:
 
@@ -220,6 +238,14 @@ private:
   std::vector<QPushButton*> tmux_config_buttons_;
   QPushButton* stop_config_button_;
   std::vector<std::string> tmux_config_names_;
+  
+  // Recording status
+  StatusLed* recording_led_;
+  
+  // Recording topic selection
+  std::vector<std::string> available_topics_;
+  std::vector<std::string> selected_topics_;
+  std::vector<QPushButton*> topic_buttons_;
   
   // Helper functions for GUI-aware tmux configuration
   bool IsGuiNodeRunning();

@@ -154,12 +154,12 @@ void CameraDisplay::resizeEvent(QResizeEvent* event) {
   }
 }
 
-StatusLed::StatusLed(QString name) : led_(nullptr) {
+StatusLed::StatusLed(QString name, bool is_recording_led) : led_(nullptr) {
   QFont font("Arial");
   font.setPointSize(15);
   QLabel* label = new QLabel(name);
   label->setFont(font);
-  led_ = new Led();
+  led_ = new Led(is_recording_led);
   led_->setFixedSize(30, 30);
   QHBoxLayout* layout = new QHBoxLayout();
   layout->addWidget(label);
@@ -316,7 +316,8 @@ MainWindow::MainWindow(QWidget* parent) :
     display_(nullptr),
     status_label_(nullptr),
     disk_space_bar_(nullptr),
-    stop_config_button_(nullptr) {
+    stop_config_button_(nullptr),
+    recording_led_(nullptr) {
   this->setWindowTitle("UT AUTOmataGUI");
   
   // Ensure window takes full screen space
@@ -336,7 +337,14 @@ MainWindow::MainWindow(QWidget* parent) :
   status_label_ = new QLabel("Mode: Autonomous\nBattery: 0V");
   status_label_->setFont(font);
   status_label_->setAlignment(Qt::AlignHCenter);
+  
+  // Add recording indicator
+  recording_led_ = new StatusLed("REC", true);  // true = use grey when off
+  recording_led_->setFixedHeight(60);
+  
   top_bar->addWidget(ipaddr_label_);
+  top_bar->addStretch();
+  top_bar->addWidget(recording_led_);
   top_bar->addStretch();
   top_bar->addWidget(status_label_);
   top_bar->addStretch();
@@ -437,6 +445,67 @@ MainWindow::MainWindow(QWidget* parent) :
 
     tab_widget_->addTab(main_widget, "Main");
     tab_widget_->addTab(ros_group, tr("Configurations"));
+    
+    // Create Recorder Tab
+    QWidget* recorder_widget = new QWidget();
+    QVBoxLayout* recorder_layout = new QVBoxLayout();
+    
+    QLabel* recorder_title = new QLabel("Recording Topics");
+    recorder_title->setFont(font);
+    recorder_layout->addWidget(recorder_title);
+    
+    // Create scroll area for topics
+    QWidget* topics_container = new QWidget();
+    QVBoxLayout* topics_layout = new QVBoxLayout();
+    topics_container->setLayout(topics_layout);
+    
+    // Initialize default topics
+    selected_topics_ = {
+      "/scan",
+      "/camera_0/image_raw",
+      "/ackermann_curvature_drive",
+      "/car_status",
+      "/joystick",
+      "/imu",
+      "/odom"
+    };
+    
+    available_topics_ = {
+      "/scan",
+      "/camera_0/image_raw",
+      "/ackermann_curvature_drive",
+      "/car_status",
+      "/joystick",
+      "/imu",
+      "/odom",
+      "/tf",
+      "/tf_static"
+    };
+    
+    topic_buttons_.clear();
+    
+    for (const auto& topic : available_topics_) {
+      QPushButton* topic_btn = new QPushButton(QString::fromStdString(topic));
+      topic_btn->setFont(font);
+      topic_btn->setCheckable(true);
+      
+      // Check if topic is in selected list
+      bool is_selected = std::find(selected_topics_.begin(), 
+                                   selected_topics_.end(), 
+                                   topic) != selected_topics_.end();
+      topic_btn->setChecked(is_selected);
+      
+      connect(topic_btn, SIGNAL(clicked()), this, SLOT(ToggleTopicRecording()));
+      topic_buttons_.push_back(topic_btn);
+      topics_layout->addWidget(topic_btn);
+    }
+    
+    topics_layout->addStretch();
+    
+    recorder_layout->addWidget(topics_container);
+    recorder_widget->setLayout(recorder_layout);
+    
+    tab_widget_->addTab(recorder_widget, tr("Recorder"));
   }
 
   main_layout_ = new QVBoxLayout(this);
@@ -464,6 +533,10 @@ MainWindow::MainWindow(QWidget* parent) :
   connect(this,
           SIGNAL(UpdateCameraSignal(const QPixmap&)),
           SLOT(UpdateCameraSlot(const QPixmap&)));
+  
+  connect(this,
+          SIGNAL(UpdateRecordingStatusSignal(bool)),
+          SLOT(UpdateRecordingStatusSlot(bool)));
 }
 
 MainWindow::~MainWindow() {
@@ -735,6 +808,56 @@ void MainWindow::StopTmuxConfiguration() {
       Exec(kill_command);
     }
   }
+}
+
+void MainWindow::UpdateRecordingStatus(bool recording) {
+  UpdateRecordingStatusSignal(recording);
+}
+
+void MainWindow::UpdateRecordingStatusSlot(bool recording) {
+  if (recording_led_) {
+    recording_led_->SetStatus(recording);
+  }
+}
+
+void MainWindow::ToggleTopicRecording() {
+  QPushButton* button = qobject_cast<QPushButton*>(sender());
+  if (!button) return;
+  
+  // Find which topic was toggled
+  for (size_t i = 0; i < topic_buttons_.size(); ++i) {
+    if (topic_buttons_[i] == button) {
+      std::string topic = available_topics_[i];
+      
+      // Update selected topics list
+      auto it = std::find(selected_topics_.begin(), selected_topics_.end(), topic);
+      if (button->isChecked()) {
+        if (it == selected_topics_.end()) {
+          selected_topics_.push_back(topic);
+        }
+      } else {
+        if (it != selected_topics_.end()) {
+          selected_topics_.erase(it);
+        }
+      }
+      
+      // TODO: Publish updated topic list to recorder node
+      UpdateTopicsToRecord();
+      break;
+    }
+  }
+}
+
+void MainWindow::UpdateTopicsToRecord() {
+  // This will be called when topics are toggled
+  // For now, we'll log the change
+  std::string topics_str = "Selected topics: ";
+  for (const auto& topic : selected_topics_) {
+    topics_str += topic + ", ";
+  }
+  printf("%s\n", topics_str.c_str());
+  
+  // TODO: Publish to /recorder/set_topics topic
 }
 
 }  // namespace ut_automata_gui
