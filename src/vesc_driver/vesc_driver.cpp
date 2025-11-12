@@ -43,6 +43,7 @@ CONFIG_FLOAT(max_accel_, "max_acceleration");
 CONFIG_FLOAT(max_decel_, "max_deceleration");
 CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
 CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
+CONFIG_FLOAT(max_steering_angle_, "max_steering_angle");
 CONFIG_STRING(joystick_mode_, "joystick_mode");
 CONFIG_STRING(serial_port_, "serial_port");
 CONFIG_BOOL(fuse_imu_, "fuse_imu");
@@ -153,6 +154,10 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   RCLCPP_INFO(nh_->get_logger(), "  joystick_normal_speed = %.2f", normal_speed_);
   RCLCPP_INFO(nh_->get_logger(), "  joystick_turbo_speed = %.2f", turbo_speed_);
   RCLCPP_INFO(nh_->get_logger(), "  joystick_mode = %s", joystick_mode_.c_str());
+  RCLCPP_INFO(nh_->get_logger(), "  max_steering_angle = %.3f rad (%.1f deg)", 
+              max_steering_angle_, max_steering_angle_ * 180.0 / M_PI);
+  RCLCPP_INFO(nh_->get_logger(), "  calculated min_turning_radius = %.3f m", 
+              wheelbase_ / tan(max_steering_angle_));
   RCLCPP_INFO(nh_->get_logger(), "===================================");
   
   state_msg_.header.frame_id = "base_link";
@@ -291,7 +296,6 @@ geometry_msgs::msg::TwistStamped CalculateDriveCmd(float speed, float steering_a
 
 void VescDriver::joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
   static const bool kDebug = false;
-  static const float kMaxTurnRate = 0.25;
   static const float kAxesEps = 0.2;
   static const size_t kManualDriveButton = 4;
   static const size_t kAutonomousDriveButton = 5;
@@ -382,7 +386,7 @@ void VescDriver::joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
     const bool turbo_mode = (msg->axes[2] >= 0.9);
     const float max_speed = (turbo_mode ? turbo_speed_ : normal_speed_);
     float speed = drive_joystick * max_speed;
-    float steering_angle = steer_joystick * kMaxTurnRate;
+    float steering_angle = steer_joystick * max_steering_angle_;
     mux_drive_speed_ = speed;
     mux_steering_angle_ = steering_angle;
     if (kDebug) printf("Mode: %s, Speed: %7.2f, Steering: %.1f\u00b0\n", 

@@ -72,12 +72,27 @@ class VESCCalibrator(Node):
         self.steering_corrections = []  # Store steering corrections during calibration
         self.recording_corrections = False
         
+        # Load max_steering_angle from config for joystick corrections
+        try:
+            import re
+            config_path = "/home/orin/roboracer_ws/src/ut_automata/config/car.lua"
+            with open(config_path, 'r') as f:
+                content = f.read()
+            match = re.search(r'max_steering_angle\s*=\s*([-0-9.]+)', content)
+            if match:
+                self.max_steering_angle = float(match.group(1))
+            else:
+                self.max_steering_angle = 0.286  # default
+        except:
+            self.max_steering_angle = 0.286  # default
+        
         # Calibration results
         self.results = {
             'steering_offset': None,
             'steering_gain': None,
             'speed_offset': None,
-            'speed_gain': None
+            'speed_gain': None,
+            'max_steering_angle': None
         }
         
         self.get_logger().info('VESC Calibrator initialized')
@@ -96,8 +111,9 @@ class VESCCalibrator(Node):
             # Use left stick horizontal (axes[0]) for steering, same as vesc_driver
             # Negative because that's how vesc_driver does it
             steer_input = -msg.axes[0] if len(msg.axes) > 0 else 0.0
-            # Scale by max turn rate (0.25 rad from vesc_driver.cpp)
-            steering_correction = steer_input * 0.25
+            # Scale by max steering angle from config (default 0.286 rad)
+            max_steering_angle = getattr(self, 'max_steering_angle', 0.286)
+            steering_correction = steer_input * max_steering_angle
             self.steering_corrections.append(steering_correction)
             
     def send_drive_command(self, velocity, curvature):
@@ -322,6 +338,38 @@ class VESCCalibrator(Node):
         except Exception as e:
             self.get_logger().error(f"Error writing config file: {e}")
             return False
+    
+    def write_max_steering_angle(self, angle, config_path="/home/orin/roboracer_ws/src/ut_automata/config/car.lua"):
+        """Write max_steering_angle to car.lua config file"""
+        import re
+        
+        try:
+            # Read existing content or create new file
+            try:
+                with open(config_path, 'r') as f:
+                    content = f.read()
+            except FileNotFoundError:
+                # Create new file with car_name if it doesn't exist
+                content = 'car_name = "orin12";\n\n'
+            
+            # Check if max_steering_angle already exists in the file
+            pattern = r'(max_steering_angle\s*=\s*)([-0-9.]+)([;]?[^\n]*)'
+            if re.search(pattern, content):
+                # Replace existing value (preserve semicolon and comments)
+                replacement = f'\\g<1>{angle:.4f}\\g<3>'
+                new_content = re.sub(pattern, replacement, content)
+            else:
+                # Append to file if it doesn't exist
+                new_content = content.rstrip() + f'\nmax_steering_angle = {angle:.4f}; -- radians, calibrated from turn radius\n'
+            
+            with open(config_path, 'w') as f:
+                f.write(new_content)
+                
+            self.get_logger().info(f"Updated max_steering_angle to {angle:.4f} rad ({math.degrees(angle):.2f} deg) in {config_path}")
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Error writing config file: {e}")
+            return False
         
     def calibrate_steering_offset(self):
         """
@@ -376,8 +424,8 @@ class VESCCalibrator(Node):
                 if self.current_joy is not None and len(self.current_joy.axes) > 0:
                     # Use left stick horizontal (axes[0]) for steering
                     steer_input = -self.current_joy.axes[0]
-                    # Scale by max turn rate (0.25 rad)
-                    steering_correction = steer_input * 0.25
+                    # Scale by max steering angle from config
+                    steering_correction = steer_input * self.max_steering_angle
                 
                 # Command forward with user's steering correction
                 # curvature = 1/turn_radius, for small angles: curvature ≈ steering_angle / wheelbase
@@ -503,7 +551,22 @@ class VESCCalibrator(Node):
             return
         
         wheelbase = 0.324  # meters (from vesc.lua)
-        max_steering_angle = 0.25  # radians (from vesc_driver.cpp)
+        
+        # Read current max_steering_angle from config (or use default)
+        try:
+            import re
+            config_path = "/home/orin/roboracer_ws/src/ut_automata/config/car.lua"
+            with open(config_path, 'r') as f:
+                content = f.read()
+            match = re.search(r'max_steering_angle\s*=\s*([-0-9.]+)', content)
+            if match:
+                max_steering_angle = float(match.group(1))
+                print(f"Current max_steering_angle from config: {max_steering_angle:.4f} rad ({math.degrees(max_steering_angle):.2f}°)")
+            else:
+                max_steering_angle = 0.286  # default for ~1.1m turn radius
+                print(f"No max_steering_angle in config, using default: {max_steering_angle:.4f} rad")
+        except:
+            max_steering_angle = 0.286  # default
         
         # Calculate maximum curvature from max steering angle
         # From vesc_driver: steering_angle = atan(wheelbase / turn_radius)
@@ -565,11 +628,18 @@ class VESCCalibrator(Node):
         
         # Calculate average turn radius
         avg_radius = np.mean(turn_radii)
-        print(f"\nAverage turn radius: {avg_radius:.3f} m")
+        print(f"\n📊 Turn Radius Measurements:")
+        print(f"   Average turn radius: {avg_radius:.3f} m")
+        if len(turn_radii) > 1:
+            print(f"   Individual radii: {', '.join([f'{r:.3f}m' for r in turn_radii])}")
+            print(f"   Variation: ±{np.std(turn_radii):.3f} m")
         
         # Calculate actual steering angle from measured radius
         # steering_angle = atan(wheelbase / turn_radius)
         actual_steering_angle = math.atan(wheelbase / avg_radius)
+        
+        # This is the max_steering_angle the vehicle can physically achieve
+        measured_max_steering_angle = actual_steering_angle
         
         # Calculate gain: commanded_angle / actual_angle gives us the gain
         # But we command curvature, so we need to work backwards
@@ -606,6 +676,7 @@ class VESCCalibrator(Node):
         new_gain = current_gain * correction_factor
         
         self.results['steering_gain'] = new_gain
+        self.results['max_steering_angle'] = measured_max_steering_angle
         
         # Write the gain to car.lua config file
         if self.write_steering_gain(new_gain):
@@ -614,8 +685,18 @@ class VESCCalibrator(Node):
             print(f"\n⚠️  Failed to update car.lua. Please update it manually.")
             print(f"   Set steering_angle_to_servo_gain = {new_gain:.4f};")
         
+        # Write max_steering_angle to car.lua config file
+        if self.write_max_steering_angle(measured_max_steering_angle):
+            print(f"✅ Updated car.lua with max_steering_angle: {measured_max_steering_angle:.4f} rad ({math.degrees(measured_max_steering_angle):.2f}°)")
+            print(f"   This corresponds to minimum turning radius: {avg_radius:.3f} m")
+        else:
+            print(f"\n⚠️  Failed to update car.lua. Please update it manually.")
+            print(f"   Set max_steering_angle = {measured_max_steering_angle:.4f};")
+        
         print(f"\n✓ Steering gain calibrated: {new_gain:.4f}")
         print(f"  (Correction factor: {correction_factor:.3f})")
+        print(f"✓ Max steering angle calibrated: {measured_max_steering_angle:.4f} rad ({math.degrees(measured_max_steering_angle):.2f}°)")
+        print(f"  Minimum turning radius: {avg_radius:.3f} m")
         print("⚠️  Remember to restart the VESC driver node for the change to take effect!")
         
     def calibrate_speed_offset(self):
@@ -869,6 +950,11 @@ class VESCCalibrator(Node):
         
         if self.results['speed_gain'] is not None:
             print(f"speed_to_erpm_gain = {self.results['speed_gain']:.1f};")
+        
+        if self.results['max_steering_angle'] is not None:
+            print(f"max_steering_angle = {self.results['max_steering_angle']:.4f}; -- {math.degrees(self.results['max_steering_angle']):.2f} degrees")
+            min_turn_radius = 0.324 / math.tan(self.results['max_steering_angle'])
+            print(f"  --> Minimum turning radius: {min_turn_radius:.3f} m")
         
         print("-"*60)
         

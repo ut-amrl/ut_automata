@@ -24,6 +24,11 @@ max_deceleration = 6.0; -- m/s^2
 joystick_normal_speed = 1.0; -- m/s
 joystick_turbo_speed = 2.0; -- m/s
 
+-- Maximum steering angle in radians for joystick control
+-- Formula: max_steering_angle = atan(wheelbase / desired_min_turning_radius)
+-- Example: 0.286 rad (16.4°) gives 1.1m turning radius with 0.324m wheelbase
+max_steering_angle = 0.286; -- radians
+
 -- IMU fusion parameters
 fuse_imu = true; -- Set to true to fuse IMU data with odometry using EKF
 i2c_bus_number = 7; -- I2C bus number for MPU6050 sensor
