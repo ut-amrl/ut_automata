@@ -199,17 +199,10 @@ install(TARGETS
   websocket
   DESTINATION lib/${PROJECT_NAME})
 
-# Copy simulator configs
-install(DIRECTORY
-  config
-  DESTINATION share/${PROJECT_NAME}
-  OPTIONAL)
-
 # ROS 2 package finalization
 # Install launch files, config files, scripts, etc.
 install(DIRECTORY
   launch
-  config
   DESTINATION share/${PROJECT_NAME}
   OPTIONAL)
 
@@ -221,26 +214,6 @@ install(DIRECTORY
   OPTIONAL)
 
 ament_export_dependencies(rosidl_default_runtime)
-
-# Generate car.lua from the hostname at build time and install it.
-# The generated file will be written to the build tree and then installed
-# into share/${PROJECT_NAME}/config/car.lua so it ends up at
-# $(ros2 pkg prefix ut_automata)/share/ut_automata/config/car.lua
-set(GENERATED_CAR_LUA ${CMAKE_CURRENT_BINARY_DIR}/share/${PROJECT_NAME}/config/car.lua)
-
-add_custom_command(
-  OUTPUT ${GENERATED_CAR_LUA}
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/share/${PROJECT_NAME}/config
-  COMMAND /bin/sh -c "hn=$(hostname); num=$(echo \"${hn}\" | grep -oE '[0-9]+' | tail -n1); if [ -z \"${num}\" ]; then num=0; fi; printf 'car_name = \"car%s\";\\n' \"${num}\" > \"${GENERATED_CAR_LUA}\""
-  COMMENT "Generating ${GENERATED_CAR_LUA} from hostname"
-  VERBATIM
-)
-
-add_custom_target(generate_car_lua ALL DEPENDS ${GENERATED_CAR_LUA})
-
-# Install the generated file into the package share directory so it's available
-# after 'colcon build' under $(ros2 pkg prefix ut_automata)/share/ut_automata/config/car.lua
-install(FILES ${GENERATED_CAR_LUA} DESTINATION share/${PROJECT_NAME}/config)
 
 # ament_package() MUST be the last line
 ament_package()

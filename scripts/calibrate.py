@@ -29,7 +29,15 @@ from sensor_msgs.msg import Joy
 import time
 import math
 import numpy as np
+import os
+from pathlib import Path
 from geometry_msgs.msg import Twist
+
+# Config files are in the source tree, not install directory
+# Use ~/roboracer_ws/src/ut_automata/config/ for config files
+CONFIG_DIR = Path(os.path.expanduser("~/roboracer_ws/src/ut_automata/config"))
+DEFAULT_CAR_CONFIG = str(CONFIG_DIR / "car.lua")
+DEFAULT_VESC_CONFIG = str(CONFIG_DIR / "vesc.lua")
 
 class VESCCalibrator(Node):
     def __init__(self):
@@ -73,18 +81,11 @@ class VESCCalibrator(Node):
         self.recording_corrections = False
         
         # Load max_steering_angle from config for joystick corrections
-        try:
-            import re
-            config_path = "/home/orin/roboracer_ws/src/ut_automata/config/car.lua"
-            with open(config_path, 'r') as f:
-                content = f.read()
-            match = re.search(r'max_steering_angle\s*=\s*([-0-9.]+)', content)
-            if match:
-                self.max_steering_angle = float(match.group(1))
-            else:
-                self.max_steering_angle = 0.286  # default
-        except:
-            self.max_steering_angle = 0.286  # default
+        self.max_steering_angle, source = self.read_max_steering_angle()
+        if source:
+            self.get_logger().info(f"Loaded max_steering_angle from {source}: {self.max_steering_angle:.4f} rad")
+        else:
+            self.get_logger().warn(f"No max_steering_angle found in car.lua or vesc.lua, using default: {self.max_steering_angle:.4f} rad")
         
         # Calibration results
         self.results = {
@@ -165,10 +166,82 @@ class VESCCalibrator(Node):
         x1, y1 = self.get_position()
         return math.sqrt((x1 - x0)**2 + (y1 - y0)**2)
     
-    def read_vesc_config(self, car_config_path="/home/orin/roboracer_ws/src/ut_automata/config/car.lua",
-                         vesc_config_path="/home/orin/roboracer_ws/src/ut_automata/config/vesc.lua"):
+    def read_max_steering_angle(self, car_config_path=None,
+                                vesc_config_path=None,
+                                wheelbase=0.324, verbose=False):
+        """Read max_steering_angle from car.lua (or vesc.lua as fallback)
+        
+        Args:
+            car_config_path: Path to car.lua config file (defaults to ../config/car.lua)
+            vesc_config_path: Path to vesc.lua config file (defaults to ../config/vesc.lua)
+            wheelbase: Wheelbase in meters (for computing turn radius)
+            verbose: If True, print detailed information about loaded value
+            
+        Returns:
+            tuple: (max_steering_angle in radians, source filename or None)
+        """
+        import re
+        
+        if car_config_path is None:
+            car_config_path = DEFAULT_CAR_CONFIG
+        if vesc_config_path is None:
+            vesc_config_path = DEFAULT_VESC_CONFIG
+        
+        max_steering_angle = None
+        source = None
+        
+        config_paths = [car_config_path, vesc_config_path]
+        
+        for config_path in config_paths:
+            try:
+                with open(config_path, 'r') as f:
+                    content = f.read()
+                match = re.search(r'max_steering_angle\s*=\s*([-0-9.]+)', content)
+                if match:
+                    max_steering_angle = float(match.group(1))
+                    source = config_path.split('/')[-1]  # Get filename only
+                    break
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                if verbose:
+                    print(f"Warning: Error reading {config_path}: {e}")
+                else:
+                    self.get_logger().warn(f"Error reading {config_path}: {e}")
+                continue
+        
+        # Use default if not found
+        if max_steering_angle is None:
+            # default for ~0.75m turn radius
+            # this should match the vesc.lua default
+            # note this is intentionally allows a tighter turn radius than the planner's default 0.8m
+            # this is to ensure the car can make turns within the planner's default 0.8m turn radius even after calibration
+            max_steering_angle = 0.425
+            source = None
+        
+        # Print information if verbose
+        if verbose:
+            if source:
+                print(f"✓ Loaded max_steering_angle from {source}:")
+                print(f"  {max_steering_angle:.4f} rad ({math.degrees(max_steering_angle):.2f}°)")
+                print(f"  Corresponds to ~{wheelbase / math.tan(max_steering_angle):.2f}m turning radius")
+            else:
+                print(f"⚠️  No max_steering_angle found in car.lua or vesc.lua")
+                print(f"   Using default: {max_steering_angle:.4f} rad ({math.degrees(max_steering_angle):.2f}°)")
+                print(f"   This corresponds to ~{wheelbase / math.tan(max_steering_angle):.2f}m turning radius")
+        
+        return max_steering_angle, source
+    
+    def read_vesc_config(self, car_config_path=None,
+                         vesc_config_path=None):
         """Read steering offset and gain from car.lua (or vesc.lua as fallback) config file"""
         import re
+        
+        if car_config_path is None:
+            car_config_path = DEFAULT_CAR_CONFIG
+        if vesc_config_path is None:
+            vesc_config_path = DEFAULT_VESC_CONFIG
+        
         offset = 0.5  # default
         gain = -0.9015  # default
         
@@ -211,9 +284,75 @@ class VESCCalibrator(Node):
             
         return offset, gain
     
-    def write_steering_offset(self, offset, config_path="/home/orin/roboracer_ws/src/ut_automata/config/car.lua"):
+    def read_speed_config(self, car_config_path='default',
+                          vesc_config_path='default'):
+        """Read speed offset and gain from car.lua (or vesc.lua as fallback) config file
+        
+        Args:
+            car_config_path: Path to car.lua, 'default' for default path, or None to skip
+            vesc_config_path: Path to vesc.lua, 'default' for default path, or None to skip
+        """
+        import re
+        
+        if car_config_path == 'default':
+            car_config_path = DEFAULT_CAR_CONFIG
+        if vesc_config_path == 'default':
+            vesc_config_path = DEFAULT_VESC_CONFIG
+        
+        offset = 180.0  # default
+        gain = 5356.0  # default
+        
+        # Build list of config paths to check (skip None values)
+        config_paths = []
+        if car_config_path is not None:
+            config_paths.append(car_config_path)
+        if vesc_config_path is not None:
+            config_paths.append(vesc_config_path)
+        
+        found_offset = False
+        found_gain = False
+        
+        for config_path in config_paths:
+            try:
+                with open(config_path, 'r') as f:
+                    content = f.read()
+                    
+                # Match speed_to_erpm_offset = value; (with optional semicolon and comment)
+                if not found_offset:
+                    offset_match = re.search(r'speed_to_erpm_offset\s*=\s*([-0-9.]+)', content)
+                    if offset_match:
+                        offset = float(offset_match.group(1))
+                        found_offset = True
+                    
+                # Match speed_to_erpm_gain = value; (with optional semicolon and comment)
+                if not found_gain:
+                    gain_match = re.search(r'speed_to_erpm_gain\s*=\s*([-0-9.]+)', content)
+                    if gain_match:
+                        gain = float(gain_match.group(1))
+                        found_gain = True
+                    
+                # If we found both values, we're done
+                if found_offset and found_gain:
+                    break
+                    
+            except FileNotFoundError:
+                continue  # Try next config file
+            except Exception as e:
+                self.get_logger().warn(f"Error reading config file {config_path}: {e}")
+                continue
+        
+        if offset == 180.0 and gain == 5356.0 and len(config_paths) > 0:
+            paths_str = " or ".join([p for p in [car_config_path, vesc_config_path] if p is not None])
+            self.get_logger().warn(f"Could not read speed config from {paths_str}, using defaults")
+            
+        return offset, gain
+    
+    def write_steering_offset(self, offset, config_path=None):
         """Write steering offset to car.lua config file"""
         import re
+        
+        if config_path is None:
+            config_path = DEFAULT_CAR_CONFIG
         
         try:
             # Read existing content or create new file
@@ -243,9 +382,12 @@ class VESCCalibrator(Node):
             self.get_logger().error(f"Error writing config file: {e}")
             return False
     
-    def write_steering_gain(self, gain, config_path="/home/orin/roboracer_ws/src/ut_automata/config/car.lua"):
+    def write_steering_gain(self, gain, config_path=None):
         """Write steering gain to car.lua config file"""
         import re
+        
+        if config_path is None:
+            config_path = DEFAULT_CAR_CONFIG
         
         try:
             # Read existing content or create new file
@@ -275,9 +417,12 @@ class VESCCalibrator(Node):
             self.get_logger().error(f"Error writing config file: {e}")
             return False
     
-    def write_speed_offset(self, offset, config_path="/home/orin/roboracer_ws/src/ut_automata/config/car.lua"):
+    def write_speed_offset(self, offset, config_path=None):
         """Write speed offset to car.lua config file"""
         import re
+        
+        if config_path is None:
+            config_path = DEFAULT_CAR_CONFIG
         
         try:
             # Read existing content or create new file
@@ -307,9 +452,12 @@ class VESCCalibrator(Node):
             self.get_logger().error(f"Error writing config file: {e}")
             return False
     
-    def write_speed_gain(self, gain, config_path="/home/orin/roboracer_ws/src/ut_automata/config/car.lua"):
+    def write_speed_gain(self, gain, config_path=None):
         """Write speed gain to car.lua config file"""
         import re
+        
+        if config_path is None:
+            config_path = DEFAULT_CAR_CONFIG
         
         try:
             # Read existing content or create new file
@@ -339,9 +487,12 @@ class VESCCalibrator(Node):
             self.get_logger().error(f"Error writing config file: {e}")
             return False
     
-    def write_max_steering_angle(self, angle, config_path="/home/orin/roboracer_ws/src/ut_automata/config/car.lua"):
+    def write_max_steering_angle(self, angle, config_path=None):
         """Write max_steering_angle to car.lua config file"""
         import re
+        
+        if config_path is None:
+            config_path = DEFAULT_CAR_CONFIG
         
         try:
             # Read existing content or create new file
@@ -552,21 +703,8 @@ class VESCCalibrator(Node):
         
         wheelbase = 0.324  # meters (from vesc.lua)
         
-        # Read current max_steering_angle from config (or use default)
-        try:
-            import re
-            config_path = "/home/orin/roboracer_ws/src/ut_automata/config/car.lua"
-            with open(config_path, 'r') as f:
-                content = f.read()
-            match = re.search(r'max_steering_angle\s*=\s*([-0-9.]+)', content)
-            if match:
-                max_steering_angle = float(match.group(1))
-                print(f"Current max_steering_angle from config: {max_steering_angle:.4f} rad ({math.degrees(max_steering_angle):.2f}°)")
-            else:
-                max_steering_angle = 0.286  # default for ~1.1m turn radius
-                print(f"No max_steering_angle in config, using default: {max_steering_angle:.4f} rad")
-        except:
-            max_steering_angle = 0.286  # default
+        # Read current max_steering_angle from config (try car.lua first, then vesc.lua)
+        max_steering_angle, source = self.read_max_steering_angle(wheelbase=wheelbase, verbose=True)
         
         # Calculate maximum curvature from max steering angle
         # From vesc_driver: steering_angle = atan(wheelbase / turn_radius)
@@ -813,6 +951,46 @@ class VESCCalibrator(Node):
         print("="*60)
         print("\nThis test measures the relationship between speed commands")
         print("and actual velocity.")
+        
+        # Check if current speed config values are reasonable
+        current_offset, current_gain = self.read_speed_config()
+        print(f"\n📋 Current speed configuration:")
+        print(f"   speed_to_erpm_offset: {current_offset:.1f}")
+        print(f"   speed_to_erpm_gain: {current_gain:.1f}")
+        
+        # Warn if the gain seems way off (should be ~5000-6000 for typical RC car)
+        if current_gain < 100 or current_gain > 10000:
+            print(f"\n⚠️  WARNING: Current speed_to_erpm_gain ({current_gain:.1f}) seems incorrect!")
+            print(f"   Expected range: 5000-6000 for typical RC car")
+            print(f"   This will cause incorrect speed commands during calibration.")
+            print(f"\n   The vesc.lua defaults are:")
+            # Read only from vesc.lua (skip car.lua)
+            vesc_offset, vesc_gain = self.read_speed_config(car_config_path=None, vesc_config_path='default')
+            print(f"     speed_to_erpm_offset: {vesc_offset:.1f}")
+            print(f"     speed_to_erpm_gain: {vesc_gain:.1f}")
+            print(f"\n   Options:")
+            print(f"   1. Use vesc.lua defaults for this calibration (recommended)")
+            print(f"   2. Continue with current values from car.lua")
+            print(f"   q. Skip speed gain calibration")
+            
+            choice = input("\n   Enter choice (1/2/q): ").strip()
+            if choice == '1':
+                print(f"\n   ⚠️  You need to fix car.lua BEFORE continuing:")
+                print(f"   1. Comment out or delete these lines from car.lua:")
+                print(f"      # speed_to_erpm_offset = {current_offset:.1f};")
+                print(f"      # speed_to_erpm_gain = {current_gain:.1f};")
+                print(f"   2. Restart the VESC driver node so it uses vesc.lua defaults")
+                print(f"   3. Then come back and press ENTER to continue calibration")
+                print(f"\n   Press ENTER after fixing car.lua and restarting the VESC driver...")
+                input()
+                # Store the vesc.lua offset for use in gain calculation
+                self.results['speed_offset'] = vesc_offset
+                print(f"\n   ✓ Will use offset {vesc_offset:.1f} from vesc.lua for gain calculation")
+            elif choice.lower() == 'q':
+                print("Skipping speed gain calibration")
+                return
+            # else continue with current values (choice == '2' or invalid)
+        
         print("\nYou will need:")
         print("  - A straight path of at least 5 meters")
         print("  - Markers at known distances (e.g., every 1 meter)")
@@ -898,8 +1076,14 @@ class VESCCalibrator(Node):
         speeds = np.array([m['actual_speed'] for m in measurements])
         erpms = np.array([m['erpm'] for m in measurements])
         
-        # Use the offset we calculated earlier (or default)
-        offset = self.results.get('speed_offset', 180.0)
+        # Use the offset we calculated earlier, or read from config
+        offset = self.results['speed_offset']
+        if offset is None:
+            # Read the existing offset from config files
+            offset, _ = self.read_speed_config()
+            self.get_logger().info(f"Using existing speed_to_erpm_offset from config: {offset:.1f}")
+        else:
+            self.get_logger().info(f"Using calibrated speed_to_erpm_offset: {offset:.1f}")
         
         # Solve for gain: gain = (erpm - offset) / speed
         # Use least squares for better accuracy
@@ -908,16 +1092,63 @@ class VESCCalibrator(Node):
         gain, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
         gain = gain[0]
         
-        self.results['speed_gain'] = gain
-        
-        print(f"\n✓ Speed gain calibrated: {gain:.1f}")
-        print(f"  Using offset: {offset:.1f}")
+        print(f"\n📊 Calibration Results:")
+        print(f"   Calculated gain: {gain:.1f}")
+        print(f"   Using offset: {offset:.1f}")
         print(f"\nMeasurements:")
         for m in measurements:
             predicted_erpm = gain * m['actual_speed'] + offset
             error = abs(m['erpm'] - predicted_erpm)
             print(f"  Speed: {m['actual_speed']:.2f} m/s, ERPM: {m['erpm']:.1f}, "
                   f"Predicted: {predicted_erpm:.1f}, Error: {error:.1f}")
+        
+        # Validate the gain is reasonable
+        expected_min_gain = 1000  # Typical minimum for RC cars
+        expected_max_gain = 10000  # Typical maximum for RC cars
+        gain_is_valid = expected_min_gain <= gain <= expected_max_gain
+        
+        if not gain_is_valid:
+            print(f"\n⚠️  WARNING: Calculated gain ({gain:.1f}) is outside expected range!")
+            print(f"   Expected range: {expected_min_gain} - {expected_max_gain}")
+            print(f"\n🔍 Diagnostic Information:")
+            print(f"   ERPM range: {erpms.min():.1f} to {erpms.max():.1f} (variation: {erpms.max() - erpms.min():.1f})")
+            print(f"   Speed range: {speeds.min():.2f} to {speeds.max():.2f} m/s")
+            
+            # Check for common problems
+            if erpms.max() - erpms.min() < 100:
+                print(f"\n❌ PROBLEM DETECTED: ERPM values barely changed!")
+                print(f"   The car was likely NOT responding to speed commands.")
+                print(f"   Common causes:")
+                print(f"   1. R1 button was not held during the ENTIRE test duration")
+                print(f"   2. Car.lua has incorrect values preventing movement")
+                print(f"   3. VESC driver is not receiving/processing commands")
+                print(f"   4. Motor controller is in an error state")
+            elif gain < 0:
+                print(f"\n❌ PROBLEM DETECTED: Negative gain (impossible!)")
+                print(f"   This means ERPM decreased as speed increased.")
+                print(f"   The offset ({offset:.1f}) is likely much too high.")
+                print(f"   Try calibrating speed_offset first, or use vesc.lua defaults.")
+            elif gain < expected_min_gain:
+                print(f"\n❌ PROBLEM DETECTED: Gain is too low")
+                print(f"   The car was moving, but ERPM values are lower than expected.")
+                print(f"   This usually means the offset ({offset:.1f}) is incorrect.")
+            elif gain > expected_max_gain:
+                print(f"\n⚠️  Gain is higher than typical, but might be correct for your setup.")
+            
+            print(f"\n   Options:")
+            print(f"   1. Skip saving (recommended - fix the issue and retry)")
+            print(f"   2. Save anyway (not recommended)")
+            
+            choice = input("\n   Enter choice (1/2): ").strip()
+            if choice != '2':
+                print(f"\n   Skipped saving speed_to_erpm_gain.")
+                print(f"   Please fix the issue and re-run speed gain calibration.")
+                return
+            else:
+                print(f"\n   ⚠️  Saving potentially incorrect gain value...")
+        
+        self.results['speed_gain'] = gain
+        print(f"\n✓ Speed gain calibrated: {gain:.1f}")
         
         # Write the gain to car.lua config file
         if self.write_speed_gain(self.results['speed_gain']):

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <sstream>
 #include <fstream>
+#include <iomanip>
 #include <unistd.h>
 #include <regex>
 
@@ -52,6 +53,8 @@ CONFIG_BOOL(calibrate_imu_, "calibrate_imu");
 CONFIG_INT(imu_gyro_range_, "imu_gyro_range");
 CONFIG_INT(imu_accel_range_, "imu_accel_range");
 CONFIG_INT(imu_dlpf_bandwidth_, "imu_dlpf_bandwidth");
+CONFIG_BOOL(debug_ekf_, "debug_ekf");
+CONFIG_STRING(debug_log_path_, "debug_log_path");
 
 DEFINE_string(config_dir, "/home/orin/roboracer_ws/src/ut_automata/config", 
     "Directory containing the car.lua and vesc.lua config files.");
@@ -83,6 +86,7 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     fw_version_minor_(-1),
     t_last_command_(0),
     t_last_joystick_(0),
+    last_smooth_speed_(0),
     imu_available_(false) {
   // Load config. Ensure car.lua exists; if it doesn't, create it using
   // the hostname. Hostnames like "orin07" will produce car_name = "car07".
@@ -127,6 +131,25 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     FLAGS_config_dir + "/joystick.lua",
   });
   
+  // IMU to car frame transformation
+  // Format: [x_sign, x_axis, y_sign, y_axis, z_sign, z_axis]
+  // Car frame: +x forward, +y left, +z up
+  // Axis indices: 0=x, 1=y, 2=z
+  // 
+  // Common IMU mounting orientations:
+  // 1. Standard (IMU +x forward, +y left): {1, 0, 1, 1, 1, 2}
+  // 2. IMU +x rear, +y right (user's setup): {-1, 0, -1, 1, -1, 0}
+  // 3. IMU +x right, +y forward: {1, 1, -1, 0, 1, 2}
+  // 
+  // TODO: Read from config file when LuaScript supports arrays
+  // For now, set based on your IMU mounting orientation:
+  imu_to_car_transform_ = {-1, 0, -1, 1, -1, 0};  // IMU: +x rear, +y right
+  
+  RCLCPP_INFO(nh_->get_logger(), "IMU to car transform: [%.0f,%d, %.0f,%d, %.0f,%d]",
+              imu_to_car_transform_[0], (int)imu_to_car_transform_[1],
+              imu_to_car_transform_[2], (int)imu_to_car_transform_[3],
+              imu_to_car_transform_[4], (int)imu_to_car_transform_[5]);
+  
   // DEBUG: Check value immediately after config reader
   RCLCPP_INFO(nh_->get_logger(), "AFTER ConfigReader: fuse_imu = %s", fuse_imu_ ? "true" : "false");
   
@@ -150,6 +173,10 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   RCLCPP_INFO(nh_->get_logger(), "  imu_gyro_range = %d", imu_gyro_range_);
   RCLCPP_INFO(nh_->get_logger(), "  imu_accel_range = %d", imu_accel_range_);
   RCLCPP_INFO(nh_->get_logger(), "  imu_dlpf_bandwidth = %d", imu_dlpf_bandwidth_);
+  RCLCPP_INFO(nh_->get_logger(), "  debug_ekf = %s", debug_ekf_ ? "true" : "false");
+  if (debug_ekf_) {
+    RCLCPP_INFO(nh_->get_logger(), "  debug_log_path = %s", debug_log_path_.c_str());
+  }
   RCLCPP_INFO(nh_->get_logger(), "From joystick.lua:");
   RCLCPP_INFO(nh_->get_logger(), "  joystick_normal_speed = %.2f", normal_speed_);
   RCLCPP_INFO(nh_->get_logger(), "  joystick_turbo_speed = %.2f", turbo_speed_);
@@ -251,6 +278,29 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     }
   } else {
     RCLCPP_INFO(nh_->get_logger(), "IMU fusion disabled");
+  }
+
+  // Initialize debug logging if enabled
+  if (debug_ekf_) {
+    // Create debug directory if it doesn't exist
+    std::string debug_dir = debug_log_path_.substr(0, debug_log_path_.find_last_of('/'));
+    std::string mkdir_cmd = "mkdir -p " + debug_dir;
+    if (system(mkdir_cmd.c_str()) != 0) {
+      RCLCPP_WARN(nh_->get_logger(), "Failed to create debug directory: %s", debug_dir.c_str());
+    }
+    
+    debug_log_.open(debug_log_path_, std::ios::out | std::ios::trunc);
+    if (debug_log_.is_open()) {
+      // Write CSV header
+      debug_log_ << "timestamp,dt,commanded_velocity,steering_angle,"
+                 << "rpm,tachometer,delta_tach,tach_to_meters,"
+                 << "imu_angular_velocity_raw,imu_angular_velocity_transformed,"
+                 << "ekf_x,ekf_y,ekf_theta,ekf_v,ekf_omega,"
+                 << "odom_x,odom_y,odom_theta,odom_v,odom_omega\n";
+      RCLCPP_INFO(nh_->get_logger(), "EKF debug logging enabled: %s", debug_log_path_.c_str());
+    } else {
+      RCLCPP_ERROR(nh_->get_logger(), "Failed to open debug log file: %s", debug_log_path_.c_str());
+    }
   }
 
   if (kDebug) printf("TIMER START\n");
@@ -453,6 +503,7 @@ void VescDriver::sendDriveCommands() {
       last_speed_ - kCommandInterval * max_decel,
       last_speed_ + kCommandInterval * max_accel);
   last_speed_ = smooth_speed;
+  last_smooth_speed_ = smooth_speed;  // Store for EKF
   if (kDebug) {
     printf("%7.2f %7.2f %.1f\u00b0\n",
            mux_drive_speed_, smooth_speed, mux_steering_angle_);
@@ -519,18 +570,23 @@ void VescDriver::timerCallback() {
   }
 }
 
-void VescDriver::updateOdometry(float rpm, float steering_angle) {
-  // TODO: calculate speed based on tachometer as opposed to rpm
-
+void VescDriver::updateOdometry(float rpm, float tachometer, float steering_angle) {
   static float position_x = 0;
   static float position_y = 0;
   static float orientation = 0; // theta
   static double last_frame_time = rclcpp::Clock(RCL_ROS_TIME).now().seconds();
+  static double last_tachometer = tachometer;
   rclcpp::Time current_frame_time = rclcpp::Clock(RCL_ROS_TIME).now();
   double current_frame_time_sec = current_frame_time.seconds();
 
   // Update the estimated pose
   double del_t = current_frame_time_sec - last_frame_time;
+  
+  // Tachometer to meters conversion: tachometer counts motor commutations
+  // For VESC, typically 6 commutations per electrical revolution
+  // ERPM = speed * speed_to_erpm_gain + offset
+  // Therefore: tach_to_meters ≈ 60 / (speed_to_erpm_gain * 6)
+  static const float tach_to_meters = 60.0f / (speed_to_erpm_gain_ * 6.0f);
   
   float lin_vel = 0;
   float rot_vel = 0;
@@ -539,17 +595,43 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
   if (fuse_imu_ && ekf_ && imu_available_ && mpu6050_) {
     // Enforce monotonically increasing time stamps
     if (del_t >= 0 && del_t < 1.0) {
-      // Prediction step with odometry model
-      ekf_->predict(del_t, rpm, steering_angle, speed_to_erpm_gain_, speed_to_erpm_offset_);
+      // Prediction step with ACTUAL smoothed velocity sent to motor (not raw command)
+      ekf_->predict(del_t, last_smooth_speed_, steering_angle);
+      
+      // Update with wheel odometry from tachometer
+      double delta_tach = tachometer - last_tachometer;
+      ekf_->updateWheelOdometry(delta_tach, del_t, tach_to_meters, steering_angle);
+      
+      // Variables for IMU and debug logging (declared here for scope)
+      float imu_angular_velocity_x = 0;
+      float imu_angular_velocity_y = 0;
+      float imu_angular_velocity_z_raw = 0;
+      float car_angular_velocity_z = 0;
       
       // Read IMU angular velocity directly from sensor
       try {
         // MPU6050 returns angular velocity in degrees/sec, convert to rad/s
         static const float deg_to_rad = 0.0174533f;
-        float imu_angular_velocity_z = mpu6050_->getAngularVelocityZ() * deg_to_rad;
+        
+        // Read IMU data
+        imu_angular_velocity_x = mpu6050_->getAngularVelocityX() * deg_to_rad;
+        imu_angular_velocity_y = mpu6050_->getAngularVelocityY() * deg_to_rad;
+        imu_angular_velocity_z_raw = mpu6050_->getAngularVelocityZ() * deg_to_rad;
+        
+        // Apply IMU to car frame transformation
+        car_angular_velocity_z = imu_angular_velocity_z_raw;  // Default: no transform
+        if (imu_to_car_transform_.size() == 6) {
+          // Transform format: [x_sign, x_axis, y_sign, y_axis, z_sign, z_axis]
+          float imu_angular_velocity[3] = {imu_angular_velocity_x, imu_angular_velocity_y, imu_angular_velocity_z_raw};
+          int z_axis = static_cast<int>(imu_to_car_transform_[5]);
+          float z_sign = imu_to_car_transform_[4];
+          if (z_axis >= 0 && z_axis < 3) {
+            car_angular_velocity_z = z_sign * imu_angular_velocity[z_axis];
+          }
+        }
         
         // Update step with IMU measurement
-        ekf_->updateIMU(imu_angular_velocity_z, true);
+        ekf_->updateIMU(car_angular_velocity_z, del_t);
         
         // Publish IMU message
         auto imu_msg = sensor_msgs::msg::Imu();
@@ -562,10 +644,10 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
         imu_msg.linear_acceleration.z = mpu6050_->getAccelerationZ();
         imu_msg.linear_acceleration_covariance = {0};
         
-        // Angular velocity
-        imu_msg.angular_velocity.x = mpu6050_->getAngularVelocityX() * deg_to_rad;
-        imu_msg.angular_velocity.y = mpu6050_->getAngularVelocityY() * deg_to_rad;
-        imu_msg.angular_velocity.z = imu_angular_velocity_z;
+        // Angular velocity (already transformed to car frame above)
+        imu_msg.angular_velocity.x = 0;  // Only using Z axis for now
+        imu_msg.angular_velocity.y = 0;
+        imu_msg.angular_velocity.z = car_angular_velocity_z;
         imu_msg.angular_velocity_covariance[0] = {0};
         
         // Invalidate quaternion (not calculated)
@@ -578,7 +660,7 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
         imu_pub_->publish(imu_msg);
         
         if (kDebug) {
-          printf("IMU: angular_velocity_z = %.3f rad/s\n", imu_angular_velocity_z);
+          printf("IMU: angular_velocity_z (car frame) = %.3f rad/s\n", car_angular_velocity_z);
         }
       } catch (const std::exception& e) {
         // If sensor read fails, continue with prediction only
@@ -587,8 +669,34 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
         }
       }
       
-      // Get fused state estimate
+      // Get fused state estimate (pose and velocities)
       ekf_->getState(position_x, position_y, orientation, lin_vel, rot_vel);
+      
+      // Debug logging
+      if (debug_ekf_ && debug_log_.is_open()) {
+        debug_log_ << std::fixed << std::setprecision(6)
+                   << current_frame_time_sec << ","
+                   << del_t << ","
+                   << last_smooth_speed_ << ","  // Log ACTUAL speed sent to motor
+                   << steering_angle << ","
+                   << rpm << ","
+                   << tachometer << ","
+                   << (tachometer - last_tachometer) << ","
+                   << tach_to_meters << ","
+                   << (imu_angular_velocity_z_raw / 0.0174533f) << ","  // Convert back to deg/s
+                   << (car_angular_velocity_z / 0.0174533f) << ","      // Convert back to deg/s
+                   << position_x << ","
+                   << position_y << ","
+                   << orientation << ","
+                   << lin_vel << ","
+                   << rot_vel << ","
+                   << position_x << ","  // odom same as ekf when using ekf
+                   << position_y << ","
+                   << orientation << ","
+                   << lin_vel << ","
+                   << rot_vel << "\n";
+        debug_log_.flush();
+      }
     }
   } else {
     // Standard odometry without EKF fusion
@@ -650,6 +758,7 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
     printf("Odometry messages received out of order.\n") ;
   }
   last_frame_time = current_frame_time_sec;
+  last_tachometer = tachometer;
 }
 
 void VescDriver::vescPacketCallback(const boost::shared_ptr<VescPacket const>&
@@ -688,7 +797,7 @@ packet)
     car_status_msg_.status = static_cast<uint8_t>(drive_mode_);
   car_status_pub_->publish(car_status_msg_);
 
-    updateOdometry(values->rpm(), last_steering_angle_);
+    updateOdometry(values->rpm(), values->tachometer(), last_steering_angle_);
 
   }
   else if (packet->name() == "FWVersion") {

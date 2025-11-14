@@ -13,13 +13,18 @@ namespace vesc_driver
 {
 
 /**
- * @brief Extended Kalman Filter for fusing odometry with IMU data
+ * @brief Extended Kalman Filter for fusing wheel odometry, commanded velocity, and IMU data
  * 
  * State vector: [x, y, theta, v, omega]
- * - x, y: position in odom frame
- * - theta: orientation (yaw)
- * - v: linear velocity
- * - omega: angular velocity
+ * - x, y: position in odom frame (m)
+ * - theta: orientation (yaw, rad)
+ * - v: linear velocity (m/s)
+ * - omega: angular velocity (rad/s)
+ * 
+ * Measurements:
+ * - Wheel odometry (delta_x, delta_y from tachometer)
+ * - IMU angular velocity
+ * - Commanded velocity (for drift prevention)
  */
 class EKFFusion
 {
@@ -31,22 +36,28 @@ public:
   explicit EKFFusion(float wheelbase);
 
   /**
-   * @brief Predict step using odometry model
+   * @brief Predict step using commanded velocity model
    * @param dt Time step (seconds)
-   * @param rpm Motor RPM from VESC
+   * @param commanded_velocity Commanded velocity from controller (m/s)
    * @param steering_angle Current steering angle (radians)
-   * @param speed_to_erpm_gain Conversion gain from speed to ERPM
-   * @param speed_to_erpm_offset Conversion offset from speed to ERPM
    */
-  void predict(double dt, float rpm, float steering_angle,
-               float speed_to_erpm_gain, float speed_to_erpm_offset);
+  void predict(double dt, float commanded_velocity, float steering_angle);
+
+  /**
+   * @brief Update step using wheel odometry from tachometer
+   * @param delta_tach Change in tachometer reading (encoder ticks)
+   * @param dt Time step (seconds)
+   * @param tach_to_meters Conversion from tachometer ticks to meters
+   * @param steering_angle Current steering angle (radians)
+   */
+  void updateWheelOdometry(double delta_tach, double dt, float tach_to_meters, float steering_angle);
 
   /**
    * @brief Update step using IMU angular velocity measurement
    * @param angular_velocity_z Angular velocity from IMU (rad/s)
-   * @param available Whether IMU data is available
+   * @param dt Time step (seconds)
    */
-  void updateIMU(float angular_velocity_z, bool available);
+  void updateIMU(float angular_velocity_z, double dt);
 
   /**
    * @brief Get current state estimate
@@ -73,7 +84,10 @@ private:
   // Process noise covariance
   Eigen::Matrix<float, 5, 5> Q_;
   
-  // IMU measurement noise covariance (for omega)
+  // Wheel odometry measurement noise covariance (2x2 for dx, dy)
+  Eigen::Matrix<float, 2, 2> R_wheel_;
+  
+  // IMU measurement noise covariance (for angular velocity)
   float R_imu_;
   
   // Vehicle wheelbase

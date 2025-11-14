@@ -6,6 +6,7 @@
 #include <atomic>
 #include <string>
 #include <memory>
+#include <fstream>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float64.hpp"
@@ -98,6 +99,8 @@ private:
   std::atomic<double> t_last_joystick_;
   // Last servo angle command
   float last_steering_angle_;
+  // Last smoothed speed actually sent to motor (for EKF)
+  float last_smooth_speed_;
 
   // Create an odometry message
   nav_msgs::msg::Odometry odom_msg_;
@@ -107,6 +110,10 @@ private:
   std::unique_ptr<MPU6050Sensor> mpu6050_;
   bool fuse_imu_ = true;
   bool imu_available_;
+  std::vector<float> imu_to_car_transform_;
+
+  // Debug logging
+  std::ofstream debug_log_;
 
   // Convert curvature commands to steering angle.
   float CalculateSteeringAngle(float lin_vel, float rot_vel);
@@ -122,7 +129,7 @@ private:
       const amrl_msgs::msg::AckermannCurvatureDriveMsg::SharedPtr cmd);
   void joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg);
 
-  void updateOdometry(float rpm, float steering_angle);
+  void updateOdometry(float rpm, float tachometer, float steering_angle);
   
   // true if car is running autonomously, false otherwise 
   bool isAutonomous();
