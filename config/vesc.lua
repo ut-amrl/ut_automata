@@ -36,13 +36,3 @@ calibrate_imu = true; -- Calibrate IMU on startup
 imu_gyro_range = 0; -- 0=250, 1=500, 2=1000, 3=2000 deg/s
 imu_accel_range = 0; -- 0=2g, 1=4g, 2=8g, 3=16g
 imu_dlpf_bandwidth = 0; -- 0=260Hz, 1=184Hz, 2=94Hz, 3=44Hz, 4=21Hz, 5=10Hz, 6=5Hz
-
--- Debug EKF logging for drift analysis
-debug_ekf = true; -- Set to true to log EKF data
-debug_log_path = "/home/orin/roboracer_ws/data/debug/ekf_debug.csv"; -- Path to debug log file
-
--- IMU mounting orientation is configured in vesc_driver.cpp
--- Common orientations:
---   Standard (IMU +x forward, +y left): {1, 0, 1, 1, 1, 2}
---   IMU +x rear, +y right: {-1, 0, -1, 1, -1, 0}
---   IMU +x right, +y forward: {1, 1, -1, 0, 1, 2}

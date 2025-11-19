@@ -101,6 +101,14 @@ private:
   float last_steering_angle_;
   // Last smoothed speed actually sent to motor (for EKF)
   float last_smooth_speed_;
+  
+  // Last D-pad state for trim control
+  int last_dpad_x_;
+  int last_dpad_y_;
+  
+  // Runtime-adjustable trim offsets (initialized from config)
+  float steering_offset_trim_;
+  float speed_offset_trim_;
 
   // Create an odometry message
   nav_msgs::msg::Odometry odom_msg_;
@@ -130,6 +138,9 @@ private:
   void joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg);
 
   void updateOdometry(float rpm, float tachometer, float steering_angle);
+  
+  // Save trim offsets to car.lua configuration file
+  void saveTrimOffsetsToConfig();
   
   // true if car is running autonomously, false otherwise 
   bool isAutonomous();

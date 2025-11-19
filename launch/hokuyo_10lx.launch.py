@@ -19,15 +19,24 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'ip_address': '192.168.0.10',
+            'ip_port': 10940,
             'serial_port': '',
             'serial_baud': 115200,
-            'frame_id': 'laser',
-            'calibrate_time': False,
-            'publish_intensity': True,
+            'laser_frame_id': 'laser',
+            'angle_max': 2.35619,
+            'angle_min': -2.35619,
+            'publish_intensity': False,
             'publish_multiecho': False,
-            'angle_min': -2.25,
-            'angle_max': 2.25,
+            'calibrate_time': False,
+            'default_user_latency': 0.0,
+            'diagnostics_tolerance': 0.05,
+            'diagnostics_window_time': 5.0,
+            'error_limit': 4,
+            'get_detailed_status': False,
+            'cluster': 1,
+            'skip': 1,
         }],
     ))
+
 
     return ld

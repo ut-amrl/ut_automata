@@ -88,6 +88,15 @@ class JoystickTeleop(Node):
             joy_msg.axes.append(self.joystick.get_axis(i))
             #if (self.joystick.get_axis(i)):
             #  self.last_active_time = time.time()
+        
+        # Get hat (d-pad)
+        if self.joystick.get_numhats() > 0:
+            hat = self.joystick.get_hat(0)
+            joy_msg.axes.append(hat[0]) # Left/Right (Axis 6)
+            joy_msg.axes.append(hat[1]) # Up/Down (Axis 7)
+        else:
+            joy_msg.axes.append(0.0)
+            joy_msg.axes.append(0.0)
         for i in range(10): #10
             joy_msg.buttons.append(self.joystick.get_button(i))
             if (self.joystick.get_button(i)):

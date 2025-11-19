@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <unistd.h>
 #include <regex>
+#include <ctime>
 
 #include "boost/bind/bind.hpp"
 #include "gflags/gflags.h"
@@ -87,6 +88,10 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     t_last_command_(0),
     t_last_joystick_(0),
     last_smooth_speed_(0),
+    last_dpad_x_(0),
+    last_dpad_y_(0),
+    steering_offset_trim_(0),
+    speed_offset_trim_(0),
     imu_available_(false) {
   // Load config. Ensure car.lua exists; if it doesn't, create it using
   // the hostname. Hostnames like "orin07" will produce car_name = "car07".
@@ -186,6 +191,13 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   RCLCPP_INFO(nh_->get_logger(), "  calculated min_turning_radius = %.3f m", 
               wheelbase_ / tan(max_steering_angle_));
   RCLCPP_INFO(nh_->get_logger(), "===================================");
+  
+  // Initialize trim offsets from config values
+  steering_offset_trim_ = steering_to_servo_offset_;
+  speed_offset_trim_ = speed_to_erpm_offset_;
+  
+  
+  state_msg_.header.frame_id = "base_link";
   
   state_msg_.header.frame_id = "base_link";
   car_status_msg_.header = state_msg_.header;
@@ -351,6 +363,39 @@ void VescDriver::joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
   static const size_t kAutonomousDriveButton = 5;
   static const size_t kAutonomousDriveToggleButton = 7;
   if (msg->buttons.size() < 6) return;
+
+  // Trim logic using D-pad (axes 6 and 7)
+  if (msg->axes.size() >= 8) {
+    int dpad_x = static_cast<int>(msg->axes[6]);
+    int dpad_y = static_cast<int>(msg->axes[7]);
+    
+    // Steering trim (Left/Right)
+    if (dpad_x != 0 && dpad_x != last_dpad_x_) {
+      // Left (-1) decreases offset, Right (+1) increases offset
+      float step = 0.01f;
+      steering_offset_trim_ += dpad_x * step;
+      saveTrimOffsetsToConfig();
+      RCLCPP_INFO(nh_->get_logger(), "Steering Trim: %.3f (delta from config: %.3f)", 
+                  steering_offset_trim_, steering_offset_trim_ - steering_to_servo_offset_);
+    }
+
+    // Speed trim (Up/Down)
+    if (dpad_y != 0 && dpad_y != last_dpad_y_) {
+      // Up (+1) increases offset, Down (-1) decreases offset
+      // ERPM values are typically in thousands, so 100 is a small adjustment
+      float step = 100.0f;
+      speed_offset_trim_ += dpad_y * step;
+      saveTrimOffsetsToConfig();
+      RCLCPP_INFO(nh_->get_logger(), "Speed Trim: %.2f (delta from config: %.2f)", 
+                  speed_offset_trim_, speed_offset_trim_ - speed_to_erpm_offset_);
+    }
+    
+    last_dpad_x_ = dpad_x;
+    last_dpad_y_ = dpad_y;
+  }
+
+
+
   t_last_joystick_ = rclcpp::Clock(RCL_ROS_TIME).now().seconds();
   int toggle = toggleState(msg->buttons[kAutonomousDriveToggleButton]);
 
@@ -509,11 +554,11 @@ void VescDriver::sendDriveCommands() {
            mux_drive_speed_, smooth_speed, mux_steering_angle_);
   }
   const float erpm =
-      speed_to_erpm_gain_ * smooth_speed + speed_to_erpm_offset_;
+      speed_to_erpm_gain_ * smooth_speed + speed_offset_trim_;
 
   // calc steering angle (servo)
   const float servo = steering_to_servo_gain_ * mux_steering_angle_ +
-      steering_to_servo_offset_;
+      steering_offset_trim_;
 
   // Set speed command.
   const float erpm_clipped = Clip(erpm, -erpm_speed_limit_, erpm_speed_limit_, "erpm");
@@ -522,11 +567,11 @@ void VescDriver::sendDriveCommands() {
   // Set servo position command.
   const float clipped_servo = Clip(servo, servo_min_, servo_max_, "servo");
   vesc_.setServo(clipped_servo);
-  mux_steering_angle_ = (clipped_servo - steering_to_servo_offset_) 
+  mux_steering_angle_ = (clipped_servo - steering_offset_trim_) 
                         / steering_to_servo_gain_;
   last_steering_angle_ = mux_steering_angle_;
 
-  const float clipped_speed = (erpm_clipped - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+  const float clipped_speed = (erpm_clipped - speed_offset_trim_) / speed_to_erpm_gain_;
   drive_pub_->publish(CalculateDriveCmd(clipped_speed, mux_steering_angle_));
 }
 
@@ -701,7 +746,7 @@ void VescDriver::updateOdometry(float rpm, float tachometer, float steering_angl
   } else {
     // Standard odometry without EKF fusion
     // Calcuate linear velocity
-    lin_vel = (rpm - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+    lin_vel = (rpm - speed_offset_trim_) / speed_to_erpm_gain_;
     // Clamp velocity to zero for minuscule values - a VESC drift issue.
     if (fabs(lin_vel) < 0.01) {
       lin_vel = 0.0;
@@ -832,6 +877,78 @@ void VescDriver::ackermannCurvatureCallback(
   }
 }
  
+
+void VescDriver::saveTrimOffsetsToConfig() {
+  std::string car_path = FLAGS_config_dir + "/car.lua";
+  
+  // Read existing content
+  std::ifstream file_in(car_path);
+  std::string content;
+  if (file_in.good()) {
+    std::stringstream buffer;
+    buffer << file_in.rdbuf();
+    content = buffer.str();
+    file_in.close();
+    
+    // Create backup
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S");
+    std::string backup_path = car_path + ".bk-" + ss.str();
+    
+    std::ofstream backup_out(backup_path);
+    if (backup_out.good()) {
+      backup_out << content;
+      backup_out.close();
+      RCLCPP_INFO(nh_->get_logger(), "Created backup config: %s", backup_path.c_str());
+    } else {
+      RCLCPP_WARN(nh_->get_logger(), "Failed to create backup config: %s", backup_path.c_str());
+    }
+  }
+  
+  // Prepare the offset lines with current absolute values
+  std::string steering_line = "steering_angle_to_servo_offset = " + 
+                              std::to_string(steering_offset_trim_) + ";\n";
+  std::string speed_line = "speed_to_erpm_offset = " + 
+                          std::to_string(speed_offset_trim_) + ";\n";
+  
+  // Check if values already exist and update them, or append if not
+  // Regex to match existing assignments. Note: values can be negative.
+  std::regex steering_regex(R"(steering_angle_to_servo_offset\s*=\s*[-+]?[0-9]*\.?[0-9]+;)");
+  std::regex speed_regex(R"(speed_to_erpm_offset\s*=\s*[-+]?[0-9]*\.?[0-9]+;)");
+  
+  bool has_steering = std::regex_search(content, steering_regex);
+  bool has_speed = std::regex_search(content, speed_regex);
+  
+  if (has_steering) {
+    content = std::regex_replace(content, steering_regex, 
+                                 "steering_angle_to_servo_offset = " + 
+                                 std::to_string(steering_offset_trim_) + ";");
+  } else {
+    content += steering_line;
+  }
+  
+  if (has_speed) {
+    content = std::regex_replace(content, speed_regex,
+                                "speed_to_erpm_offset = " + 
+                                std::to_string(speed_offset_trim_) + ";");
+  } else {
+    content += speed_line;
+  }
+  
+  // Write back to file
+  std::ofstream file_out(car_path);
+  if (file_out.good()) {
+    file_out << content;
+    file_out.close();
+    RCLCPP_INFO(nh_->get_logger(), 
+                "Saved offsets to %s: steering=%.3f, speed=%.2f",
+                car_path.c_str(), steering_offset_trim_, speed_offset_trim_);
+  } else {
+    RCLCPP_ERROR(nh_->get_logger(), "Failed to write offsets to %s", car_path.c_str());
+  }
+}
 
 bool VescDriver::isAutonomous(){
   return drive_mode_ == kAutonomousDrive || drive_mode_ == kAutonomousContinuousDrive;
