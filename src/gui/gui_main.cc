@@ -78,6 +78,8 @@ std::atomic_bool is_recording_{false};
 std::atomic<std::chrono::steady_clock::time_point> last_joystick_time_{std::chrono::steady_clock::time_point{}};
 // Track last IMU message time for timeout detection
 std::atomic<std::chrono::steady_clock::time_point> last_imu_time_{std::chrono::steady_clock::time_point{}};
+// Track last recording status message time for recorder node detection
+std::atomic<std::chrono::steady_clock::time_point> last_recording_time_{std::chrono::steady_clock::time_point{}};
 // ROS node and subscriptions for proper cleanup
 std::shared_ptr<rclcpp::Node> ros_node_ = nullptr;
 rclcpp::Subscription<CarStatusMsg>::SharedPtr status_sub_ = nullptr;
@@ -199,6 +201,9 @@ void RecordingCallback(const Int32::SharedPtr msg) {
   std::lock_guard<std::mutex> lock(cleanup_mutex_);
   if (!run_.load() || main_window_ == nullptr || !rclcpp::ok()) return;
   
+  // Update the last recording message timestamp
+  last_recording_time_.store(std::chrono::steady_clock::now());
+  
   bool recording = (msg->data == 1);
   is_recording_.store(recording);
 }
@@ -278,7 +283,25 @@ void* RosThread(void* arg) {
                                  imu_okay_.load(),
                                  throttle_.load(),
                                  steering_.load());
-      main_window_->UpdateRecordingStatus(is_recording_.load());
+      
+      // Determine recording state based on message reception and recording status
+      auto now = std::chrono::steady_clock::now();
+      auto last_recording = last_recording_time_.load();
+      auto time_since_recording = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_recording).count();
+      
+      ut_automata_gui::Led::RecordingState recording_state;
+      if (time_since_recording > 2000) {  // No message for 2 seconds
+        // Recorder node is not running
+        recording_state = ut_automata_gui::Led::INACTIVE;
+      } else if (is_recording_.load()) {
+        // Recorder node is running and recording
+        recording_state = ut_automata_gui::Led::RECORDING;
+      } else {
+        // Recorder node is running but not recording
+        recording_state = ut_automata_gui::Led::READY;
+      }
+      
+      main_window_->UpdateRecordingState(recording_state);
     }
     loop.Sleep();
   }
@@ -393,6 +416,7 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, &SignalHandler);
   qRegisterMetaType<std::vector<std::string> >("std::vector<std::string>");
   qRegisterMetaType<QPixmap>("QPixmap");
+  qRegisterMetaType<ut_automata_gui::Led::RecordingState>("Led::RecordingState");
 
   QApplication app(argc, argv);
   main_window_ = new ut_automata_gui::MainWindow();

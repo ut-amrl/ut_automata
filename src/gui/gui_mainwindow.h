@@ -68,10 +68,26 @@ class Led : public QWidget {
   Q_OBJECT
   
  public:
-  Led(bool is_recording_led = false) : status_on_(false), is_recording_led_(is_recording_led) {}
+  enum RecordingState {
+    INACTIVE,    // Node not running - Grey
+    READY,       // Node active, not recording - Red
+    RECORDING    // Recording in progress - Green
+  };
+  
+  Led(bool is_recording_led = false) : 
+      status_on_(false), 
+      is_recording_led_(is_recording_led),
+      recording_state_(INACTIVE) {}
+  
   void SetStatus(bool value) {
     if (status_on_ == value) return;
     status_on_ = value;
+    update();
+  }
+  
+  void SetRecordingState(RecordingState state) {
+    if (recording_state_ == state) return;
+    recording_state_ = state;
     update();
   }
 
@@ -84,11 +100,17 @@ class Led : public QWidget {
     painter.begin(this);
     
     if (is_recording_led_) {
-      // Recording LED: Red when recording (on), Grey when not recording (off)
-      if (status_on_) {
-        painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
-      } else {
-        painter.fillRect(QRectF(0, 0, width(), height()), kGreyBrush);
+      // Recording LED: Grey (inactive), Red (ready), Green (recording)
+      switch (recording_state_) {
+        case INACTIVE:
+          painter.fillRect(QRectF(0, 0, width(), height()), kGreyBrush);
+          break;
+        case READY:
+          painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+          break;
+        case RECORDING:
+          painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+          break;
       }
     } else {
       // Normal status LED: Green when okay (on), Red when not okay (off)
@@ -104,6 +126,7 @@ class Led : public QWidget {
  private:
   bool status_on_;
   bool is_recording_led_;
+  RecordingState recording_state_;
 };
 
 class StatusLed : public QFrame {
@@ -112,6 +135,7 @@ class StatusLed : public QFrame {
  public:
   explicit StatusLed(QString name, bool is_recording_led = false);
   void SetStatus(bool value);
+  void SetRecordingState(Led::RecordingState state);
 
  private:
   bool status_on_;
@@ -170,6 +194,7 @@ public:
                     float steering);
   void UpdateCamera(const QPixmap& image);
   void UpdateRecordingStatus(bool recording);
+  void UpdateRecordingState(Led::RecordingState state);
 
 public slots:
   void closeWindow();
@@ -190,6 +215,7 @@ public slots:
   void StartTmuxConfiguration();
   void StopTmuxConfiguration();
   void UpdateRecordingStatusSlot(bool recording);
+  void UpdateRecordingStateSlot(Led::RecordingState state);
   void UpdateTopicsToRecord();
   void ToggleTopicRecording();
 
@@ -207,6 +233,7 @@ signals:
                           float steering);
   void UpdateCameraSignal(const QPixmap& image);
   void UpdateRecordingStatusSignal(bool recording);
+  void UpdateRecordingStateSignal(Led::RecordingState state);
 
 private:
 

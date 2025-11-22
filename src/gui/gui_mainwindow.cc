@@ -171,6 +171,10 @@ void StatusLed::SetStatus(bool value) {
   led_->SetStatus(value);
 }
 
+void StatusLed::SetRecordingState(Led::RecordingState state) {
+  led_->SetRecordingState(state);
+}
+
 DiskSpaceBar::DiskSpaceBar(QWidget* parent) 
     : QWidget(parent), used_gb_(0.0f), total_gb_(0.0f) {
   setFixedHeight(24); // 12pt font tall, with some padding
@@ -537,6 +541,10 @@ MainWindow::MainWindow(QWidget* parent) :
   connect(this,
           SIGNAL(UpdateRecordingStatusSignal(bool)),
           SLOT(UpdateRecordingStatusSlot(bool)));
+  
+  connect(this,
+          SIGNAL(UpdateRecordingStateSignal(Led::RecordingState)),
+          SLOT(UpdateRecordingStateSlot(Led::RecordingState)));
 }
 
 MainWindow::~MainWindow() {
@@ -817,6 +825,16 @@ void MainWindow::UpdateRecordingStatus(bool recording) {
 void MainWindow::UpdateRecordingStatusSlot(bool recording) {
   if (recording_led_) {
     recording_led_->SetStatus(recording);
+  }
+}
+
+void MainWindow::UpdateRecordingState(Led::RecordingState state) {
+  UpdateRecordingStateSignal(state);
+}
+
+void MainWindow::UpdateRecordingStateSlot(Led::RecordingState state) {
+  if (recording_led_) {
+    recording_led_->SetRecordingState(state);
   }
 }
 
