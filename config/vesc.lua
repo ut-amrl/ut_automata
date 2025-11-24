@@ -29,6 +29,15 @@ joystick_turbo_speed = 2.0; -- m/s
 -- Example: 0.425 rad (24.35°) gives 0.75m turning radius with 0.324m wheelbase
 max_steering_angle = 0.425; -- radians
 
+-- Joystick steering curve
+-- Bezier Curve Examples (xm, ym):
+-- Linear: (0.5, 0.5)
+-- Soft Center: (0.6, 0.2) or very soft center (0.8, 0.1) -- very soft center is the default, which makes the joystick less sensitive in the center and more sensitive at the edges
+-- Aggressive Center: (0.3, 0.6) -- you probably don't want to use this as it makes the center of the joystick more sensitive, not less!
+steering_curve_xm = 0.8;
+steering_curve_ym = 0.1;
+
+
 -- IMU fusion parameters
 fuse_imu = true; -- Set to true to fuse IMU data with odometry using EKF
 i2c_bus_number = 7; -- I2C bus number for MPU6050 sensor

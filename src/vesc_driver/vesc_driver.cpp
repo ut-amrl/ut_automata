@@ -46,6 +46,8 @@ CONFIG_FLOAT(max_decel_, "max_deceleration");
 CONFIG_FLOAT(turbo_speed_, "joystick_turbo_speed");
 CONFIG_FLOAT(normal_speed_, "joystick_normal_speed");
 CONFIG_FLOAT(max_steering_angle_, "max_steering_angle");
+CONFIG_FLOAT(steering_curve_xm_, "steering_curve_xm");
+CONFIG_FLOAT(steering_curve_ym_, "steering_curve_ym");
 CONFIG_STRING(joystick_mode_, "joystick_mode");
 CONFIG_STRING(serial_port_, "serial_port");
 CONFIG_BOOL(fuse_imu_, "fuse_imu");
@@ -71,6 +73,38 @@ float mux_steering_angle_ = 0;
 
 VescStateStamped state_msg_;
 CarStatusMsg car_status_msg_;
+
+// Helper for 4th degree Bezier
+float Bezier4(float t, float p0, float p1, float p2, float p3, float p4) {
+  float one_minus_t = 1.0f - t;
+  float one_minus_t2 = one_minus_t * one_minus_t;
+  float one_minus_t3 = one_minus_t2 * one_minus_t;
+  float one_minus_t4 = one_minus_t3 * one_minus_t;
+  float t2 = t * t;
+  float t3 = t2 * t;
+  float t4 = t3 * t;
+  
+  return one_minus_t4 * p0 +
+         4.0f * one_minus_t3 * t * p1 +
+         6.0f * one_minus_t2 * t2 * p2 +
+         4.0f * one_minus_t * t3 * p3 +
+         t4 * p4;
+}
+
+// Derivative of 4th degree Bezier
+float Bezier4Prime(float t, float p0, float p1, float p2, float p3, float p4) {
+  float one_minus_t = 1.0f - t;
+  float one_minus_t2 = one_minus_t * one_minus_t;
+  float one_minus_t3 = one_minus_t2 * one_minus_t;
+  float t2 = t * t;
+  float t3 = t2 * t;
+  
+  return 4.0f * one_minus_t3 * (p1 - p0) +
+         12.0f * one_minus_t2 * t * (p2 - p1) +
+         12.0f * one_minus_t * t2 * (p3 - p2) +
+         4.0f * t3 * (p4 - p3);
+}
+
 }  // namespace
 
 namespace vesc_driver
@@ -188,6 +222,8 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   RCLCPP_INFO(nh_->get_logger(), "  joystick_mode = %s", joystick_mode_.c_str());
   RCLCPP_INFO(nh_->get_logger(), "  max_steering_angle = %.3f rad (%.1f deg)", 
               max_steering_angle_, max_steering_angle_ * 180.0 / M_PI);
+  RCLCPP_INFO(nh_->get_logger(), "  steering_curve_xm = %.2f", steering_curve_xm_);
+  RCLCPP_INFO(nh_->get_logger(), "  steering_curve_ym = %.2f", steering_curve_ym_);
   RCLCPP_INFO(nh_->get_logger(), "  calculated min_turning_radius = %.3f m", 
               wheelbase_ / tan(max_steering_angle_));
   RCLCPP_INFO(nh_->get_logger(), "===================================");
@@ -481,7 +517,42 @@ void VescDriver::joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
     const bool turbo_mode = (msg->axes[2] >= 0.9);
     const float max_speed = (turbo_mode ? turbo_speed_ : normal_speed_);
     float speed = drive_joystick * max_speed;
-    float steering_angle = steer_joystick * max_steering_angle_;
+    
+    // Apply 2D Parametric Bezier curve to steering input
+    // P0=(-1,-1), P1=(-xm,-ym), P2=(0,0), P3=(xm,ym), P4=(1,1)
+    // We need to find t such that BezierX(t) = steer_joystick
+    // Then steering_output = BezierY(t)
+    
+    float x_target = steer_joystick;
+    
+    // Initial guess for t (linear mapping from [-1, 1] to [0, 1])
+    float t = (x_target + 1.0f) * 0.5f;
+    
+    // Newton's method to solve for t
+    const int kMaxIter = 10;
+    const float kEpsilon = 1e-4f;
+    
+    for (int i = 0; i < kMaxIter; ++i) {
+      float x_val = Bezier4(t, -1.0f, -steering_curve_xm_, 0.0f, steering_curve_xm_, 1.0f);
+      float error = x_val - x_target;
+      
+      if (std::abs(error) < kEpsilon) break;
+      
+      float dx_dt = Bezier4Prime(t, -1.0f, -steering_curve_xm_, 0.0f, steering_curve_xm_, 1.0f);
+      
+      // Avoid division by zero
+      if (std::abs(dx_dt) < 1e-6f) break;
+      
+      t -= error / dx_dt;
+      
+      // Clamp t to [0, 1]
+      t = std::max(0.0f, std::min(1.0f, t));
+    }
+    
+    // Compute Y value for the found t
+    float steer_curved = Bezier4(t, -1.0f, -steering_curve_ym_, 0.0f, steering_curve_ym_, 1.0f);
+    
+    float steering_angle = steer_curved * max_steering_angle_;
     mux_drive_speed_ = speed;
     mux_steering_angle_ = steering_angle;
     if (kDebug) printf("Mode: %s, Speed: %7.2f, Steering: %.1f\u00b0\n", 
