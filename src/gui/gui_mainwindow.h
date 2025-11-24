@@ -195,6 +195,7 @@ public:
   void UpdateCamera(const QPixmap& image);
   void UpdateRecordingStatus(bool recording);
   void UpdateRecordingState(Led::RecordingState state);
+  void UpdateAvailableTopics(const std::vector<std::string>& topics);
 
 public slots:
   void closeWindow();
@@ -218,6 +219,7 @@ public slots:
   void UpdateRecordingStateSlot(Led::RecordingState state);
   void UpdateTopicsToRecord();
   void ToggleTopicRecording();
+  void UpdateAvailableTopicsSlot(const std::vector<std::string>& topics);
 
 signals:
   void UpdateQuestion(std::string question,
@@ -234,6 +236,7 @@ signals:
   void UpdateCameraSignal(const QPixmap& image);
   void UpdateRecordingStatusSignal(bool recording);
   void UpdateRecordingStateSignal(Led::RecordingState state);
+  void UpdateAvailableTopicsSignal(const std::vector<std::string>& topics);
 
 private:
 
@@ -268,6 +271,7 @@ private:
   
   // Recording status
   StatusLed* recording_led_;
+  QWidget* recorder_widget_;
   
   // Recording topic selection
   std::vector<std::string> available_topics_;

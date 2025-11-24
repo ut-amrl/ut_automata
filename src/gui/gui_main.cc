@@ -51,6 +51,7 @@
 #include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
 #include "ut_automata/msg/car_status_msg.hpp"
 #include "std_msgs/msg/int32.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
@@ -60,6 +61,7 @@ using sensor_msgs::msg::LaserScan;
 using sensor_msgs::msg::Image;
 using sensor_msgs::msg::Joy;
 using sensor_msgs::msg::Imu;
+using std_msgs::msg::Int32;
 using std_msgs::msg::Int32;
 
 namespace {
@@ -89,6 +91,7 @@ rclcpp::Subscription<Image>::SharedPtr camera_sub_ = nullptr;
 rclcpp::Subscription<Joy>::SharedPtr joystick_sub_ = nullptr;
 rclcpp::Subscription<Imu>::SharedPtr imu_sub_ = nullptr;
 rclcpp::Subscription<Int32>::SharedPtr recording_sub_ = nullptr;
+rclcpp::Subscription<std_msgs::msg::String>::SharedPtr topics_sub_ = nullptr;
 std::mutex cleanup_mutex_;
 int lock_fd_ = -1;  // File descriptor for the lock file
 }  // namespace
@@ -208,6 +211,37 @@ void RecordingCallback(const Int32::SharedPtr msg) {
   is_recording_.store(recording);
 }
 
+std::vector<std::string> ParseTopicList(const std::string& json) {
+  std::vector<std::string> topics;
+  std::string s = json;
+  // Remove brackets
+  size_t start = s.find('[');
+  size_t end = s.rfind(']');
+  if (start == std::string::npos || end == std::string::npos || end <= start) return topics;
+  
+  s = s.substr(start + 1, end - start - 1);
+  
+  std::stringstream ss(s);
+  std::string item;
+  while (std::getline(ss, item, ',')) {
+    // Trim whitespace and quotes
+    size_t first = item.find_first_not_of(" \"\t\r\n");
+    size_t last = item.find_last_not_of(" \"\t\r\n");
+    if (first != std::string::npos && last != std::string::npos) {
+      topics.push_back(item.substr(first, last - first + 1));
+    }
+  }
+  return topics;
+}
+
+void TopicsCallback(const std_msgs::msg::String::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cleanup_mutex_);
+  if (!run_.load() || main_window_ == nullptr || !rclcpp::ok()) return;
+  
+  std::vector<std::string> topics = ParseTopicList(msg->data);
+  main_window_->UpdateAvailableTopics(topics);
+}
+
 void* RosThread(void* arg) {
   // Don't detach - we need to properly join the thread
   // pthread_detach(pthread_self());
@@ -229,6 +263,8 @@ void* RosThread(void* arg) {
       "/imu", 10u, &ImuCallback);
   recording_sub_ = ros_node_->create_subscription<Int32>(
       "/recording", 10u, &RecordingCallback);
+  topics_sub_ = ros_node_->create_subscription<std_msgs::msg::String>(
+      "/recorder/topics", 10u, &TopicsCallback);
 
   RateLoop loop(5.0);
   while (rclcpp::ok() && run_.load()) {
@@ -345,6 +381,10 @@ void* RosThread(void* arg) {
           recording_sub_.reset();
           printf("Recording subscription cleaned up\n");
         }
+        if (topics_sub_) {
+          topics_sub_.reset();
+          printf("Topics subscription cleaned up\n");
+        }
       } catch (const std::exception& e) {
         printf("Exception during subscription cleanup: %s\n", e.what());
       }
@@ -371,6 +411,7 @@ void* RosThread(void* arg) {
       joystick_sub_.reset();
       imu_sub_.reset();
       recording_sub_.reset();
+      topics_sub_.reset();
       ros_node_.reset();
     }
   }

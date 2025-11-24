@@ -321,7 +321,8 @@ MainWindow::MainWindow(QWidget* parent) :
     status_label_(nullptr),
     disk_space_bar_(nullptr),
     stop_config_button_(nullptr),
-    recording_led_(nullptr) {
+    recording_led_(nullptr),
+    recorder_widget_(nullptr) {
   this->setWindowTitle("UT AUTOmataGUI");
   
   // Ensure window takes full screen space
@@ -345,6 +346,7 @@ MainWindow::MainWindow(QWidget* parent) :
   // Add recording indicator
   recording_led_ = new StatusLed("REC", true);  // true = use grey when off
   recording_led_->setFixedHeight(60);
+  recording_led_->setVisible(false);  // Initially hidden until recorder node is detected
   
   top_bar->addWidget(ipaddr_label_);
   top_bar->addStretch();
@@ -451,7 +453,7 @@ MainWindow::MainWindow(QWidget* parent) :
     tab_widget_->addTab(ros_group, tr("Configurations"));
     
     // Create Recorder Tab
-    QWidget* recorder_widget = new QWidget();
+    recorder_widget_ = new QWidget();
     QVBoxLayout* recorder_layout = new QVBoxLayout();
     
     QLabel* recorder_title = new QLabel("Recording Topics");
@@ -507,9 +509,10 @@ MainWindow::MainWindow(QWidget* parent) :
     topics_layout->addStretch();
     
     recorder_layout->addWidget(topics_container);
-    recorder_widget->setLayout(recorder_layout);
+    recorder_widget_->setLayout(recorder_layout);
     
-    tab_widget_->addTab(recorder_widget, tr("Recorder"));
+    // Don't add tab initially, wait for recorder node
+    // tab_widget_->addTab(recorder_widget_, tr("Recorder"));
   }
 
   main_layout_ = new QVBoxLayout(this);
@@ -545,6 +548,10 @@ MainWindow::MainWindow(QWidget* parent) :
   connect(this,
           SIGNAL(UpdateRecordingStateSignal(Led::RecordingState)),
           SLOT(UpdateRecordingStateSlot(Led::RecordingState)));
+
+  connect(this,
+          SIGNAL(UpdateAvailableTopicsSignal(const std::vector<std::string>&)),
+          SLOT(UpdateAvailableTopicsSlot(const std::vector<std::string>&)));
 }
 
 MainWindow::~MainWindow() {
@@ -657,7 +664,7 @@ void MainWindow::UpdateStatusSlot(int mode,
       status += "UNKN\n";
     } break;
   }
-  status += "Battery: " + QString::number(battery, 'g', 4) + "V";
+  status += "Battery: " + QString::number(battery, 'f', 1) + "V";
   status_label_->setText(status);
   drive_led_->SetStatus(vesc_okay);
   lidar_led_->SetStatus(lidar_okay);
@@ -834,8 +841,74 @@ void MainWindow::UpdateRecordingState(Led::RecordingState state) {
 
 void MainWindow::UpdateRecordingStateSlot(Led::RecordingState state) {
   if (recording_led_) {
-    recording_led_->SetRecordingState(state);
+    if (state == Led::INACTIVE) {
+      recording_led_->setVisible(false);
+      // Remove Recorder tab if present
+      int index = tab_widget_->indexOf(recorder_widget_);
+      if (index != -1) {
+        tab_widget_->removeTab(index);
+      }
+    } else {
+      recording_led_->setVisible(true);
+      recording_led_->SetRecordingState(state);
+      // Add Recorder tab if not present
+      if (tab_widget_->indexOf(recorder_widget_) == -1) {
+        tab_widget_->addTab(recorder_widget_, tr("Recorder"));
+      }
+    }
   }
+}
+
+void MainWindow::UpdateAvailableTopics(const std::vector<std::string>& topics) {
+  UpdateAvailableTopicsSignal(topics);
+}
+
+void MainWindow::UpdateAvailableTopicsSlot(const std::vector<std::string>& topics) {
+  // Check if topics actually changed to avoid unnecessary rebuilds
+  if (topics == available_topics_) return;
+  
+  available_topics_ = topics;
+  
+  // Get layout to update buttons
+  if (!recorder_widget_) return;
+  QVBoxLayout* recorder_layout = qobject_cast<QVBoxLayout*>(recorder_widget_->layout());
+  if (!recorder_layout || recorder_layout->count() < 2) return;
+  
+  QWidget* topics_container = recorder_layout->itemAt(1)->widget();
+  if (!topics_container) return;
+  
+  QVBoxLayout* topics_layout = qobject_cast<QVBoxLayout*>(topics_container->layout());
+  if (!topics_layout) return;
+  
+  // Clear existing buttons
+  QLayoutItem* item;
+  while ((item = topics_layout->takeAt(0)) != nullptr) {
+    delete item->widget();
+    delete item;
+  }
+  topic_buttons_.clear();
+  
+  // Add new buttons
+  QFont font("Arial");
+  font.setPointSize(20);
+  
+  for (const auto& topic : available_topics_) {
+    QPushButton* topic_btn = new QPushButton(QString::fromStdString(topic));
+    topic_btn->setFont(font);
+    topic_btn->setCheckable(true);
+    
+    // Check if topic is in selected list
+    bool is_selected = std::find(selected_topics_.begin(), 
+                                 selected_topics_.end(), 
+                                 topic) != selected_topics_.end();
+    topic_btn->setChecked(is_selected);
+    
+    connect(topic_btn, SIGNAL(clicked()), this, SLOT(ToggleTopicRecording()));
+    topic_buttons_.push_back(topic_btn);
+    topics_layout->addWidget(topic_btn);
+  }
+  
+  topics_layout->addStretch();
 }
 
 void MainWindow::ToggleTopicRecording() {
