@@ -36,6 +36,8 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
+#include <errno.h>
+#include <string.h>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joy.hpp"
@@ -47,8 +49,6 @@
 
 CONFIG_STRING(joystick_name_, "joystick_name");
 CONFIG_STRING(joystick_port_, "joystick_port");
-
-DEFINE_string(config_dir, "/home/orin/roboracer_ws/src/ut_automata/config", "Directory containing joystick.lua config file.");
 
 using sensor_msgs::msg::Joy;
 using std::string;
@@ -143,10 +143,17 @@ vector<JoystickInfo> ListAvailableJoysticks() {
     string device_path = "/dev/input/js" + std::to_string(i);
     int fd = open(device_path.c_str(), O_RDONLY);
     if (fd < 0) {
+      int first_errno = errno;
       // Try alternative path
       device_path = "/dev/js" + std::to_string(i);
       fd = open(device_path.c_str(), O_RDONLY);
       if (fd < 0) {
+        // Only print debug info for js0 and js1 to avoid spam
+        if (i <= 1) {
+          std::cout << "Debug: Could not open /dev/input/js" << i 
+                    << " (errno: " << first_errno << " - " << strerror(first_errno) << ") or "
+                    << "/dev/js" << i << " (errno: " << errno << " - " << strerror(errno) << ")" << std::endl;
+        }
         continue;
       }
     }
@@ -453,11 +460,35 @@ int main(int argc, char** argv) {
   }
   
   if (selected_device.empty()) {
-    std::cout << "ERROR: No suitable joystick devices found!" << std::endl;
+    std::cout << "No suitable joystick devices found. Waiting for connection..." << std::endl;
     if (is_jetson) {
       std::cout << "Try pairing a Bluetooth controller or connecting a USB controller." << std::endl;
     }
-    return 1;
+    
+    // Loop until a device is found
+    while (selected_device.empty() && rclcpp::ok()) {
+      std::this_thread::sleep_for(std::chrono::seconds(2));
+      
+      // Re-scan for devices
+      available_joysticks = ListAvailableJoysticks();
+      
+      // Check if we found any likely joysticks
+      for (const auto& joy : available_joysticks) {
+        if (IsLikelyJoystick(joy.name)) {
+          selected_device = joy.device_path;
+          selected_name = joy.name;
+          break;
+        }
+      }
+      
+      if (!selected_device.empty()) {
+        std::cout << "Joystick detected!" << std::endl;
+        PrintJoystickList(available_joysticks);
+      } else {
+        // Optional: Print a dot or keep silent to avoid log spam
+        // std::cout << "." << std::flush;
+      }
+    }
   }
   
   std::cout << "=== Connecting to selected joystick ===" << std::endl;
@@ -465,8 +496,10 @@ int main(int argc, char** argv) {
   std::cout << "Device name: '" << selected_name << "'" << std::endl;
   
   // Load config.
+  const string home_dir = getenv("HOME") ? string(getenv("HOME")) : "/home/ntsoi";
+  const string config_dir = home_dir + "/roboracer_ws/src/ut_automata/config";
   config_reader::ConfigReader reader({
-    FLAGS_config_dir + "/joystick.lua"
+    config_dir + "/joystick.lua"
   });
   rclcpp::init(argc, argv);
   auto node = rclcpp::Node::make_shared("joystick");

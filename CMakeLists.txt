@@ -126,37 +126,41 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
     ${CMAKE_CURRENT_SOURCE_DIR}/../mpu6050driver/include)
   target_link_libraries(vesc_driver ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK} i2c)
 
-  add_executable(gui
-        src/gui/gui_main.cc
-        src/gui/gui_mainwindow.cc
-        src/gui/vector_display.cc
-        ${GUI_MOC_SRCS})
-  ament_target_dependencies(gui rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs cv_bridge OpenCV rosidl_default_runtime)
-  target_include_directories(gui PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
-  TARGET_LINK_LIBRARIES(gui
-        Qt5::Core
-        Qt5::Gui
-        Qt5::Widgets
-        Qt5::OpenGL
-        ${OpenCV_LIBS}
-  ${libs} ${OPENGL_LIBRARY} GL ${UT_AUTOMATA_TYPESUPPORT_LINK})
-
-  add_executable(joystick
-    src/joystick/joystick.cc
-    src/joystick/joystick_driver.cc)
-  ament_target_dependencies(joystick rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime)
-  target_include_directories(joystick PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
-  target_link_libraries(joystick ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK})
-
   # Install hardware executables for ROS 2
   install(TARGETS
     vesc_driver
-    gui
-    joystick
     DESTINATION lib/${PROJECT_NAME})
 ENDIF()
+
+add_executable(gui
+      src/gui/gui_main.cc
+      src/gui/gui_mainwindow.cc
+      src/gui/vector_display.cc
+      ${GUI_MOC_SRCS})
+ament_target_dependencies(gui rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs cv_bridge OpenCV rosidl_default_runtime)
+target_include_directories(gui PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
+TARGET_LINK_LIBRARIES(gui
+      Qt5::Core
+      Qt5::Gui
+      Qt5::Widgets
+      Qt5::OpenGL
+      ${OpenCV_LIBS}
+${libs} ${OPENGL_LIBRARY} GL ${UT_AUTOMATA_TYPESUPPORT_LINK})
+
+add_executable(joystick
+  src/joystick/joystick.cc
+  src/joystick/joystick_driver.cc)
+ament_target_dependencies(joystick rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime)
+target_include_directories(joystick PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
+target_link_libraries(joystick ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK})
+
+# Install common executables
+install(TARGETS
+  gui
+  joystick
+  DESTINATION lib/${PROJECT_NAME})
 
 MESSAGE(STATUS "Building simulator")
 

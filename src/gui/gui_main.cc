@@ -459,9 +459,21 @@ int main(int argc, char *argv[]) {
   qRegisterMetaType<QPixmap>("QPixmap");
   qRegisterMetaType<ut_automata_gui::Led::RecordingState>("Led::RecordingState");
 
+  bool windowed = false;
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--windowed") {
+      windowed = true;
+      break;
+    }
+  }
+
   QApplication app(argc, argv);
   main_window_ = new ut_automata_gui::MainWindow();
-  main_window_->showFullScreen();
+  if (windowed) {
+    main_window_->show();
+  } else {
+    main_window_->showFullScreen();
+  }
 
   pthread_t ptid = 0;
   pthread_create(&ptid, NULL, &RosThread, NULL);
