@@ -91,7 +91,7 @@ void* rxThread(void*) {
     serial_.waitForInput(100);
     int bytes_read = serial_.read(read_buffer, sizeof(read_buffer));
     if (bytes_read == -1) {
-      perror("Error reading from serial port");
+      fprintf(stderr, "Warning: Serial port read temporarily unavailable, vesc_driver is retrying...\n");
     }
     if (bytes_read > 0) {
       if (kDebug) printf("Bytes read: %d\n", bytes_read);

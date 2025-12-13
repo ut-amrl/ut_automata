@@ -143,17 +143,10 @@ vector<JoystickInfo> ListAvailableJoysticks() {
     string device_path = "/dev/input/js" + std::to_string(i);
     int fd = open(device_path.c_str(), O_RDONLY);
     if (fd < 0) {
-      int first_errno = errno;
       // Try alternative path
       device_path = "/dev/js" + std::to_string(i);
       fd = open(device_path.c_str(), O_RDONLY);
       if (fd < 0) {
-        // Only print debug info for js0 and js1 to avoid spam
-        if (i <= 1) {
-          std::cout << "Debug: Could not open /dev/input/js" << i 
-                    << " (errno: " << first_errno << " - " << strerror(first_errno) << ") or "
-                    << "/dev/js" << i << " (errno: " << errno << " - " << strerror(errno) << ")" << std::endl;
-        }
         continue;
       }
     }
