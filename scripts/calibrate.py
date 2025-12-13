@@ -619,7 +619,10 @@ class VESCCalibrator(Node):
                 self.results['steering_offset'] = current_offset
                 print(f"\n✅ Steering offset calibrated: {current_offset:.4f}")
                 print(f"   Average correction is now within acceptable range ({math.degrees(avg_correction):.2f}°)")
-                print("⚠️  Remember to restart the VESC driver node for the change to take effect!")
+                print("⚠️  IMPORTANT: You must restart the VESC driver node for the change to take effect!")
+                print("   You can do this by:")
+                print("   1. Finding which tmux pane contains the vesc_driver.")
+                print("   2. Restarting it by pressing CTRL-C and then UP ARROW and ENTER to rerun command.")
                 break
             
             # Calculate new offset based on average correction
@@ -643,8 +646,8 @@ class VESCCalibrator(Node):
                 print(f"\n✅ Updated car.lua with new offset: {current_offset:.4f}")
                 print("⚠️  IMPORTANT: You must restart the VESC driver node for the change to take effect!")
                 print("   You can do this by:")
-                print("   1. Finding the vesc_driver node: ros2 node list | grep vesc")
-                print("   2. Restarting it (or restart your launch file)")
+                print("   1. Finding which tmux pane contains the vesc_driver.")
+                print("   2. Restarting it by pressing CTRL-C and then UP ARROW and ENTER to rerun command.")
                 print("\n   Press ENTER after restarting the VESC driver to continue...")
                 input()
             else:
@@ -665,7 +668,10 @@ class VESCCalibrator(Node):
                     print(f"\n✅ Updated car.lua with accepted offset: {current_offset:.4f}")
                 self.results['steering_offset'] = current_offset
                 print(f"\n✓ Steering offset accepted: {current_offset:.4f}")
-                print("⚠️  Remember to restart the VESC driver node for the change to take effect!")
+                print("⚠️  IMPORTANT: You must restart the VESC driver node for the change to take effect!")
+                print("   You can do this by:")
+                print("   1. Finding which tmux pane contains the vesc_driver.")
+                print("   2. Restarting it by pressing CTRL-C and then UP ARROW and ENTER to rerun command.")
                 break
             elif response.lower() == 'q':
                 print("Steering offset calibration cancelled")
@@ -679,7 +685,10 @@ class VESCCalibrator(Node):
             print(f"\n️ Maximum iterations ({max_iterations}) reached.")
             print(f"   Using best offset found: {current_offset:.4f}")
             self.results['steering_offset'] = current_offset
-            print("⚠️  Remember to restart the VESC driver node for the change to take effect!")
+            print("⚠️  IMPORTANT: You must restart the VESC driver node for the change to take effect!")
+            print("   You can do this by:")
+            print("   1. Finding which tmux pane contains the vesc_driver.")
+            print("   2. Restarting it by pressing CTRL-C and then UP ARROW and ENTER to rerun command.")
                 
     def calibrate_steering_gain(self):
         """
@@ -835,7 +844,10 @@ class VESCCalibrator(Node):
         print(f"  (Correction factor: {correction_factor:.3f})")
         print(f"✓ Max steering angle calibrated: {measured_max_steering_angle:.4f} rad ({math.degrees(measured_max_steering_angle):.2f}°)")
         print(f"  Minimum turning radius: {avg_radius:.3f} m")
-        print("⚠️  Remember to restart the VESC driver node for the change to take effect!")
+        print("⚠️  IMPORTANT: You must restart the VESC driver node for the change to take effect!")
+        print("   You can do this by:")
+        print("   1. Finding which tmux pane contains the vesc_driver.")
+        print("   2. Restarting it by pressing CTRL-C and then UP ARROW and ENTER to rerun command.")
         
     def calibrate_speed_offset(self):
         """
@@ -937,8 +949,11 @@ class VESCCalibrator(Node):
                 print(f"\n⚠️  Failed to update car.lua. Please update it manually.")
                 print(f"    Add this line: speed_to_erpm_offset = {self.results['speed_offset']:.1f};")
 
-            print("⚠️  IMPORTANT: You must restart the VESC driver node now!")
-            print("Press ENTER to continue after restarting the VESC driver node...")
+            print("⚠️  IMPORTANT: You must restart the VESC driver node for the change to take effect!")
+            print("   You can do this by:")
+            print("   1. Finding which tmux pane contains the vesc_driver.")
+            print("   2. Restarting it by pressing CTRL-C and then UP ARROW and ENTER to rerun command.")
+            print("\n   Press ENTER after restarting the VESC driver to continue...")
             input()
             
     def calibrate_speed_gain(self):
@@ -1189,10 +1204,10 @@ class VESCCalibrator(Node):
         
         print("-"*60)
         
-        print("\n⚠️  IMPORTANT: You must restart the VESC driver node for changes to take effect!")
+        print("\n⚠️  IMPORTANT: You must restart the VESC driver node for the change to take effect!")
         print("   You can do this by:")
-        print("   1. Stopping the current VESC driver node (Ctrl+C)")
-        print("   2. Restarting your launch file or tmuxinator session")
+        print("   1. Finding which tmux pane contains the vesc_driver.")
+        print("   2. Restarting it by pressing CTRL-C and then UP ARROW and ENTER to rerun command.")
         
         print("\n📝 NOTE: These are initial calibration values. Fine-tuning may be needed.")
         print("   Test the car in autonomous mode and adjust as necessary.")
