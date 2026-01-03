@@ -4,7 +4,7 @@
 build_type=Release
 # build_type=Debug
 #acceptable build_mode: Simulation/Hardware
-build_mode=Simulation
+build_mode=Hardware
 
 .SILENT:
 

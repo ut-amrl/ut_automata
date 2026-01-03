@@ -28,10 +28,17 @@
 #include <QFrame>
 #include <QPainter>
 #include <QWidget>
+#include <QLabel>
+#include <QPixmap>
+#include <QResizeEvent>
+#include <QPushButton>
 
-class QLabel;
 class QVBoxLayout;
 class QTabWidget;
+class QHBoxLayout;
+class QGridLayout;
+class QProcess;
+class QDir;
 
 namespace vector_display {
 class VectorDisplay;
@@ -43,14 +50,45 @@ class TouchVectorDisplay;
 class AdminPassword;
 class HumanInteraction;
 
+class CameraDisplay : public QLabel {
+  Q_OBJECT
+
+ public:
+  CameraDisplay(QWidget* parent = nullptr);
+  void UpdateImage(const QPixmap& pixmap);
+
+ protected:
+  void resizeEvent(QResizeEvent* event) override;
+
+ private:
+  QPixmap current_image_;
+};
+
 class Led : public QWidget {
   Q_OBJECT
   
  public:
-  Led() : status_on_(false) {}
+  enum RecordingState {
+    INACTIVE,    // Node not running - Grey
+    READY,       // Node active, not recording - Red
+    RECORDING,   // Recording in progress - Green
+    PAUSED       // Recording paused (DAGGER) - Orange
+  };
+  
+  Led(bool is_recording_led = false) : 
+      status_on_(false), 
+      is_recording_led_(is_recording_led),
+      recording_state_(INACTIVE) {}
+  
   void SetStatus(bool value) {
     if (status_on_ == value) return;
     status_on_ = value;
+    update();
+  }
+  
+  void SetRecordingState(RecordingState state) {
+    if (recording_state_ == state) return;
+    recording_state_ = state;
     update();
   }
 
@@ -58,30 +96,72 @@ class Led : public QWidget {
   void paintEvent(QPaintEvent *event) override {
     static const QBrush kGreenBrush = QBrush(QColor(0, 225, 0));
     static const QBrush kRedBrush = QBrush(QColor(255, 0, 0));
+    static const QBrush kOrangeBrush = QBrush(QColor(255, 165, 0));
+    static const QBrush kGreyBrush = QBrush(QColor(128, 128, 128));
     QPainter painter;
     painter.begin(this);
-    if (status_on_) {
-      painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+    
+    if (is_recording_led_) {
+      // Recording LED: Grey (inactive), Red (ready), Green (recording)
+      switch (recording_state_) {
+        case INACTIVE:
+          painter.fillRect(QRectF(0, 0, width(), height()), kGreyBrush);
+          break;
+        case READY:
+          painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+          break;
+        case RECORDING:
+          painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+          break;
+        case PAUSED:
+          painter.fillRect(QRectF(0, 0, width(), height()), kOrangeBrush);
+          break;
+      }
     } else {
-      painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+      // Normal status LED: Green when okay (on), Red when not okay (off)
+      if (status_on_) {
+        painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+      } else {
+        painter.fillRect(QRectF(0, 0, width(), height()), kRedBrush);
+      }
     }
     painter.end();
   }
 
  private:
   bool status_on_;
+  bool is_recording_led_;
+  RecordingState recording_state_;
 };
 
 class StatusLed : public QFrame {
   Q_OBJECT
   
  public:
-  explicit StatusLed(QString name);
+  explicit StatusLed(QString name, bool is_recording_led = false);
   void SetStatus(bool value);
+  void SetRecordingState(Led::RecordingState state);
 
  private:
   bool status_on_;
   Led* led_;
+};
+
+class DiskSpaceBar : public QWidget {
+  Q_OBJECT
+
+ public:
+  explicit DiskSpaceBar(QWidget* parent = nullptr);
+  void UpdateDiskSpace(float used_gb, float total_gb);
+
+ protected:
+  void paintEvent(QPaintEvent* event) override;
+
+ private:
+  float used_gb_;
+  float total_gb_;
+  QLabel* used_label_;
+  QLabel* available_label_;
 };
 
 class RealStatus : public QFrame {
@@ -108,13 +188,19 @@ class MainWindow : public QWidget {
 
 public:
   MainWindow(QWidget *parent = 0);
+  ~MainWindow();
   void UpdateStatus(int mode, 
                     float battery,
                     bool drive_okay,
                     bool lidar_okay,
-                    bool camera_okay,
+                    bool joystick_okay,
+                    bool imu_okay,
                     float throttle,
                     float steering);
+  void UpdateCamera(const QPixmap& image);
+  void UpdateRecordingStatus(bool recording);
+  void UpdateRecordingState(Led::RecordingState state);
+  void UpdateAvailableTopics(const std::vector<std::string>& topics);
 
 public slots:
   void closeWindow();
@@ -122,14 +208,23 @@ public slots:
   void StartRos();
   void StartCar();
   void StartCamera();
-  void StopAll();
   void UpdateStatusSlot(int mode, 
                         float battery,
                         bool drive_okay,
                         bool lidar_okay,
-                        bool camera_okay,
+                        bool joystick_okay,
+                        bool imu_okay,
                         float throttle,
                         float steering);
+  void UpdateCameraSlot(const QPixmap& image);
+  void UpdateTmuxConfigurations();
+  void StartTmuxConfiguration();
+  void StopTmuxConfiguration();
+  void UpdateRecordingStatusSlot(bool recording);
+  void UpdateRecordingStateSlot(Led::RecordingState state);
+  void UpdateTopicsToRecord();
+  void ToggleTopicRecording();
+  void UpdateAvailableTopicsSlot(const std::vector<std::string>& topics);
 
 signals:
   void UpdateQuestion(std::string question,
@@ -139,9 +234,14 @@ signals:
                           float battery,
                           bool drive_okay,
                           bool lidar_okay,
-                          bool camera_okay,
+                          bool joystick_okay,
+                          bool imu_okay,
                           float throttle,
                           float steering);
+  void UpdateCameraSignal(const QPixmap& image);
+  void UpdateRecordingStatusSignal(bool recording);
+  void UpdateRecordingStateSignal(Led::RecordingState state);
+  void UpdateAvailableTopicsSignal(const std::vector<std::string>& topics);
 
 private:
 
@@ -151,8 +251,8 @@ private:
   // Vector display.
   QTabWidget* tab_widget_;
 
-  // Robot name display.
-  QLabel* robot_label_;
+  // Camera image display.
+  CameraDisplay* camera_display_;
 
   // Main layout of the window.
   QVBoxLayout* main_layout_;
@@ -165,6 +265,27 @@ private:
 
   // Robot status display.
   QLabel* status_label_;
+  
+  // Disk space indicator
+  DiskSpaceBar* disk_space_bar_;
+  
+  // Tmux configuration widgets
+  std::vector<QPushButton*> tmux_config_buttons_;
+  QPushButton* stop_config_button_;
+  std::vector<std::string> tmux_config_names_;
+  
+  // Recording status
+  StatusLed* recording_led_;
+  QWidget* recorder_widget_;
+  
+  // Recording topic selection
+  std::vector<std::string> available_topics_;
+  std::vector<std::string> selected_topics_;
+  std::vector<QPushButton*> topic_buttons_;
+  
+  // Helper functions for GUI-aware tmux configuration
+  bool IsGuiNodeRunning();
+  std::string CreateTmuxConfigWithoutGui(const std::string& config_name);
 };
 
 

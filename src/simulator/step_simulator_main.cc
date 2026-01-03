@@ -14,45 +14,57 @@
 //========================================================================
 /*!
  * \file    simulator_main.cpp
- * \brief   A simple simulator.
+ * \brief   A simple simulator (ROS 2 Version).
  * \author  Joydeep Biswas, (C) 2010
  */
 //========================================================================
 
-#include <stdio.h>
-
 #include <iostream>
+#include <memory>
 
-#include "gflags/gflags.h"
-#include "ros/ros.h"
-
-#include "shared/util/timer.h"
-#include "simulator/simulator.h"
-
-DEFINE_double(fps, 120.0, "Simulator frames rate.");
+#include "rclcpp/rclcpp.hpp"
+#include "simulator/simulator.h"  // You will need to port this header and its source file as well.
+#include "shared/util/timer.h"    // Assuming this is a custom timer and not ROS-specific.
 
 int main(int argc, char **argv) {
-  google::ParseCommandLineFlags(&argc, &argv, false);
-  printf("\nUT AUTOmata F1/10 Simulator\n\n");
+  // Initialize ROS 2
+  rclcpp::init(argc, argv);
 
-  ros::init(argc, argv, "ut_automata_simulator");
-  ros::NodeHandle n;
+  // Create a ROS 2 node
+  auto simulator_node = rclcpp::Node::make_shared("ut_automata_simulator");
+
+  // Declare the 'fps' parameter with a default value of 120.0
+  simulator_node->declare_parameter<double>("fps", 120.0);
+  double fps = simulator_node->get_parameter("fps").as_double();
+
+  RCLCPP_INFO(simulator_node->get_logger(), "\nUT AUTOmata F1/10 Simulator\n");
+  RCLCPP_INFO(simulator_node->get_logger(), "Simulator frame rate set to: %.2f", fps);
 
   Simulator simulator;
-  simulator.Init(n);
+  // The Init function now needs to accept a ROS 2 node pointer.
+  // Example: simulator.Init(simulator_node);
+  simulator.Init(simulator_node);
   simulator.SetStepMode(true);
 
-  // main loop
-  RateLoop rate(FLAGS_fps);
-  while (ros::ok()){
-    ros::spinOnce();
-    // Wait for a character to be pressed.
+  // Create a rate object for the main loop
+  rclcpp::Rate rate(fps);
+
+  // Main loop
+  while (rclcpp::ok()) {
+    // Process any pending ROS 2 callbacks
+    rclcpp::spin_some(simulator_node);
+
+    // Wait for a character to be pressed
     getchar();
+
     simulator.RunIteration();
-    rate.Sleep();
+    rate.sleep();
   }
 
-  printf("closing.\n");
+  RCLCPP_INFO(simulator_node->get_logger(), "closing.");
 
-  return(0);
+  // Shutdown ROS 2
+  rclcpp::shutdown();
+
+  return 0;
 }

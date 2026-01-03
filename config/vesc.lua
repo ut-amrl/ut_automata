@@ -23,3 +23,29 @@ max_deceleration = 6.0; -- m/s^2
 
 joystick_normal_speed = 1.0; -- m/s
 joystick_turbo_speed = 2.0; -- m/s
+
+-- Maximum steering angle in radians for joystick control
+-- Formula: max_steering_angle = atan(wheelbase / desired_min_turning_radius)
+-- Example: 0.425 rad (24.35°) gives 0.75m turning radius with 0.324m wheelbase
+max_steering_angle = 0.425; -- radians
+
+-- Joystick steering curve
+-- Bezier Curve Examples (xm, ym):
+-- Linear: (0.5, 0.5)
+-- Soft Center: (0.6, 0.2) or very soft center (0.8, 0.1) -- very soft center is the default, which makes the joystick less sensitive in the center and more sensitive at the edges
+-- Aggressive Center: (0.3, 0.6) -- you probably don't want to use this as it makes the center of the joystick more sensitive, not less!
+steering_curve_xm = 0.8;
+steering_curve_ym = 0.1;
+
+
+-- IMU fusion parameters
+fuse_imu = true; -- Set to true to fuse IMU data with odometry using EKF
+i2c_bus_number = 7; -- I2C bus number for MPU6050 sensor
+calibrate_imu = true; -- Calibrate IMU on startup
+imu_gyro_range = 0; -- 0=250, 1=500, 2=1000, 3=2000 deg/s
+imu_accel_range = 0; -- 0=2g, 1=4g, 2=8g, 3=16g
+imu_dlpf_bandwidth = 0; -- 0=260Hz, 1=184Hz, 2=94Hz, 3=44Hz, 4=21Hz, 5=10Hz, 6=5Hz
+
+
+-- Instant override parameters
+instant_override = true; -- Set to true to enable instant override of autonomous command with joystick input

@@ -24,7 +24,7 @@
 #include <iostream>
 
 #include "gflags/gflags.h"
-#include "ros/ros.h"
+#include "rclcpp/rclcpp.hpp"
 
 #include "shared/util/timer.h"
 #include "simulator/simulator.h"
@@ -33,14 +33,16 @@ int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
   printf("\nUT AUTOmata F1/10 Simulator\n\n");
 
-  ros::init(argc, argv, "ut_automata_simulator");
-  ros::NodeHandle n;
+  rclcpp::init(argc, argv);
 
+  auto node = rclcpp::Node::make_shared("ut_automata_simulator");
   Simulator simulator;
-  simulator.Init(n);
+  simulator.Init(node);
 
   // main loop
   simulator.Run();
+
+  rclcpp::shutdown();
 
   printf("closing.\n");
 
