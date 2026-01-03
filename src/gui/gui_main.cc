@@ -51,6 +51,7 @@
 #include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
 #include "ut_automata/msg/car_status_msg.hpp"
 #include "std_msgs/msg/int32.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
@@ -62,6 +63,7 @@ using sensor_msgs::msg::Image;
 using sensor_msgs::msg::Joy;
 using sensor_msgs::msg::Imu;
 using std_msgs::msg::Int32;
+using std_msgs::msg::Bool;
 using std_msgs::msg::Int32;
 
 namespace {
@@ -263,6 +265,7 @@ void* RosThread(void* arg) {
       "/imu", 10u, &ImuCallback);
   recording_sub_ = ros_node_->create_subscription<Int32>(
       "/recording", 10u, &RecordingCallback);
+      
   topics_sub_ = ros_node_->create_subscription<std_msgs::msg::String>(
       "/recorder/topics", 10u, &TopicsCallback);
 

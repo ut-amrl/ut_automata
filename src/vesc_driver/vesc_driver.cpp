@@ -56,6 +56,7 @@ CONFIG_BOOL(calibrate_imu_, "calibrate_imu");
 CONFIG_INT(imu_gyro_range_, "imu_gyro_range");
 CONFIG_INT(imu_accel_range_, "imu_accel_range");
 CONFIG_INT(imu_dlpf_bandwidth_, "imu_dlpf_bandwidth");
+CONFIG_BOOL(instant_override_, "instant_override");
 CONFIG_BOOL(debug_ekf_, "debug_ekf");
 CONFIG_STRING(debug_log_path_, "debug_log_path");
 
@@ -284,6 +285,7 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
 
   state_pub_ = nh_->create_publisher<ut_automata::msg::VescStateStamped>("sensors/core", rclcpp::QoS(10));
   autonomy_enabler_pub_ = nh_->create_publisher<std_msgs::msg::Bool>("autonomy_enabler", rclcpp::QoS(10));
+  override_pub_ = nh_->create_publisher<std_msgs::msg::Bool>("/override_active", rclcpp::QoS(10));
   odom_pub_ = nh_->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(10));
   drive_pub_ = nh_->create_publisher<geometry_msgs::msg::TwistStamped>("vesc_drive", rclcpp::QoS(10));
   car_status_pub_ = nh_->create_publisher<ut_automata::msg::CarStatusMsg>("car_status", rclcpp::QoS(10));
@@ -557,6 +559,96 @@ void VescDriver::joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
     mux_steering_angle_ = steering_angle;
     if (kDebug) printf("Mode: %s, Speed: %7.2f, Steering: %.1f\u00b0\n", 
                        joystick_mode_.c_str(), speed, math_util::RadToDeg(steering_angle));
+  }
+  
+  
+  // Instant override logic
+  bool override_active = false;
+  override_drive_active_ = false;
+  override_steer_active_ = false;
+  
+  if (instant_override_ && (drive_mode_ == kAutonomousDrive || drive_mode_ == kAutonomousContinuousDrive)) {
+    // Check for significant joystick input
+    static const float kOverrideEps = 0.1; 
+    
+    // Check drive stick
+    float drive_val = 0;
+    if (joystick_mode_ == "both" || joystick_mode_ == "right") {
+       if (msg->axes.size() > 4) drive_val = msg->axes[4];
+    } else {
+       if (msg->axes.size() > 1) drive_val = msg->axes[1];
+    }
+    
+    // Check steer stick
+    float steer_val = 0;
+    if (joystick_mode_ == "both" || joystick_mode_ == "left") {
+        if (msg->axes.size() > 0) steer_val = msg->axes[0];
+    } else {
+        if (msg->axes.size() > 3) steer_val = msg->axes[3];
+    }
+    
+    if (std::abs(drive_val) > kOverrideEps) {
+        override_drive_active_ = true;
+    }
+    if (std::abs(steer_val) > kOverrideEps) {
+        override_steer_active_ = true;
+    }
+    
+    if (override_drive_active_ || override_steer_active_) {
+        // Calculate joystick commands
+        float steer_joystick = 0.0;
+        float drive_joystick = 0.0;
+        
+        if (joystick_mode_ == "both") {
+          steer_joystick = -msg->axes[0]; 
+          drive_joystick = -msg->axes[4]; 
+        } else if (joystick_mode_ == "left") {
+          steer_joystick = -msg->axes[0]; 
+          drive_joystick = -msg->axes[1]; 
+        } else if (joystick_mode_ == "right") {
+          steer_joystick = -msg->axes[3]; 
+          drive_joystick = -msg->axes[4]; 
+        } else {
+          steer_joystick = -msg->axes[0]; 
+          drive_joystick = -msg->axes[4]; 
+        }
+        
+        const bool turbo_mode = (msg->axes[2] >= 0.9);
+        const float max_speed = (turbo_mode ? turbo_speed_ : normal_speed_);
+        float speed = drive_joystick * max_speed;
+        
+        float x_target = steer_joystick;
+        float t = (x_target + 1.0f) * 0.5f;
+        const int kMaxIter = 10;
+        const float kEpsilon = 1e-4f;
+        for (int i = 0; i < kMaxIter; ++i) {
+          float x_val = Bezier4(t, -1.0f, -steering_curve_xm_, 0.0f, steering_curve_xm_, 1.0f);
+          float error = x_val - x_target;
+          if (std::abs(error) < kEpsilon) break;
+          float dx_dt = Bezier4Prime(t, -1.0f, -steering_curve_xm_, 0.0f, steering_curve_xm_, 1.0f);
+          if (std::abs(dx_dt) < 1e-6f) break;
+          t -= error / dx_dt;
+          t = std::max(0.0f, std::min(1.0f, t));
+        }
+        float steer_curved = Bezier4(t, -1.0f, -steering_curve_ym_, 0.0f, steering_curve_ym_, 1.0f);
+        float steering_angle = steer_curved * max_steering_angle_;
+        
+        if (override_drive_active_) {
+            mux_drive_speed_ = speed;
+        }
+        if (override_steer_active_) {
+            mux_steering_angle_ = steering_angle;
+        }
+        
+        override_active = true;
+    }
+  }
+
+  // Publish override status
+  std_msgs::msg::Bool override_msg;
+  override_msg.data = override_active;
+  if (override_pub_) {
+      override_pub_->publish(override_msg);
   }
 
   if (drive_mode_ == kAutonomousDrive || 
@@ -942,9 +1034,17 @@ void VescDriver::ackermannCurvatureCallback(
     const amrl_msgs::msg::AckermannCurvatureDriveMsg::SharedPtr cmd) {
   t_last_command_ = rclcpp::Clock(RCL_ROS_TIME).now().seconds();
   if (isAutonomous()) {
-    mux_drive_speed_ = cmd->velocity;
-    const float rot_vel = cmd->velocity * cmd->curvature;
-    mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
+    if (!override_drive_active_) {
+      mux_drive_speed_ = cmd->velocity;
+    }
+
+    float effective_speed = mux_drive_speed_;
+    
+    const float rot_vel = effective_speed * cmd->curvature;
+    
+    if (!override_steer_active_) {
+        mux_steering_angle_ = CalculateSteeringAngle(effective_speed, rot_vel);
+    }
   }
 }
  

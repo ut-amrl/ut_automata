@@ -71,7 +71,8 @@ class Led : public QWidget {
   enum RecordingState {
     INACTIVE,    // Node not running - Grey
     READY,       // Node active, not recording - Red
-    RECORDING    // Recording in progress - Green
+    RECORDING,   // Recording in progress - Green
+    PAUSED       // Recording paused (DAGGER) - Orange
   };
   
   Led(bool is_recording_led = false) : 
@@ -95,6 +96,7 @@ class Led : public QWidget {
   void paintEvent(QPaintEvent *event) override {
     static const QBrush kGreenBrush = QBrush(QColor(0, 225, 0));
     static const QBrush kRedBrush = QBrush(QColor(255, 0, 0));
+    static const QBrush kOrangeBrush = QBrush(QColor(255, 165, 0));
     static const QBrush kGreyBrush = QBrush(QColor(128, 128, 128));
     QPainter painter;
     painter.begin(this);
@@ -110,6 +112,9 @@ class Led : public QWidget {
           break;
         case RECORDING:
           painter.fillRect(QRectF(0, 0, width(), height()), kGreenBrush);
+          break;
+        case PAUSED:
+          painter.fillRect(QRectF(0, 0, width(), height()), kOrangeBrush);
           break;
       }
     } else {

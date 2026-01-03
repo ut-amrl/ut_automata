@@ -57,6 +57,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>::SharedPtr ackermann_curvature_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joystick_sub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr override_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
@@ -109,6 +110,10 @@ private:
   // Runtime-adjustable trim offsets (initialized from config)
   float steering_offset_trim_;
   float speed_offset_trim_;
+  
+  // Override status flags
+  bool override_drive_active_ = false;
+  bool override_steer_active_ = false;
 
   // Create an odometry message
   nav_msgs::msg::Odometry odom_msg_;
