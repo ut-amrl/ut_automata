@@ -5,8 +5,8 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         Node(
-            package='urg_node2',
-            executable='urg_node2_node',
+            package='urg_node',
+            executable='urg_node_driver',
             name='urg_node',
             output='screen',
             parameters=[{

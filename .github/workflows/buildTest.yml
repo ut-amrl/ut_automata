@@ -21,7 +21,7 @@ jobs:
             libgflags-dev libgoogle-glog-dev liblua5.1-0-dev \
             libboost-all-dev libqt5websockets5-dev libqt5opengl5-dev qtbase5-dev \
             ros-jazzy-ament-index-cpp ros-jazzy-tf2-ros \
-            ros-jazzy-tf2-geometry-msgs ros-jazzy-urg-node2 ros-jazzy-joy
+            ros-jazzy-tf2-geometry-msgs ros-jazzy-urg-node ros-jazzy-joy
 
       - name: Create workspace
         run: |
