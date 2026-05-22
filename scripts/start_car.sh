@@ -1,16 +1,17 @@
 #!/bin/bash
 
 # Source environment variables
-source /opt/ros/melodic/setup.bash
+source /opt/ros/jazzy/setup.bash
 
-# Adding the paths to required packages to ROS_PACKAGE_PATH
-export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:~/ut_automata
-export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:~/amrl_libraries/amrl_maps
-export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:~/amrl_libraries/amrl_msgs
+if [ -f "$HOME/ut_automata_ws/install/setup.bash" ]; then
+  source "$HOME/ut_automata_ws/install/setup.bash"
+elif [ -f "$HOME/ut_automata/install/setup.bash" ]; then
+  source "$HOME/ut_automata/install/setup.bash"
+fi
+
 export DISPLAY=:0 
 
 IPADDR="$(ip addr show wlan0 | grep -Po 'inet \K[\d.]+')"
 echo "wlan0 IP address is $IPADDR"
-rospack find ut_automata
 
-/opt/ros/melodic/bin/roslaunch ut_automata start_car.launch
+ros2 launch ut_automata start_car.launch.py

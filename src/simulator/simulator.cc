@@ -23,19 +23,23 @@
 #include <stdio.h>
 
 #include <algorithm>
+#include <functional>
 #include <string>
 
+#include "ament_index_cpp/get_package_share_directory.hpp"
+#include "builtin_interfaces/msg/duration.hpp"
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
-#include "geometry_msgs/Pose2D.h"
-#include "geometry_msgs/PoseWithCovarianceStamped.h"
+#include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
+#include "geometry_msgs/msg/pose2_d.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "ros/package.h"
+#include "tf2/LinearMath/Quaternion.h"
 
 #include "simulator.h"
-#include "amrl_msgs/Localization2DMsg.h"
+#include "amrl_msgs/msg/localization2_d_msg.hpp"
 #include "config_reader/config_reader.h"
 #include "shared/math/geometry.h"
 #include "shared/math/line2d.h"
@@ -47,10 +51,10 @@
 
 using Eigen::Rotation2Df;
 using Eigen::Vector2f;
-using amrl_msgs::AckermannCurvatureDriveMsg;
+using amrl_msgs::msg::AckermannCurvatureDriveMsg;
 using geometry::Heading;
 using geometry::Line2f;
-using geometry_msgs::PoseWithCovarianceStamped;
+using geometry_msgs::msg::PoseWithCovarianceStamped;
 using math_util::AngleMod;
 using math_util::DegToRad;
 using math_util::RadToDeg;
@@ -62,7 +66,8 @@ using vector_map::VectorMap;
 
 DEFINE_bool(localize, false, "Publish localization");
 
-const string kAmrlMapsDir = ros::package::getPath("amrl_maps");
+const string kAmrlMapsDir = ament_index_cpp::get_package_share_directory("amrl_maps");
+const string kUtAutomataDir = ament_index_cpp::get_package_share_directory("ut_automata");
 
 CONFIG_STRING(cMapName, "map_name");
 CONFIG_FLOAT(cCarLength, "car_length");
@@ -86,7 +91,7 @@ CONFIG_FLOAT(cAngularErrorRate, "angular_error_rate");
 CONFIG_FLOAT(cMaxLaserRange, "max_laser_range");
 CONFIG_FLOAT(cLaserAngleIncrement, "laser_angle_increment");
 CONFIG_FLOAT(cLaserFOV, "laser_fov");
-config_reader::ConfigReader reader({"config/simulator.lua"});
+config_reader::ConfigReader reader({kUtAutomataDir + "/config/simulator.lua"});
 
 string MapNameToFile(const string& map) {
   return kAmrlMapsDir + "/" + map + "/" + map + ".vectormap.txt";
@@ -98,7 +103,6 @@ Simulator::Simulator() :
               random_.UniformRandom(-10, 10)),
     odom_angle_(random_.UniformRandom(-M_PI, M_PI)) {
   t_last_cmd_ = GetMonotonicTime();
-  truePoseMsg.header.seq = 0;
   truePoseMsg.header.frame_id = "map";
 }
 
@@ -114,15 +118,15 @@ void Simulator::ResetState() {
   map_.Load(MapNameToFile(cMapName));
 }
 
-void Simulator::Init(ros::NodeHandle& n) {
+void Simulator::Init(const rclcpp::Node::SharedPtr& node) {
+  node_ = node;
   if (kAmrlMapsDir.empty()) {
     fprintf(stderr,
             "ERROR: AMRL maps directory not found. "
-            "Make sure your ROS_PACKAGE_PATH environment variable includes "
-            "the path to the amrl_maps repository.\n");
+            "Make sure the amrl_maps package is built in the same colcon "
+            "workspace and the install space is sourced.\n");
     exit(1);
   }
-  scan_msg_.header.seq = 0;
   scan_msg_.header.frame_id = "base_laser";
   scan_msg_.angle_min = -0.5 * cLaserFOV;
   scan_msg_.angle_max = 0.5 * cLaserFOV;
@@ -133,7 +137,6 @@ void Simulator::Init(ros::NodeHandle& n) {
   scan_msg_.time_increment = 0.0;
   scan_msg_.scan_time = 0.05;
 
-  odom_msg_.header.seq = 0;
   odom_msg_.header.frame_id = "odom";
   odom_msg_.child_frame_id = "base_footprint";
 
@@ -141,44 +144,42 @@ void Simulator::Init(ros::NodeHandle& n) {
   InitSimulatorVizMarkers();
   DrawMap();
 
-  drive_subscriber_ = n.subscribe(
+  drive_subscriber_ = node_->create_subscription<AckermannCurvatureDriveMsg>(
       "/ackermann_curvature_drive",
       1,
-      &Simulator::DriveCallback,
-      this);
-  init_subscriber_ = n.subscribe(
-      "/set_pose", 1, &Simulator::InitalLocationCallback, this);
-  odometry_publisher_ = n.advertise<nav_msgs::Odometry>("/odom",1);
-  laser_publisher_ = n.advertise<sensor_msgs::LaserScan>("/scan", 1);
-  map_publisher_ = n.advertise<visualization_msgs::Marker>(
+      std::bind(&Simulator::DriveCallback, this, std::placeholders::_1));
+  init_subscriber_ = node_->create_subscription<amrl_msgs::msg::Localization2DMsg>(
+      "/set_pose", 1, std::bind(&Simulator::InitalLocationCallback, this, std::placeholders::_1));
+  odometry_publisher_ = node_->create_publisher<nav_msgs::msg::Odometry>("/odom", 1);
+  laser_publisher_ = node_->create_publisher<sensor_msgs::msg::LaserScan>("/scan", 1);
+  map_publisher_ = node_->create_publisher<visualization_msgs::msg::Marker>(
       "/simulator_visualization", 6);
-  robot_marker_publisher_ = n.advertise<visualization_msgs::Marker>(
+  robot_marker_publisher_ = node_->create_publisher<visualization_msgs::msg::Marker>(
       "/simulator_visualization", 6);
-  true_pose_publisher_ = n.advertise<geometry_msgs::PoseStamped>(
+  true_pose_publisher_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
       "/simulator_true_pose", 1);
   if (FLAGS_localize) {
-    localization_publisher_ = n.advertise<amrl_msgs::Localization2DMsg>(
+    localization_publisher_ = node_->create_publisher<amrl_msgs::msg::Localization2DMsg>(
         "/localization", 1);
-    localization_msg_.header.seq = 0;
     localization_msg_.header.frame_id = "map";
   }
-  tf_broadcaster_ = new tf::TransformBroadcaster();
+  tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*node_);
 }
 
 void Simulator::InitalLocationCallback(
-    const amrl_msgs::Localization2DMsg& msg) {
-  true_robot_loc_ = Vector2f(msg.pose.x, msg.pose.y);
-  true_robot_angle_ = msg.pose.theta;
-  if (map_name_ != msg.map) {
-    map_.Load(MapNameToFile(msg.map));
-    map_name_ = msg.map;
+    const amrl_msgs::msg::Localization2DMsg::SharedPtr msg) {
+  true_robot_loc_ = Vector2f(msg->pose.x, msg->pose.y);
+  true_robot_angle_ = msg->pose.theta;
+  if (map_name_ != msg->map) {
+    map_.Load(MapNameToFile(msg->map));
+    map_name_ = msg->map;
     DrawMap();
   }
   printf("Set robot pose: %.2f,%.2f, %.1f\u00b0 @ %s\n",
          true_robot_loc_.x(),
          true_robot_loc_.y(),
          RadToDeg(true_robot_angle_),
-         msg.map.c_str());
+         msg->map.c_str());
 }
 
 
@@ -200,37 +201,37 @@ void Simulator::InitalLocationCallback(
  *                    0: red, 1: green, 2: blue, 3: alpha
  */
 void Simulator::InitVizMarker(
-    visualization_msgs::Marker& vizMarker,
+    visualization_msgs::msg::Marker& vizMarker,
     string ns,
     int id,
     string type,
-    geometry_msgs::PoseStamped p,
-    geometry_msgs::Point32 scale,
+    geometry_msgs::msg::PoseStamped p,
+    geometry_msgs::msg::Point32 scale,
     double duration,
     vector<float> color) {
 
   vizMarker.header.frame_id = p.header.frame_id;
-  vizMarker.header.stamp = ros::Time::now();
+  vizMarker.header.stamp = node_->now();
 
   vizMarker.ns = ns;
   vizMarker.id = id;
 
   if (type == "arrow") {
-    vizMarker.type = visualization_msgs::Marker::ARROW;
+    vizMarker.type = visualization_msgs::msg::Marker::ARROW;
   } else if (type == "cube") {
-    vizMarker.type = visualization_msgs::Marker::CUBE;
+    vizMarker.type = visualization_msgs::msg::Marker::CUBE;
   } else if (type == "sphere") {
-    vizMarker.type = visualization_msgs::Marker::SPHERE;
+    vizMarker.type = visualization_msgs::msg::Marker::SPHERE;
   } else if (type == "cylinder") {
-    vizMarker.type = visualization_msgs::Marker::CYLINDER;
+    vizMarker.type = visualization_msgs::msg::Marker::CYLINDER;
   } else if (type == "linelist") {
-    vizMarker.type = visualization_msgs::Marker::LINE_LIST;
+    vizMarker.type = visualization_msgs::msg::Marker::LINE_LIST;
   } else if (type == "linestrip") {
-    vizMarker.type = visualization_msgs::Marker::LINE_STRIP;
+    vizMarker.type = visualization_msgs::msg::Marker::LINE_STRIP;
   } else if (type == "points") {
-    vizMarker.type = visualization_msgs::Marker::POINTS;
+    vizMarker.type = visualization_msgs::msg::Marker::POINTS;
   } else {
-    vizMarker.type = visualization_msgs::Marker::ARROW;
+    vizMarker.type = visualization_msgs::msg::Marker::ARROW;
   }
 
   vizMarker.pose = p.pose;
@@ -239,23 +240,25 @@ void Simulator::InitVizMarker(
   vizMarker.scale.y = scale.y;
   vizMarker.scale.z = scale.z;
 
-  vizMarker.lifetime = ros::Duration(duration);
+  vizMarker.lifetime.sec = static_cast<int32_t>(duration);
+  vizMarker.lifetime.nanosec =
+      static_cast<uint32_t>((duration - vizMarker.lifetime.sec) * 1e9);
 
   vizMarker.color.r = color.at(0);
   vizMarker.color.g = color.at(1);
   vizMarker.color.b = color.at(2);
   vizMarker.color.a = color.at(3);
 
-  vizMarker.action = visualization_msgs::Marker::ADD;
+  vizMarker.action = visualization_msgs::msg::Marker::ADD;
 }
 
 void Simulator::InitSimulatorVizMarkers() {
-  geometry_msgs::PoseStamped p;
-  geometry_msgs::Point32 scale;
+  geometry_msgs::msg::PoseStamped p;
+  geometry_msgs::msg::Point32 scale;
   vector<float> color;
   color.resize(4);
 
-  p.header.frame_id = "/map";
+  p.header.frame_id = "map";
 
   p.pose.orientation.w = 1.0;
   scale.x = 0.05;
@@ -290,7 +293,7 @@ void Simulator::DrawMap() {
 }
 
 void Simulator::PublishOdometry() {
-  odom_msg_.header.stamp = ros::Time::now();
+  odom_msg_.header.stamp = node_->now();
   odom_msg_.pose.pose.position.x = odom_loc_.x();
   odom_msg_.pose.pose.position.y = odom_loc_.y();
   odom_msg_.pose.pose.position.z = 0.0;
@@ -305,7 +308,7 @@ void Simulator::PublishOdometry() {
   odom_msg_.twist.twist.linear.y = 0;
   odom_msg_.twist.twist.linear.z = 0.0;
 
-  odometry_publisher_.publish(odom_msg_);
+  odometry_publisher_->publish(odom_msg_);
 
   robot_pos_marker_.pose.position.x =
       true_robot_loc_.x() - cos(true_robot_angle_) * cRearAxleOffset;
@@ -319,7 +322,7 @@ void Simulator::PublishOdometry() {
 }
 
 void Simulator::PublishLaser() {
-  scan_msg_.header.stamp = ros::Time::now();
+  scan_msg_.header.stamp = node_->now();
   const Vector2f laserRobotLoc(cLaserLocX, cLaserLocY);
   const Vector2f laserLoc = true_robot_loc_ + Rotation2Df(true_robot_angle_) * laserRobotLoc;
 
@@ -340,38 +343,54 @@ void Simulator::PublishLaser() {
     }
     r = max<float>(0.0, r + random_.Gaussian(0, cLaserStdDev));
   }
-  laser_publisher_.publish(scan_msg_);
+  laser_publisher_->publish(scan_msg_);
 }
 
 void Simulator::PublishTransform() {
-  tf::Transform transform;
-  tf::Quaternion q;
+  const auto now = node_->now();
 
-  transform.setOrigin(tf::Vector3(0.0,0.0,0.0));
-  transform.setRotation(tf::Quaternion(0.0, 0.0, 0.0, 1.0));
-  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "/map",
-"/odom"));
+  geometry_msgs::msg::TransformStamped map_to_odom;
+  map_to_odom.header.stamp = now;
+  map_to_odom.header.frame_id = "map";
+  map_to_odom.child_frame_id = "odom";
+  map_to_odom.transform.rotation.w = 1.0;
+  tf_broadcaster_->sendTransform(map_to_odom);
 
-  transform.setOrigin(tf::Vector3(true_robot_loc_.x(), true_robot_loc_.y(), 0.0));
-  q.setRPY(0.0,0.0,true_robot_angle_);
-  transform.setRotation(q);
-  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "/odom",
-"/base_footprint"));
+  geometry_msgs::msg::TransformStamped odom_to_base_footprint;
+  odom_to_base_footprint.header.stamp = now;
+  odom_to_base_footprint.header.frame_id = "odom";
+  odom_to_base_footprint.child_frame_id = "base_footprint";
+  odom_to_base_footprint.transform.translation.x = true_robot_loc_.x();
+  odom_to_base_footprint.transform.translation.y = true_robot_loc_.y();
+  tf2::Quaternion q;
+  q.setRPY(0.0, 0.0, true_robot_angle_);
+  odom_to_base_footprint.transform.rotation.x = q.x();
+  odom_to_base_footprint.transform.rotation.y = q.y();
+  odom_to_base_footprint.transform.rotation.z = q.z();
+  odom_to_base_footprint.transform.rotation.w = q.w();
+  tf_broadcaster_->sendTransform(odom_to_base_footprint);
 
-  transform.setOrigin(tf::Vector3(0.0 ,0.0, 0.0));
-  transform.setRotation(tf::Quaternion(0.0, 0.0, 0.0, 1.0));
-  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(),
-"/base_footprint", "/base_link"));
+  geometry_msgs::msg::TransformStamped base_footprint_to_base_link;
+  base_footprint_to_base_link.header.stamp = now;
+  base_footprint_to_base_link.header.frame_id = "base_footprint";
+  base_footprint_to_base_link.child_frame_id = "base_link";
+  base_footprint_to_base_link.transform.rotation.w = 1.0;
+  tf_broadcaster_->sendTransform(base_footprint_to_base_link);
 
-  transform.setOrigin(tf::Vector3(cLaserLocX, cLaserLocY, cLaserLocZ));
-  transform.setRotation(tf::Quaternion(0.0, 0.0, 0.0, 1));
-  tf_broadcaster_->sendTransform(tf::StampedTransform(transform, ros::Time::now(),
-"/base_link", "/base_laser"));
+  geometry_msgs::msg::TransformStamped base_link_to_laser;
+  base_link_to_laser.header.stamp = now;
+  base_link_to_laser.header.frame_id = "base_link";
+  base_link_to_laser.child_frame_id = "base_laser";
+  base_link_to_laser.transform.translation.x = cLaserLocX;
+  base_link_to_laser.transform.translation.y = cLaserLocY;
+  base_link_to_laser.transform.translation.z = cLaserLocZ;
+  base_link_to_laser.transform.rotation.w = 1.0;
+  tf_broadcaster_->sendTransform(base_link_to_laser);
 }
 
 void Simulator::PublishVisualizationMarkers() {
-  map_publisher_.publish(line_list_marker_);
-  robot_marker_publisher_.publish(robot_pos_marker_);
+  map_publisher_->publish(line_list_marker_);
+  robot_marker_publisher_->publish(robot_pos_marker_);
 }
 
 float AbsBound(float x, float bound) {
@@ -383,14 +402,14 @@ float AbsBound(float x, float bound) {
   return x;
 }
 
-void Simulator::DriveCallback(const AckermannCurvatureDriveMsg& msg) {
- if (!isfinite(msg.velocity) || !isfinite(msg.curvature)) {
+void Simulator::DriveCallback(const AckermannCurvatureDriveMsg::SharedPtr msg) {
+ if (!isfinite(msg->velocity) || !isfinite(msg->curvature)) {
     printf("Ignoring non-finite drive values: %f %f\n",
-           msg.velocity,
-           msg.curvature);
+           msg->velocity,
+           msg->curvature);
     return;
   }
-  last_cmd_ = msg;
+  last_cmd_ = *msg;
   t_last_cmd_ = GetMonotonicTime();
 }
 
@@ -437,7 +456,7 @@ void Simulator::Update() {
       dist * cAngularDriftRate +
       random_.Gaussian(0.0, fabs(dist) * cAngularErrorRate));
 
-  truePoseMsg.header.stamp = ros::Time::now();
+  truePoseMsg.header.stamp = node_->now();
   truePoseMsg.pose.position.x = true_robot_loc_.x();
   truePoseMsg.pose.position.y = true_robot_loc_.y();
   truePoseMsg.pose.position.z = 0;
@@ -445,7 +464,7 @@ void Simulator::Update() {
   truePoseMsg.pose.orientation.z = sin(0.5 * true_robot_angle_);
   truePoseMsg.pose.orientation.x = 0;
   truePoseMsg.pose.orientation.y = 0;
-  true_pose_publisher_.publish(truePoseMsg);
+  true_pose_publisher_->publish(truePoseMsg);
 }
 
 void Simulator::RunIteration() {
@@ -469,8 +488,8 @@ void Simulator::RunIteration() {
     localization_msg_.pose.y = true_robot_loc_.y();
     localization_msg_.pose.theta = true_robot_angle_;
     localization_msg_.map = map_name_;
-    localization_msg_.header.stamp = ros::Time::now();
-    localization_publisher_.publish(localization_msg_);
+    localization_msg_.header.stamp = node_->now();
+    localization_publisher_->publish(localization_msg_);
   }
 }
 
@@ -478,19 +497,20 @@ void Simulator::Run() {
   // main loop
   const double simulator_fps = cPublishRate / cSubSampleRate;
   RateLoop rate(simulator_fps);
-  while (ros::ok()){
-    ros::spinOnce();
+  while (rclcpp::ok()){
+    rclcpp::spin_some(node_);
     RunIteration();
     rate.Sleep();
   }
 }
 
-void Simulator::Step(const amrl_msgs::AckermannCurvatureDriveMsg& cmd,
-                     nav_msgs::Odometry* odom_msg,
-                     sensor_msgs::LaserScan* scan_msg,
-                     amrl_msgs::Localization2DMsg* localization_msg) {
+void Simulator::Step(const amrl_msgs::msg::AckermannCurvatureDriveMsg& cmd,
+                     nav_msgs::msg::Odometry* odom_msg,
+                     sensor_msgs::msg::LaserScan* scan_msg,
+                     amrl_msgs::msg::Localization2DMsg* localization_msg) {
   step_mode_ = true;
-  DriveCallback(cmd);
+  last_cmd_ = cmd;
+  t_last_cmd_ = GetMonotonicTime();
   const int num_iterations = ceil(1.0 / cSubSampleRate);
   for (int i = 0; i < num_iterations; ++i) {
     RunIteration();

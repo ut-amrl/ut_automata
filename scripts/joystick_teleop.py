@@ -1,9 +1,9 @@
-#!/usr/bin/env python
-import rospy
+#!/usr/bin/env python3
+import rclpy
 import pygame
 import time
 
-from ackermann_msgs.msg import AckermannDriveStamped
+from amrl_msgs.msg import AckermannCurvatureDriveMsg
 from sensor_msgs.msg import Joy
 
 import sys, select, termios, tty
@@ -66,7 +66,7 @@ def readJoystick():
   
   # Makes the joystick message
   joy_msg = Joy();
-  joy_msg.header.stamp = rospy.Time.now();
+  joy_msg.header.stamp = node.get_clock().now().to_msg();
   joy_msg.header.frame_id = "base_link";
   
   for i in range(6): #7
@@ -110,19 +110,15 @@ def initJoystick():
     sys.exit(1)
 
 if __name__=="__main__":
-  global steer_joystick
-  global drive_joystick
-  global is_enabled
-  global turbo_mode
-  global pub_joymsg
-  pub = rospy.Publisher('commands/ackermann',
-                      AckermannDriveStamped,
-                      queue_size=5)
-  pub_joymsg = rospy.Publisher('/bluetooth_teleop/joy',
-                      Joy,
-                      queue_size=5)
-  rospy.init_node('joystick_teleop')
-  rate = rospy.Rate(20) # 20hz
+  rclpy.init()
+  node = rclpy.create_node('joystick_teleop')
+  pub = node.create_publisher(AckermannCurvatureDriveMsg,
+                      'ackermann_curvature_drive',
+                      5)
+  pub_joymsg = node.create_publisher(Joy,
+                      '/bluetooth_teleop/joy',
+                      5)
+  rate_period = 1.0 / 20.0
   initJoystick()
   
   last_active_time = time.time()
@@ -130,8 +126,9 @@ if __name__=="__main__":
   speed = 1.0 # 1.0
 
   turn = 0.25
-  while not rospy.is_shutdown():
+  while rclpy.ok():
     checkConnectivity()
+    rclpy.spin_once(node, timeout_sec=0.0)
     
     if joystick_connected:
       readJoystick()
@@ -140,36 +137,32 @@ if __name__=="__main__":
       else:
         speed = 1.0
       
-      msg = AckermannDriveStamped();
-      msg.header.stamp = rospy.Time.now();
+      msg = AckermannCurvatureDriveMsg();
+      msg.header.stamp = node.get_clock().now().to_msg();
       msg.header.frame_id = "base_link";
 
       print("Drive: {:.2f}% Steer: {:.2f}%  Enabled: {}".format(
           drive_joystick, steer_joystick, is_enabled))
 
-      msg.drive.speed = drive_joystick * speed;
-      msg.drive.acceleration = 1;
-      msg.drive.jerk = 1;
-      msg.drive.steering_angle = steer_joystick * turn
-      msg.drive.steering_angle_velocity = 1
+      msg.velocity = drive_joystick * speed;
+      msg.curvature = steer_joystick * turn
 
       if is_enabled:
         pub.publish(msg)
 
-    rate.sleep()
+    time.sleep(rate_period)
 
-  msg = AckermannDriveStamped();
-  msg.header.stamp = rospy.Time.now();
+  msg = AckermannCurvatureDriveMsg();
+  msg.header.stamp = node.get_clock().now().to_msg();
   msg.header.frame_id = "base_link";
 
-  msg.drive.speed = 0;
-  msg.drive.acceleration = 1;
-  msg.drive.jerk = 1;
-  msg.drive.steering_angle = 0
-  msg.drive.steering_angle_velocity = 1
+  msg.velocity = 0;
+  msg.curvature = 0
   pub.publish(msg)
 
   # Close the window and quit.
   # If you forget this line, the program will 'hang'
   # on exit if running from IDLE.
   pygame.quit ()
+  node.destroy_node()
+  rclpy.shutdown()

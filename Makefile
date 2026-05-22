@@ -1,31 +1,16 @@
-# include $(shell rospack find mk)/cmake.mk
+build_type ?= Release
+colcon_args ?= -DPython3_EXECUTABLE=/usr/bin/python3
+base_paths ?= . ../amrl_msgs ../amrl_maps
+parallel_workers ?= $(shell nproc)
 
-#acceptable build_types: Release/Debug/Profile
-build_type=Release
-# build_type=Debug
-#acceptable build_mode: Simulation/Hardware
-build_mode=Simulation
+.PHONY: all simulation hardware clean
 
-.SILENT:
+all: simulation
 
-all: build_mode=Simulation
-all: build build/CMakeLists.txt.copy
-	$(info build_type is [${build_type}])
-	$(info build_mode is [${build_mode}])
-	$(MAKE) --no-print-directory -C build
+simulation:
+	CMAKE_BUILD_PARALLEL_LEVEL=$(parallel_workers) colcon build --symlink-install --parallel-workers $(parallel_workers) --base-paths $(base_paths) --packages-up-to ut_automata --cmake-args -DCMAKE_BUILD_TYPE=$(build_type) $(colcon_args)
 
-hardware: build_mode=Hardware
-hardware: build build/CMakeLists.txt.copy
-	$(info build_type is [${build_type}])
-	$(info build_mode is [${build_mode}])
-	$(MAKE) --no-print-directory -C build
+hardware: simulation
 
 clean:
-	rm -rf build bin lib msg_gen src/ut_automata
-
-build/CMakeLists.txt.copy: build CMakeLists.txt Makefile
-	cd build && cmake -DCMAKE_BUILD_TYPE=$(build_type) -DCMAKE_BUILD_MODE=$(build_mode) ..
-	cp CMakeLists.txt build/CMakeLists.txt.copy
-
-build:
-	mkdir -p build
+	rm -rf build install log

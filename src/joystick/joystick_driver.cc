@@ -25,8 +25,8 @@
 #include <string>
 #include <vector>
 
-#include "ros/ros.h"
-#include "sensor_msgs/Joy.h"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/joy.hpp"
 #include "gflags/gflags.h"
 #include "joystick/joystick.h"
 #include "shared/util/timer.h"
@@ -38,7 +38,7 @@ CONFIG_STRING(joystick_port_, "joystick_port");
 
 DEFINE_string(config_dir, "config", "Directory containing joystick.lua config file.");
 
-using sensor_msgs::Joy;
+using sensor_msgs::msg::Joy;
 using std::string;
 using std::vector;
 using joystick::Joystick;
@@ -49,9 +49,9 @@ int main(int argc, char** argv) {
   config_reader::ConfigReader reader({
     FLAGS_config_dir + "/joystick.lua"
   });
-  ros::init(argc, argv, "joystick");
-  ros::NodeHandle n;
-  ros::Publisher publisher = n.advertise<sensor_msgs::Joy>("joystick", 1);
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<rclcpp::Node>("joystick");
+  auto publisher = node->create_publisher<sensor_msgs::msg::Joy>("joystick", 1);
   Joystick joystick = Joystick(joystick_name_);
   if (!joystick.Open(joystick_port_.c_str())) {
     fprintf(stderr, "ERROR: Unable to open joystick!\n");
@@ -62,21 +62,22 @@ int main(int argc, char** argv) {
   vector<float> axes;
   Joy msg;
   msg.header.frame_id = "joystick";
-  msg.header.seq = 0;
 
   RateLoop rate_loop(30);
-  while (ros::ok()) {
+  while (rclcpp::ok()) {
+    rclcpp::spin_some(node);
     joystick.ProcessEvents(2);
     joystick.GetAllAxes(&axes);
     joystick.GetAllButtons(&buttons);
-    msg.header.stamp = ros::Time::now();
+    msg.header.stamp = node->now();
     msg.axes = axes;
     msg.buttons = buttons;
-    publisher.publish(msg);
+    publisher->publish(msg);
     rate_loop.Sleep();
   }
 
   joystick.Close();
+  rclcpp::shutdown();
   return 0;
 }
 

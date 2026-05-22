@@ -1,3 +1,0 @@
-<launch>                                                                                         
-  <node name="logger" pkg="ut_automata" type="logger" respawn="false" args="--out_dir=/home/amrl_user/bagfiles/" />
-</launch>

@@ -1,69 +1,37 @@
 name: Build-Test
-# Run this workflow every time a new commit pushed to your repository
 on: push
 
 jobs:
-  # Set the job key. The key is displayed as the job name
-  # when a job name is not provided
   build-test:
-    # Name the Job
     name: Build test
-    # Set the type of machine to run on
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
+    container:
+      image: ros:jazzy-ros-base
 
     steps:
-      # Run package update
-      - name: Run package update
-        run: |
-          sudo apt-get update
-          sudo apt-get dist-upgrade -y
-
-      # Install ROS Melodic
-      - name: Install ROS Noetic
-        run: |
-          sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
-          sudo apt install curl
-          curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
-          sudo apt-get update
-          sudo apt-get install ros-noetic-desktop python3-rosdep python3-rosinstall python3-rosinstall-generator python3-wstool build-essential
-          sudo rosdep init
-          rosdep update
-
-      # Install dependencies
-      - name: Install dependencies
-        run: |
-          sudo apt-get install git libgflags-dev libpopt-dev libgoogle-glog-dev liblua5.1-0-dev libboost-all-dev libqt5websockets5-dev
-
-
-      # Checks out a copy of your repository
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      # Checkout and build amrl_msgs
-      - name: Get amrl_msgs
+      - name: Install dependencies
         run: |
-          source /opt/ros/melodic/setup.bash
-          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs
-          cd $GITHUB_WORKSPACE/..
-          git clone https://github.com/ut-amrl/amrl_msgs.git
-          cd amrl_msgs
-          make
+          apt-get update
+          apt-get install -y git python3-colcon-common-extensions \
+            libgflags-dev libgoogle-glog-dev liblua5.1-0-dev \
+            libboost-all-dev libqt5websockets5-dev libqt5opengl5-dev qtbase5-dev \
+            ros-jazzy-ament-index-cpp ros-jazzy-tf2-ros \
+            ros-jazzy-tf2-geometry-msgs ros-jazzy-urg-node ros-jazzy-joy
 
-
-      # Checkout and build amrl_maps
-      - name: Get amrl_maps
+      - name: Create workspace
         run: |
-          source /opt/ros/melodic/setup.bash
-          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_maps
-          cd $GITHUB_WORKSPACE/..
-          git clone https://github.com/ut-amrl/amrl_maps.git
+          mkdir -p "$GITHUB_WORKSPACE/../deps_ws/src"
+          ln -s "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/../deps_ws/src/ut_automata"
+          git clone https://github.com/ut-amrl/amrl_msgs.git "$GITHUB_WORKSPACE/../deps_ws/src/amrl_msgs"
+          git clone https://github.com/ut-amrl/amrl_maps.git "$GITHUB_WORKSPACE/../deps_ws/src/amrl_maps"
 
-      # Compiles the code
       - name: Run build
+        working-directory: ${{ github.workspace }}/../deps_ws
         run: |
-          source /opt/ros/melodic/setup.bash
-          export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/../amrl_msgs:$GITHUB_WORKSPACE/../amrl_maps
-          cd $GITHUB_WORKSPACE
-          make
+          . /opt/ros/jazzy/setup.sh
+          colcon build --packages-up-to ut_automata --cmake-args -DCMAKE_BUILD_TYPE=Release

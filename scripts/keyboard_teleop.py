@@ -1,7 +1,5 @@
-#!/usr/bin/env python
-import roslib
-roslib.load_manifest('ut_automata')
-import rospy
+#!/usr/bin/env python3
+import rclpy
 from amrl_msgs.msg import AckermannCurvatureDriveMsg
 
 import sys, select, termios, tty
@@ -37,10 +35,11 @@ def vels(speed,turn):
 if __name__=="__main__":
   print(banner)
   settings = termios.tcgetattr(sys.stdin)
-  pub = rospy.Publisher('ackermann_curvature_drive',
-                        AckermannCurvatureDriveMsg,
-                        queue_size=5)
-  rospy.init_node('keyop')
+  rclpy.init()
+  node = rclpy.create_node('keyop')
+  pub = node.create_publisher(AckermannCurvatureDriveMsg,
+                              'ackermann_curvature_drive',
+                              5)
 
   x = 0
   th = 0
@@ -58,7 +57,7 @@ if __name__=="__main__":
           if (key == '\x03'):
              break
        msg = AckermannCurvatureDriveMsg()
-       msg.header.stamp = rospy.Time.now()
+       msg.header.stamp = node.get_clock().now().to_msg()
        msg.header.frame_id = "base_link"
 
        msg.velocity = x*speed
@@ -71,9 +70,11 @@ if __name__=="__main__":
 
   finally:
     msg = AckermannCurvatureDriveMsg()
-    msg.header.stamp = rospy.Time.now()
+    msg.header.stamp = node.get_clock().now().to_msg()
     msg.header.frame_id = "base_link"
     msg.velocity = 0
     msg.curvature = 0
     pub.publish(msg)
     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+    node.destroy_node()
+    rclpy.shutdown()
