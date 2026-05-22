@@ -434,7 +434,7 @@ void VectorMap::Cleanup() {
       const Line2f& l1 = lines[i];
       if (l1.Length() < kMinLineLength) continue;
       // Check if l1 intersects with any line in new lines.
-      Vector2f p;
+      Vector2f p = Vector2f::Zero();
       bool intersection = false;
       for (const Line2f& l2 : new_lines) {
         CHECK(!Overlaps(l1, l2));

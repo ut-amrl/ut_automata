@@ -2,9 +2,10 @@
 # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
 # for examples
 
-source /opt/ros/melodic/setup.bash
-source /home/amrl_user/astra/devel/setup.sh
-export ROS_PACKAGE_PATH=~/ut_automata:$ROS_PACKAGE_PATH
+source /opt/ros/jazzy/setup.bash
+if [ -f /home/amrl_user/ut_automata_ws/install/setup.bash ]; then
+  source /home/amrl_user/ut_automata_ws/install/setup.bash
+fi
 
 ########################################################
 # Set ROS IP if possible

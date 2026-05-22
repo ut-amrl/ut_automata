@@ -2,19 +2,22 @@
 
 #include "vesc_driver.h"
 
+#include <boost/bind/bind.hpp>
+
 #include <atomic>
 #include <cassert>
+#include <chrono>
 #include <cmath>
+#include <functional>
 #include <sstream>
 
-#include "boost/bind.hpp"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "ut_automata/CarStatusMsg.h"
-#include "ut_automata/VescStateStamped.h"
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
-#include "nav_msgs/Odometry.h"
-#include "geometry_msgs/TwistStamped.h"
+#include "ut_automata/msg/car_status_msg.hpp"
+#include "ut_automata/msg/vesc_state_stamped.hpp"
+#include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
+#include "nav_msgs/msg/odometry.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
 
 #include "config_reader/config_reader.h"
 #include "shared/math/math_util.h"
@@ -40,8 +43,9 @@ CONFIG_STRING(serial_port_, "serial_port");
 DEFINE_string(config_dir, "config", 
     "Directory containing the car.lua and vesc.lua config files.");
 
-using ut_automata::CarStatusMsg;
-using ut_automata::VescStateStamped;
+using ut_automata::msg::CarStatusMsg;
+using ut_automata::msg::VescStateStamped;
+using boost::placeholders::_1;
 
 namespace {
 
@@ -56,8 +60,8 @@ CarStatusMsg car_status_msg_;
 namespace vesc_driver
 {
 
-VescDriver::VescDriver(ros::NodeHandle nh,
-                       ros::NodeHandle private_nh) :
+VescDriver::VescDriver(const rclcpp::Node::SharedPtr& node) :
+    node_(node),
     vesc_(std::string(),
           boost::bind(&VescDriver::vescPacketCallback, this, _1)),
     driver_mode_(MODE_INITIALIZING),
@@ -73,11 +77,10 @@ VescDriver::VescDriver(ros::NodeHandle nh,
       FLAGS_config_dir + "/vesc.lua"
     });
   }
-  state_msg_.header.seq = 0;
   state_msg_.header.frame_id = "base_link";
   car_status_msg_.header = state_msg_.header;
 
-  odom_msg_.header.stamp = ros::Time::now();
+  odom_msg_.header.stamp = node_->now();
   odom_msg_.header.frame_id = "odom";
   odom_msg_.child_frame_id = "base_link";
 
@@ -116,31 +119,31 @@ VescDriver::VescDriver(ros::NodeHandle nh,
   CHECK(vesc_.connect(serial_port_)) << "Failed to connect to the VESC";
   if (kDebug) printf("CONNECTED\n");
 
-  state_pub_ = nh.advertise<VescStateStamped>("sensors/core", 1);
-  autonomy_enabler_pub_ = nh.advertise<std_msgs::Bool>("autonomy_enabler", 1);
-  odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
-  drive_pub_ = nh.advertise<geometry_msgs::TwistStamped>("vesc_drive", 1);
-  car_status_pub_ = nh.advertise<CarStatusMsg>("car_status", 1);
+  state_pub_ = node_->create_publisher<VescStateStamped>("sensors/core", 1);
+  autonomy_enabler_pub_ = node_->create_publisher<std_msgs::msg::Bool>("autonomy_enabler", 1);
+  odom_pub_ = node_->create_publisher<nav_msgs::msg::Odometry>("odom", 1);
+  drive_pub_ = node_->create_publisher<geometry_msgs::msg::TwistStamped>("vesc_drive", 1);
+  car_status_pub_ = node_->create_publisher<CarStatusMsg>("car_status", 1);
 
-  ackermann_curvature_sub_ = nh.subscribe(
+  ackermann_curvature_sub_ = node_->create_subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>(
       "/ackermann_curvature_drive",
       10,
-      &VescDriver::ackermannCurvatureCallback,
-      this);
-  joystick_sub_ = nh.subscribe(
-      "joystick", 10, &VescDriver::joystickCallback, this);
+      std::bind(&VescDriver::ackermannCurvatureCallback, this, std::placeholders::_1));
+  joystick_sub_ = node_->create_subscription<sensor_msgs::msg::Joy>(
+      "joystick", 10, std::bind(&VescDriver::joystickCallback, this, std::placeholders::_1));
 
   if (kDebug) printf("TIMER START\n");
   // create a 50Hz timer, used for state machine & polling VESC telemetry
-  timer_ = nh.createSteadyTimer(ros::WallDuration(kCommandInterval),
-                                &VescDriver::timerCallback,
-                                this);
+  timer_ = node_->create_wall_timer(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::duration<double>(kCommandInterval)),
+      std::bind(&VescDriver::timerCallback, this));
   if (kDebug) printf("DONE INIT\n");
 }
 
 void VescDriver::checkCommandTimeout() {
   static const double kTimeout = 0.5;
-  const double t_now = ros::WallTime::now().toSec();
+  const double t_now = node_->now().seconds();
   if ((t_now > t_last_command_ + kTimeout && isAutonomous()) ||
       t_now > t_last_joystick_ + kTimeout) {
     mux_drive_speed_ = 0;
@@ -148,9 +151,10 @@ void VescDriver::checkCommandTimeout() {
   }
 }
 
-geometry_msgs::TwistStamped createTwist(float velocity, float curvature) {
-  geometry_msgs::TwistStamped  twist_msg;
-  twist_msg.header.stamp = ros::Time::now();
+geometry_msgs::msg::TwistStamped createTwist(
+    const rclcpp::Node::SharedPtr& node, float velocity, float curvature) {
+  geometry_msgs::msg::TwistStamped twist_msg;
+  twist_msg.header.stamp = node->now();
   twist_msg.twist.linear.x = velocity;
   twist_msg.twist.linear.y = 0;
   twist_msg.twist.linear.z = 0;
@@ -160,35 +164,36 @@ geometry_msgs::TwistStamped createTwist(float velocity, float curvature) {
   return twist_msg;
 }
 
-geometry_msgs::TwistStamped CalculateDriveCmd(float speed, float steering_angle) {
+geometry_msgs::msg::TwistStamped CalculateDriveCmd(
+    const rclcpp::Node::SharedPtr& node, float speed, float steering_angle) {
   float velocity = speed;
   float turn_radius = steering_angle != 0 ? wheelbase_ / tan(steering_angle) : 0;
   float curvature = turn_radius != 0 ?  1.0 / turn_radius : 0;
 
-  return createTwist(velocity, curvature);
+  return createTwist(node, velocity, curvature);
 }
 
-void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
+void VescDriver::joystickCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
   static const bool kDebug = false;
   static const float kMaxTurnRate = 0.25;
   static const float kAxesEps = 0.2;
   static const size_t kManualDriveButton = 4;
   static const size_t kAutonomousDriveButton = 5;
   static const size_t kAutonomousDriveToggleButton = 7;
-  if (msg.buttons.size() < 6) return;
-  t_last_joystick_ = ros::WallTime::now().toSec();
-  int toggle = toggleState(msg.buttons[kAutonomousDriveToggleButton]);
+  if (msg->buttons.size() < 6) return;
+  t_last_joystick_ = node_->now().seconds();
+  int toggle = toggleState(msg->buttons[kAutonomousDriveToggleButton]);
 
   // determine if any button/axes is pressed.
   bool pressed = (drive_mode_ == kAutonomousContinuousDrive 
     && toggle == kToggleOn);
-  for(size_t i = 0; i < msg.buttons.size(); i++){
-    if(i != kAutonomousDriveToggleButton && msg.buttons[i]){
+  for(size_t i = 0; i < msg->buttons.size(); i++){
+    if(i != kAutonomousDriveToggleButton && msg->buttons[i]){
       pressed = true;
     }
   }
-  for(size_t i = 0; i < msg.axes.size(); i++){
-    float axes_value = msg.axes[i];
+  for(size_t i = 0; i < msg->axes.size(); i++){
+    float axes_value = msg->axes[i];
     if(i == 2 || i == 5){
       // axes 2, 5's initial value is around -1.0
       axes_value += 1.0;
@@ -202,7 +207,7 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     drive_mode_ = kStoppedDrive;
     mux_drive_speed_ = 0;
     mux_steering_angle_ = 0;
-  } else if (msg.buttons[kManualDriveButton] == 1) {
+  } else if (msg->buttons[kManualDriveButton] == 1) {
     // joystick mode
     if(kDebug) printf("Joystick\n");
     drive_mode_ = kJoystickDrive;
@@ -211,7 +216,7 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     toggle != kToggleOn)){
     if(kDebug) printf("ContAutonomous\n");
     drive_mode_ = kAutonomousContinuousDrive;
-  } else if (msg.buttons[kAutonomousDriveButton] == 1) {
+  } else if (msg->buttons[kAutonomousDriveButton] == 1) {
     if(kDebug) printf("Autonomous\n");
     drive_mode_ = kAutonomousDrive;
   } else {
@@ -221,10 +226,10 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
     mux_steering_angle_ = 0;
   }
   if (drive_mode_ == kJoystickDrive) {
-    if (msg.axes.size() < 5) return;
-    const float steer_joystick = -msg.axes[0];
-    const float drive_joystick = -msg.axes[4];
-    const bool turbo_mode = (msg.axes[2] >= 0.9);
+    if (msg->axes.size() < 5) return;
+    const float steer_joystick = -msg->axes[0];
+    const float drive_joystick = -msg->axes[4];
+    const bool turbo_mode = (msg->axes[2] >= 0.9);
     const float max_speed = (turbo_mode ? turbo_speed_ : normal_speed_);
     float speed = drive_joystick * max_speed;
     float steering_angle = steer_joystick * kMaxTurnRate;
@@ -235,13 +240,13 @@ void VescDriver::joystickCallback(const sensor_msgs::Joy& msg) {
 
   if (drive_mode_ == kAutonomousDrive || 
       drive_mode_ == kAutonomousContinuousDrive) {
-    std_msgs::Bool msg;
-    msg.data = true;
-    autonomy_enabler_pub_.publish(msg);
+    std_msgs::msg::Bool autonomy_msg;
+    autonomy_msg.data = true;
+    autonomy_enabler_pub_->publish(autonomy_msg);
   } else {
-    std_msgs::Bool msg;
-    msg.data = false;
-    autonomy_enabler_pub_.publish(msg);
+    std_msgs::msg::Bool autonomy_msg;
+    autonomy_msg.data = false;
+    autonomy_enabler_pub_->publish(autonomy_msg);
   }
 }
 
@@ -316,12 +321,12 @@ void VescDriver::sendDriveCommands() {
   last_steering_angle_ = mux_steering_angle_;
 
   const float clipped_speed = (erpm_clipped - speed_to_erpm_offset_) / speed_to_erpm_gain_;
-  drive_pub_.publish(CalculateDriveCmd(clipped_speed, mux_steering_angle_));
+  drive_pub_->publish(CalculateDriveCmd(node_, clipped_speed, mux_steering_angle_));
 }
 
-void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
+void VescDriver::timerCallback() {
   static const double kMaxInitPeriod = 2.0;
-  static const double kTStart = ros::WallTime::now().toSec();
+  static const double kTStart = node_->now().seconds();
 
   if (kDebug) printf("TIMER CALLBACK\n");
   checkCommandTimeout();
@@ -335,7 +340,7 @@ void VescDriver::timerCallback(const ros::SteadyTimerEvent& event) {
    *  OPERATING - receiving commands from subscriber topics
    */
   if (driver_mode_ == MODE_INITIALIZING) {
-    CHECK_LE(ros::WallTime::now().toSec() - kTStart, kMaxInitPeriod) 
+    CHECK_LE(node_->now().seconds() - kTStart, kMaxInitPeriod)
         << "FAIL: Timed out while trying to initialize VESC.\n";
 
     if (kDebug) printf("INITIALIZING\n");
@@ -379,9 +384,9 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
   static float position_x = 0;
   static float position_y = 0;
   static float orientation = 0; // theta
-  static double last_frame_time = ros::Time::now().toSec();
-  ros::Time current_frame_time_ros = ros::Time::now();
-  double current_frame_time = current_frame_time_ros.toSec();
+  static double last_frame_time = node_->now().seconds();
+  rclcpp::Time current_frame_time_ros = node_->now();
+  double current_frame_time = current_frame_time_ros.seconds();
 
   // Update the estimated pose
   double del_t = current_frame_time - last_frame_time;
@@ -403,7 +408,7 @@ void VescDriver::updateOdometry(float rpm, float steering_angle) {
     odom_msg_.pose.pose.position.y = position_y;
     odom_msg_.pose.pose.orientation.w = cos(0.5 * orientation);
     odom_msg_.pose.pose.orientation.z = sin(0.5 * orientation);
-    odom_pub_.publish(odom_msg_);
+    odom_pub_->publish(odom_msg_);
   } else {
     printf("Odometry messages received out of order.\n") ;
   }
@@ -417,7 +422,7 @@ packet)
     boost::shared_ptr<VescPacketValues const> values =
       boost::dynamic_pointer_cast<VescPacketValues const>(packet);
 
-    state_msg_.header.stamp = ros::Time::now();
+    state_msg_.header.stamp = node_->now();
     state_msg_.state.voltage_input = values->v_in();
     state_msg_.state.temperature_pcb = values->temp_pcb();
     state_msg_.state.current_motor = values->current_motor();
@@ -431,12 +436,12 @@ packet)
     state_msg_.state.displacement = values->tachometer();
     state_msg_.state.distance_traveled = values->tachometer_abs();
     state_msg_.state.fault_code = values->fault_code();
-    state_pub_.publish(state_msg_);
+    state_pub_->publish(state_msg_);
 
-    car_status_msg_.header.stamp = ros::Time::now();
+    car_status_msg_.header.stamp = node_->now();
     car_status_msg_.battery_voltage = values->v_in();
     car_status_msg_.status = static_cast<uint8_t>(drive_mode_);
-    car_status_pub_.publish(car_status_msg_);
+    car_status_pub_->publish(car_status_msg_);
 
     updateOdometry(values->rpm(), last_steering_angle_);
 
@@ -464,11 +469,11 @@ float VescDriver::CalculateSteeringAngle(float lin_vel, float rot_vel) {
 }
 
 void VescDriver::ackermannCurvatureCallback(
-    const amrl_msgs::AckermannCurvatureDriveMsg& cmd) {
-  t_last_command_ = ros::WallTime::now().toSec();
+    const amrl_msgs::msg::AckermannCurvatureDriveMsg::SharedPtr cmd) {
+  t_last_command_ = node_->now().seconds();
   if (isAutonomous()) {
-    mux_drive_speed_ = cmd.velocity;
-    const float rot_vel = cmd.velocity * cmd.curvature;
+    mux_drive_speed_ = cmd->velocity;
+    const float rot_vel = cmd->velocity * cmd->curvature;
     mux_steering_angle_ = CalculateSteeringAngle(mux_drive_speed_, rot_vel);
   }
 }

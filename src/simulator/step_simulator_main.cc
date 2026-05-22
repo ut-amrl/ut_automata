@@ -24,7 +24,7 @@
 #include <iostream>
 
 #include "gflags/gflags.h"
-#include "ros/ros.h"
+#include "rclcpp/rclcpp.hpp"
 
 #include "shared/util/timer.h"
 #include "simulator/simulator.h"
@@ -35,17 +35,17 @@ int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
   printf("\nUT AUTOmata F1/10 Simulator\n\n");
 
-  ros::init(argc, argv, "ut_automata_simulator");
-  ros::NodeHandle n;
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<rclcpp::Node>("ut_automata_step_simulator");
 
   Simulator simulator;
-  simulator.Init(n);
+  simulator.Init(node);
   simulator.SetStepMode(true);
 
   // main loop
   RateLoop rate(FLAGS_fps);
-  while (ros::ok()){
-    ros::spinOnce();
+  while (rclcpp::ok()){
+    rclcpp::spin_some(node);
     // Wait for a character to be pressed.
     getchar();
     simulator.RunIteration();
@@ -53,6 +53,7 @@ int main(int argc, char **argv) {
   }
 
   printf("closing.\n");
+  rclcpp::shutdown();
 
   return(0);
 }

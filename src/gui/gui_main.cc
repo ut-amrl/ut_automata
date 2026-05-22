@@ -21,6 +21,7 @@
 
 #include <pthread.h>
 
+#include <memory>
 #include <string>
 #include <vector>
 #include <signal.h>
@@ -28,19 +29,20 @@
 #include <QPushButton>
 #include <QMetaType>
 
-#include "ros/ros.h"
-#include "sensor_msgs/LaserScan.h"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
 
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
-#include "ut_automata/CarStatusMsg.h"
+#include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
+#include "ut_automata/msg/car_status_msg.hpp"
 #include "gui_mainwindow.h"
 #include "shared/util/timer.h"
 
-using amrl_msgs::AckermannCurvatureDriveMsg;
-using ut_automata::CarStatusMsg;
+using amrl_msgs::msg::AckermannCurvatureDriveMsg;
+using ut_automata::msg::CarStatusMsg;
 
 namespace {
 ut_automata_gui::MainWindow* main_window_ = nullptr;
+rclcpp::Node::SharedPtr node_;
 bool run_ = true;
 bool lidar_okay_ = false;
 bool camera_okay_ = false;
@@ -51,38 +53,37 @@ float throttle_ = 0;
 float steering_ = 0;
 }  // namespace
 
-void StatusCallback(const CarStatusMsg& msg) {
+void StatusCallback(const CarStatusMsg::SharedPtr msg) {
   if (!run_ || main_window_ == nullptr) return;
-  drive_mode_ = msg.status;
-  battery_voltage_ = msg.battery_voltage;
+  drive_mode_ = msg->status;
+  battery_voltage_ = msg->battery_voltage;
   vesc_okay_ = true;
 }
 
-void LidarCallback(const sensor_msgs::LaserScan& msg) {
+void LidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
   lidar_okay_  = true;
 }
 
-void DriveCallback(const AckermannCurvatureDriveMsg& msg) {
-  throttle_ = msg.velocity;
-  steering_ = msg.curvature;
+void DriveCallback(const AckermannCurvatureDriveMsg::SharedPtr msg) {
+  throttle_ = msg->velocity;
+  steering_ = msg->curvature;
 }
 
 void* RosThread(void* arg) {
   pthread_detach(pthread_self());
 
-  ros::NodeHandle n;
-  ros::Subscriber status_sub =
-      n.subscribe("car_status", 1, &StatusCallback);
-  ros::Subscriber lidar_sub =
-      n.subscribe("scan", 1, &LidarCallback);
-  ros::Subscriber drive_sub =
-      n.subscribe("ackermann_curvature_drive", 1, &DriveCallback);
+  auto status_sub = node_->create_subscription<CarStatusMsg>(
+      "car_status", 1, &StatusCallback);
+  auto lidar_sub = node_->create_subscription<sensor_msgs::msg::LaserScan>(
+      "scan", 1, &LidarCallback);
+  auto drive_sub = node_->create_subscription<AckermannCurvatureDriveMsg>(
+      "ackermann_curvature_drive", 1, &DriveCallback);
 
   RateLoop loop(5.0);
-  while(ros::ok() && run_) {
+  while(rclcpp::ok() && run_) {
     throttle_ = steering_ = 0;
     vesc_okay_ = lidar_okay_ = camera_okay_ = false;
-    ros::spinOnce();
+    rclcpp::spin_some(node_);
     main_window_->UpdateStatus(drive_mode_,
                                battery_voltage_,
                                vesc_okay_,
@@ -107,7 +108,8 @@ void SignalHandler(int num) {
 }
 
 int main(int argc, char *argv[]) {
-  ros::init(argc, argv, "ut_automata_gui", ros::init_options::NoSigintHandler);
+  rclcpp::init(argc, argv);
+  node_ = std::make_shared<rclcpp::Node>("ut_automata_gui");
   signal(SIGINT, &SignalHandler);
   qRegisterMetaType<std::vector<std::string> >("std::vector<std::string>");
 
@@ -122,5 +124,6 @@ int main(int argc, char *argv[]) {
   // Waiting for the created thread to terminate
   pthread_join(ptid, NULL);
   delete main_window_;
+  rclcpp::shutdown();
   return retval;
 }

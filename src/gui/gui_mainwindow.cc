@@ -46,10 +46,7 @@
 #include <QGroupBox>
 #include <QTabWidget>
 
-#include <ros/master.h>
-#include <ros/package.h>
-
-#include "std_msgs/String.h"
+#include "rclcpp/rclcpp.hpp"
 
 #include "vector_display.h"
 
@@ -221,7 +218,7 @@ MainWindow::MainWindow(QWidget* parent) :
     QSizePolicy expanding_policy;
     expanding_policy.setVerticalPolicy(QSizePolicy::Expanding);
     expanding_policy.setHorizontalPolicy(QSizePolicy::Expanding);
-    QPushButton* start_ros = new QPushButton("Start roscore");
+    QPushButton* start_ros = new QPushButton("Start ROS 2 daemon");
     QPushButton* start_camera = new QPushButton("Start Camera");
     QPushButton* start_car = new QPushButton("Start Car");
     QPushButton* stop_all = new QPushButton("Stop all nodes");
@@ -321,22 +318,22 @@ void Exec(const string& cmd) {
 }
 
 void MainWindow::StartCar() {
-  Exec("roslaunch ut_automata start_car.launch start_gui:=false");
+  Exec("ros2 launch ut_automata start_car.launch.py start_gui:=false");
 }
 
 void MainWindow::StartRos() {
-  Exec("/usr/bin/screen -mdS roscore roscore");
+  Exec("ros2 daemon start");
 }
 
 void MainWindow::StartCamera() {
-  Exec("roslaunch astra_camera astra.launch > /dev/null &");
+  Exec("ros2 launch astra_camera astra.launch.py > /dev/null &");
 }
 
 void MainWindow::StopAll() {
   // two seperate kills to ensure that both
   // autostart and manual start will be stopped
-  Exec("/opt/ros/melodic/bin/rosnode kill -a");
-  Exec("/usr/bin/pkill roslaunch");
+  Exec("/usr/bin/pkill -f 'ros2 launch'");
+  Exec("/usr/bin/pkill -f 'ut_automata/(vesc_driver|websocket|joystick|gui|simulator)'");
 }
 
 void MainWindow::closeWindow() {
@@ -350,7 +347,7 @@ void MainWindow::UpdateIP() {
     s = s + ip + "\n";
   }
   ipaddr_label_->setText(QString::fromUtf8(s.c_str()));
-  ros_led_->SetStatus(ros::master::check());
+  ros_led_->SetStatus(rclcpp::ok());
 }
 
 void MainWindow::UpdateStatus(int mode, 

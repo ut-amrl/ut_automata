@@ -4,8 +4,7 @@
 [JetPack on Nvidia DevKit](#jetpack-on-nvidia-devkit)  
 [JetPack on ConnectTech Orbitty Carrier](#jetpack-on-connecttech-orbitty-carrier)  
 [CUDA + PyTorch](#cuda-and-pytorch)  
-[ROS](#ros)  
-[ROS Melodic With Python3](#ros-melodic-with-python3)  
+[ROS 2](#ros-2)
 [Optional Tools](#optional-tools)  
 
 You will require an xUbuntu 18.04 computer to run the [Nvidia SDK Manager](https://developer.nvidia.com/nvidia-sdk-manager). As of the time this documentation was written, `sdkmanager` is incompatible with 20.04, but it can be run under a [VMWare Workstation Player](https://www.vmware.com/products/workstation-player/workstation-player-evaluation.html) virtual machine running 18.04 - you just need to [connect the Jetson USB device to the VM](https://www.vmware.com/support/ws5/doc/ws_devices_usb_connect.html)
@@ -90,22 +89,22 @@ You will require an xUbuntu 18.04 computer to run the [Nvidia SDK Manager](https
     ![image](https://user-images.githubusercontent.com/3406269/116788939-f9912f00-aa71-11eb-980d-24dc96409fd3.png)
 6. To install pytorch, follow the instructions here: https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-8-0-now-available/72048 
 
-## ROS
+## ROS 2
 
-Install ROS Melodic as per the installation instructions: http://wiki.ros.org/melodic/Installation/Ubuntu
+The current `ut_automata` code targets ROS 2 Jazzy. Install ROS 2 Jazzy using the official Ubuntu instructions:
 
-## ROS Melodic With Python3
+https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html
 
-After installing ROS, install rospkg for python3:
+Jazzy targets Ubuntu 24.04. Older JetPack/L4T images for TX2-era hardware are based on Ubuntu 18.04 and are not a native Jazzy target; those systems will need either a newer supported platform image, a containerized build, or a different ROS 2 distribution matched to the OS.
+
+After installing ROS 2, source the environment and build the workspace with `colcon`:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+cd ~/ut_automata_ws
+colcon build --symlink-install
+source install/setup.bash
 ```
-sudo apt install python3-pip python3-all-dev python3-rospkg
-```
-This will prompt to install python3-rospkg and to remove ROS packages (already installed). Select Yes for that prompt. 
-This will remove ROS packages and we will have to re-install them.
-```
-sudo apt install ros-melodic-desktop-full --fix-missing
-```
-After this, you should be able to run PyTorch with Cuda alongside ROS using Python3.
 
 ## Optional Tools
 

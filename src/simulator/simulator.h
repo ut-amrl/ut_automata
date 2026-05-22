@@ -20,25 +20,25 @@
 //========================================================================
 
 #include <iostream>
+#include <memory>
 #include <stdio.h>
 #include <random>
 #include <string>
 #include <vector>
 
 #include "eigen3/Eigen/Dense"
-#include "geometry_msgs/Point32.h"
-#include "geometry_msgs/PoseStamped.h"
-#include "geometry_msgs/PoseWithCovarianceStamped.h"
-#include "nav_msgs/Odometry.h"
-#include "ros/ros.h"
-#include "ros/package.h"
-#include "sensor_msgs/LaserScan.h"
-#include "tf/transform_broadcaster.h"
-#include "tf/transform_datatypes.h"
-#include "visualization_msgs/Marker.h"
+#include "geometry_msgs/msg/point32.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
+#include "tf2_ros/transform_broadcaster.h"
+#include "visualization_msgs/msg/marker.hpp"
 
-#include "amrl_msgs/AckermannCurvatureDriveMsg.h"
-#include "amrl_msgs/Localization2DMsg.h"
+#include "amrl_msgs/msg/ackermann_curvature_drive_msg.hpp"
+#include "amrl_msgs/msg/localization2_d_msg.hpp"
 
 #include "shared/util/random.h"
 #include "shared/util/timer.h"
@@ -83,25 +83,26 @@ class Simulator{
   // Last time data was published.
   double last_publish_time_ = 0.0;
 
-  ros::Subscriber drive_subscriber_;
-  ros::Subscriber init_subscriber_;
+  rclcpp::Node::SharedPtr node_;
+  rclcpp::Subscription<amrl_msgs::msg::AckermannCurvatureDriveMsg>::SharedPtr drive_subscriber_;
+  rclcpp::Subscription<amrl_msgs::msg::Localization2DMsg>::SharedPtr init_subscriber_;
 
-  ros::Publisher odometry_publisher_;
-  ros::Publisher laser_publisher_;
-  ros::Publisher map_publisher_;
-  ros::Publisher robot_marker_publisher_;
-  ros::Publisher true_pose_publisher_;
-  ros::Publisher localization_publisher_;
-  tf::TransformBroadcaster *tf_broadcaster_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr laser_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr map_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr robot_marker_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr true_pose_publisher_;
+  rclcpp::Publisher<amrl_msgs::msg::Localization2DMsg>::SharedPtr localization_publisher_;
+  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
 
-  sensor_msgs::LaserScan scan_msg_;
-  nav_msgs::Odometry odom_msg_;
+  sensor_msgs::msg::LaserScan scan_msg_;
+  nav_msgs::msg::Odometry odom_msg_;
 
   vector_map::VectorMap map_;
 
-  visualization_msgs::Marker line_list_marker_;
-  visualization_msgs::Marker robot_pos_marker_;
+  visualization_msgs::msg::Marker line_list_marker_;
+  visualization_msgs::msg::Marker robot_pos_marker_;
 
   // True robot location - will be corrupted by actuation error.
   Eigen::Vector2f true_robot_loc_;
@@ -109,11 +110,11 @@ class Simulator{
 
   double t_last_cmd_;
 
-  geometry_msgs::PoseStamped truePoseMsg;
+  geometry_msgs::msg::PoseStamped truePoseMsg;
 
-  amrl_msgs::AckermannCurvatureDriveMsg last_cmd_;
+  amrl_msgs::msg::AckermannCurvatureDriveMsg last_cmd_;
 
-  amrl_msgs::Localization2DMsg localization_msg_;
+  amrl_msgs::msg::Localization2DMsg localization_msg_;
   std::string map_name_;
 
   util_random::Random random_;
@@ -125,18 +126,18 @@ class Simulator{
   bool step_mode_ = false;
 
 private:
-  void InitVizMarker(visualization_msgs::Marker& vizMarker,
+  void InitVizMarker(visualization_msgs::msg::Marker& vizMarker,
                      std::string ns,
                      int id,
                      std::string type,
-                     geometry_msgs::PoseStamped p,
-                     geometry_msgs::Point32 scale,
+                     geometry_msgs::msg::PoseStamped p,
+                     geometry_msgs::msg::Point32 scale,
                      double duration,
                      std::vector<float> color);
   void InitSimulatorVizMarkers();
   void DrawMap();
-  void InitalLocationCallback(const amrl_msgs::Localization2DMsg& msg);
-  void DriveCallback(const amrl_msgs::AckermannCurvatureDriveMsg& msg);
+  void InitalLocationCallback(const amrl_msgs::msg::Localization2DMsg::SharedPtr msg);
+  void DriveCallback(const amrl_msgs::msg::AckermannCurvatureDriveMsg::SharedPtr msg);
   void PublishOdometry();
   void PublishLaser();
   void PublishVisualizationMarkers();
@@ -146,15 +147,15 @@ private:
 public:
   Simulator();
   ~Simulator();
-  void Init(ros::NodeHandle &n);
+  void Init(const rclcpp::Node::SharedPtr& node);
   void ResetState();
   void Run();
   void RunIteration();
   void SetStepMode(bool step_mode);
 
-  void Step(const amrl_msgs::AckermannCurvatureDriveMsg& cmd,
-            nav_msgs::Odometry* odom_msg,
-            sensor_msgs::LaserScan* scan_msg,
-            amrl_msgs::Localization2DMsg* localization_msg);
+  void Step(const amrl_msgs::msg::AckermannCurvatureDriveMsg& cmd,
+            nav_msgs::msg::Odometry* odom_msg,
+            sensor_msgs::msg::LaserScan* scan_msg,
+            amrl_msgs::msg::Localization2DMsg* localization_msg);
 };
 #endif //SIMULATOR_H
