@@ -1,0 +1,71 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Build and cache directories
+build/
+install/
+log/
+devel/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.tox/
+.coverage
+.cache/
+*.cache
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
+.tox/
+coverage.xml
+test-results/
+
+# Documentation build
+docs/_build/
+site/
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+temp/
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+docker-compose.override.yml
+Dockerfile.bak
+
+# Development
+.env
+.env.local
+.venv/
+venv/
+env/
+
+# Large data files
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.weights

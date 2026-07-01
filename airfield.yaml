@@ -1,0 +1,45 @@
+kind: package
+name: ut_automata
+dependencies:
+- ament_index_cpp
+- geometry_msgs
+- std_msgs
+- nav_msgs
+- sensor_msgs
+- tf2
+- tf2_geometry_msgs
+- tf2_ros
+- amrl_msgs
+- amrl_maps
+- cv_bridge
+- opencv2
+- qt5
+- glog
+- gflags
+- lua5.1
+- boost
+- libx11
+- i2c
+- mpu6050driver
+# urg_node: Hokuyo lidar driver launched by hokuyo_10lx.launch.py
+# (Node package='urg_node'). Not linked by ut_automata code, but must be
+# installed in the image so the launch can find it. apt: ros-$ROS_DISTRO-urg-node.
+- urg_node
+- rosidl_default_runtime
+- ament_cmake
+- rosidl_default_generators
+source_path: .
+ros_distro: jazzy
+base_image: roboracer/l4t-jazzy:r39.2
+# Hardware access for vesc_driver (VESC serial + MPU6050 IMU) and joystick.
+# /dev/ttyACM0 is root:dialout -> needs dialout group (GID 20) to open it;
+# /dev/i2c-7 is root:i2c -> needs i2c group (GID 108) for the MPU6050 IMU
+# (vesc.lua i2c_bus_number=7), else "failed to open /dev/i2c-7" + IMU fusion off;
+# /dev/input/js0 is world-readable so the device passthrough alone suffices.
+devices:
+  - /dev/ttyACM0
+  - /dev/i2c-7
+  - /dev/input/js0
+group_add:
+  - "20"
+  - "108"

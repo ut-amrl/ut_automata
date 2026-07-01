@@ -10,3 +10,5 @@ src/ut_automata/
 config/car.lua
 config/car.lua.*
 .vscode
+.air
+.airfield/
