@@ -207,6 +207,7 @@ install(TARGETS
 # Install launch files, config files, scripts, etc.
 install(DIRECTORY
   launch
+  config
   DESTINATION share/${PROJECT_NAME}
   OPTIONAL)
 

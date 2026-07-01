@@ -39,9 +39,13 @@ steering_curve_ym = 0.1;
 
 
 -- IMU fusion parameters
-fuse_imu = true; -- Set to true to fuse IMU data with odometry using EKF
+-- NOTE: utav19 has no MPU6050 wired (i2cdetect finds nothing at 0x68/0x69 on any
+-- bus), so IMU fusion is disabled and odometry comes from VESC wheel encoders
+-- alone. Re-enable (and pass /dev/i2c-<n> into the container via the package's
+-- `devices:`) only on a car that actually has the IMU installed.
+fuse_imu = false; -- Set to true to fuse IMU data with odometry using EKF
 i2c_bus_number = 7; -- I2C bus number for MPU6050 sensor
-calibrate_imu = true; -- Calibrate IMU on startup
+calibrate_imu = false; -- Calibrate IMU on startup
 imu_gyro_range = 0; -- 0=250, 1=500, 2=1000, 3=2000 deg/s
 imu_accel_range = 0; -- 0=2g, 1=4g, 2=8g, 3=16g
 imu_dlpf_bandwidth = 0; -- 0=260Hz, 1=184Hz, 2=94Hz, 3=44Hz, 4=21Hz, 5=10Hz, 6=5Hz
