@@ -30,7 +30,10 @@ dependencies:
 - rosidl_default_generators
 source_path: .
 ros_distro: jazzy
-base_image: roboracer/l4t-jazzy:r39.2
+# The auto colcon build (container entry wrapper) must pass Hardware mode:
+# CMakeLists gates vesc_driver behind IF(CMAKE_BUILD_MODE MATCHES "Hardware");
+# without it the driver is never compiled -> "No executable found".
+colcon_args: --cmake-args -DCMAKE_BUILD_MODE=Hardware
 # Hardware access for vesc_driver (VESC serial + MPU6050 IMU) and joystick.
 # /dev/ttyACM0 is root:dialout -> needs dialout group (GID 20) to open it;
 # /dev/i2c-7 is root:i2c -> needs i2c group (GID 108) for the MPU6050 IMU
