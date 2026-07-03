@@ -121,7 +121,11 @@ private:
   // EKF for IMU fusion
   std::unique_ptr<EKFFusion> ekf_;
   std::unique_ptr<MPU6050Sensor> mpu6050_;
-  bool fuse_imu_ = true;
+  // NOTE: intentionally no fuse_imu_ member — it is CONFIG_BOOL-bound in
+  // vesc_driver.cpp. A member with the same name shadows that binding and
+  // silently pins the value to its initializer, turning vesc.lua's
+  // fuse_imu setting into a no-op (force-enabled IMU fusion once stalled
+  // all VESC telemetry to ~1.6Hz on a car with a dead IMU).
   bool imu_available_;
   std::vector<float> imu_to_car_transform_;
 
