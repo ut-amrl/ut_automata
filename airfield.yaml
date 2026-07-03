@@ -38,11 +38,16 @@ colcon_args: --cmake-args -DCMAKE_BUILD_MODE=Hardware
 # /dev/ttyACM0 is root:dialout -> needs dialout group (GID 20) to open it;
 # /dev/i2c-7 is root:i2c -> needs i2c group (GID 108) for the MPU6050 IMU
 # (vesc.lua i2c_bus_number=7), else "failed to open /dev/i2c-7" + IMU fusion off;
-# /dev/input/js0 is world-readable so the device passthrough alone suffices.
+# /dev/input (whole dir, not just js0): the ILITEK touchscreen permanently
+# owns js0, so a game controller enumerates as js1+ — passing only js0 hides
+# the real controller. Docker maps every node present at container START;
+# there is no hotplug, so the controller must be on before the plan comes up.
+# /dev/input/js* is root:input -> GID 996.
 devices:
   - /dev/ttyACM0
   - /dev/i2c-7
-  - /dev/input/js0
+  - /dev/input
 group_add:
   - "20"
   - "108"
+  - "996"

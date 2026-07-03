@@ -151,7 +151,7 @@ ${libs} ${OPENGL_LIBRARY} GL ${UT_AUTOMATA_TYPESUPPORT_LINK})
 add_executable(joystick
   src/joystick/joystick.cc
   src/joystick/joystick_driver.cc)
-ament_target_dependencies(joystick rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime)
+ament_target_dependencies(joystick rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime ament_index_cpp)
 target_include_directories(joystick PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
 target_link_libraries(joystick ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK})

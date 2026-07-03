@@ -39,6 +39,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "gflags/gflags.h"
@@ -385,10 +386,27 @@ bool WaitForBluetoothController(int timeout_seconds = 60) {
 
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
-  
+  // Init rclcpp before the device-wait loop below: that loop spins on
+  // rclcpp::ok(), which is false before init, so waiting for a controller
+  // used to exit(1) immediately instead of waiting.
+  rclcpp::init(argc, argv);
+
   // Check if we're on a Jetson device
   bool is_jetson = IsJetsonDevice();
-  if (is_jetson) {
+
+  // If a usable joystick device already exists, skip Bluetooth setup: it is
+  // unnecessary (wired/dongle controllers, or one paired before launch), and
+  // inside a container bluetoothctl is unavailable, so the pairing wait would
+  // burn its 60 s timeout before the /dev/input scan below ever runs.
+  bool joystick_already_present = false;
+  for (const auto& joy : ListAvailableJoysticks()) {
+    if (IsLikelyJoystick(joy.name)) {
+      joystick_already_present = true;
+      break;
+    }
+  }
+
+  if (is_jetson && !joystick_already_present) {
     std::cout << "Running on Jetson device - checking for Bluetooth controllers..." << std::endl;
     
     // First, check if we have a saved controller MAC address
@@ -488,13 +506,19 @@ int main(int argc, char** argv) {
   std::cout << "Selected device: " << selected_device << std::endl;
   std::cout << "Device name: '" << selected_name << "'" << std::endl;
   
-  // Load config.
-  const string home_dir = getenv("HOME") ? string(getenv("HOME")) : "/home/ntsoi";
-  const string config_dir = home_dir + "/roboracer_ws/src/ut_automata/config";
+  // Load config from the installed package share directory, falling back to
+  // the legacy source-checkout path for setups that never ran colcon install.
+  string config_dir;
+  try {
+    config_dir =
+        ament_index_cpp::get_package_share_directory("ut_automata") + "/config";
+  } catch (const std::exception&) {
+    const string home_dir = getenv("HOME") ? string(getenv("HOME")) : "";
+    config_dir = home_dir + "/roboracer_ws/src/ut_automata/config";
+  }
   config_reader::ConfigReader reader({
     config_dir + "/joystick.lua"
   });
-  rclcpp::init(argc, argv);
   auto node = rclcpp::Node::make_shared("joystick");
   auto publisher = node->create_publisher<Joy>("joystick",
       rclcpp::QoS(10));

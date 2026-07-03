@@ -86,7 +86,8 @@ bool Serial::open(const char *device, int baud, int flags, bool flow_control) {
   fd = ::open(device, flags);
   if (debug) printf("  dev=%s flags=0x%X fd=%d\n", device, flags, fd);
   if (fd < 0) {
-    ::close(fd);
+    // perror before anything else: close(-1) would clobber errno with EBADF
+    // and hide the real reason (e.g. ENOENT when the device is unplugged).
     perror("Error opening serial port");
     return(false);
   }
@@ -110,6 +111,11 @@ bool Serial::open(const char *device, int baud, int flags, bool flow_control) {
   cfsetispeed(&tio, bf);
   cfsetospeed(&tio, bf);
   tcsetattr(fd, TCSANOW, &tio);
+
+  // Discard anything buffered from before this open (e.g. VESC telemetry a
+  // killed previous process never read), so the first bytes the caller sees
+  // are replies to its own requests rather than stale mid-frame garbage.
+  tcflush(fd, TCIOFLUSH);
 
   // test what actually got set
   memset(&tio, 0, sizeof(tio));

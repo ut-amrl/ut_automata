@@ -278,11 +278,6 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   odom_msg_.pose.pose.orientation.z = 0;
 
 
-  // attempt to connect to the serial port
-  if (kDebug) printf("CONNECT\n");
-  CHECK(vesc_.connect(serial_port_)) << "Failed to connect to the VESC";
-  if (kDebug) printf("CONNECTED\n");
-
   state_pub_ = nh_->create_publisher<ut_automata::msg::VescStateStamped>("sensors/core", rclcpp::QoS(10));
   autonomy_enabler_pub_ = nh_->create_publisher<std_msgs::msg::Bool>("autonomy_enabler", rclcpp::QoS(10));
   override_pub_ = nh_->create_publisher<std_msgs::msg::Bool>("/override_active", rclcpp::QoS(10));
@@ -352,6 +347,15 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
       RCLCPP_ERROR(nh_->get_logger(), "Failed to open debug log file: %s", debug_log_path_.c_str());
     }
   }
+
+  // Connect to the VESC last: connect() starts the serial rx thread, which
+  // invokes vescPacketCallback as soon as bytes arrive (stale telemetry from a
+  // previous run can be buffered in the tty and parse immediately). Everything
+  // the callback dereferences (publishers, tf broadcaster, EKF/IMU) must
+  // already exist, or a leftover frame at startup segfaults the node.
+  if (kDebug) printf("CONNECT\n");
+  CHECK(vesc_.connect(serial_port_)) << "Failed to connect to the VESC";
+  if (kDebug) printf("CONNECTED\n");
 
   if (kDebug) printf("TIMER START\n");
   // create a 50Hz timer, used for state machine & polling VESC telemetry
@@ -739,13 +743,17 @@ void VescDriver::sendDriveCommands() {
 }
 
 void VescDriver::timerCallback() {
-  static const double kMaxInitPeriod = 2.0;
+  // Generous deadline: at plan launch the whole machine is busy (image
+  // rebuilds, parallel colcon builds), which can stall timer ticks for
+  // seconds. The deadline only needs to catch a VESC that stays silent, so
+  // it can be loose without hiding real failures.
+  static const double kMaxInitPeriod = 10.0;
   static const double kTStart = rclcpp::Clock(RCL_ROS_TIME).now().seconds();
 
   if (kDebug) printf("TIMER CALLBACK\n");
   checkCommandTimeout();
   // VESC interface should not unexpectedly disconnect, but test for it anyway
-  CHECK(vesc_.isConnected()) 
+  CHECK(vesc_.isConnected())
       << "Unexpectedly disconnected from serial port.";
 
   /*
@@ -754,17 +762,21 @@ void VescDriver::timerCallback() {
    *  OPERATING - receiving commands from subscriber topics
    */
   if (driver_mode_ == MODE_INITIALIZING) {
-  CHECK_LE(rclcpp::Clock(RCL_ROS_TIME).now().seconds() - kTStart, kMaxInitPeriod) 
-        << "FAIL: Timed out while trying to initialize VESC.\n";
-
     if (kDebug) printf("INITIALIZING\n");
-    // request version number, return packet will update the internal version
-    // numbers
-    vesc_.requestFWVersion();
+    // The rx thread records the version as soon as the reply arrives, so
+    // check for success BEFORE the deadline: if this tick fires late under
+    // system load, an already-completed handshake must not abort the node.
     if (fw_version_major_ >= 0 && fw_version_minor_ >= 0) {
       printf("Connected to VESC with firmware version %d.%d\n",
              fw_version_major_, fw_version_minor_);
       driver_mode_ = MODE_OPERATING;
+    } else {
+      CHECK_LE(rclcpp::Clock(RCL_ROS_TIME).now().seconds() - kTStart,
+               kMaxInitPeriod)
+          << "FAIL: Timed out while trying to initialize VESC.\n";
+      // request version number, return packet will update the internal
+      // version numbers
+      vesc_.requestFWVersion();
     }
   } else if (driver_mode_ == MODE_OPERATING) {
     sendDriveCommands();
