@@ -1,0 +1,12 @@
+mounts:
+  # Shared X11 socket dir so the `gui` pane (a Qt app) can connect either to
+  # the car's physical touchscreen (gdm Xorg on :0) or to the vnc pane's
+  # display :9 (served from a separate container). Harmless for the other
+  # ut_automata panes (hokuyo/vesc_driver/joystick) which don't use X.
+  # See packages/rviz2/.air and packages/vnc/.air for the same pattern.
+  - /tmp/.X11-unix
+  # gdm's Xauthority cookie for the touchscreen's :0 server. Panes drawing on
+  # the touchscreen must run with
+  #   DISPLAY=:0 XAUTHORITY=/run/user/2002/gdm/Xauthority
+  # (2002 = orin's uid; the dir exists whenever the auto-login session is up).
+  - /run/user/2002/gdm
