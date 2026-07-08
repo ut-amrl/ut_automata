@@ -25,6 +25,11 @@ dependencies:
 # (Node package='urg_node'). Not linked by ut_automata code, but must be
 # installed in the image so the launch can find it. apt: ros-$ROS_DISTRO-urg-node.
 - urg_node
+# camera_calibration: the cameracalibrator tool run by the camera_calibration
+# plan (ros2 run camera_calibration cameracalibrator ...). Not linked by
+# ut_automata code, but the plan runs it in this container, so it must be
+# installed in the image. apt: ros-$ROS_DISTRO-camera-calibration.
+- camera_calibration
 - rosidl_default_runtime
 - ament_cmake
 - rosidl_default_generators
