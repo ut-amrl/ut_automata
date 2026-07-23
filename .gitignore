@@ -13,3 +13,8 @@ config/car.lua.*
 .airfield/
 # core dumps (e.g. a crashed node leaves /core in the workdir)
 /core
+# airfield per-machine local config (container mounts). This repo is shared
+# course infrastructure -- students on lab machines and other robot platforms
+# clone it -- so host-specific paths (uids, mount points) must not be committed
+# here. Keep them in the consuming project's own .air instead.
+.air
