@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """ROS2 launch file port of the ROS1 `start_car.launch`.
 
-This starts the hokuyo include (assumed converted to a ROS2 python launch),
-and launches the vesc_driver, websocket, joystick and gui nodes. The gui
-node is controlled by the `start_gui` launch argument.
+This starts the lidar include (which auto-selects the RPLIDAR or Hokuyo driver
+at launch time), and launches the vesc_driver, websocket, joystick and gui
+nodes. The gui node is controlled by the `start_gui` launch argument.
 
 Assumptions:
-- A ROS2-compatible `hokuyo_10lx` launch exists at
-  `launch/hokuyo_10lx.launch.py` inside the `ut_automata` package.
+- A ROS2 `lidar` launch exists at `launch/lidar.launch.py` inside the
+  `ut_automata` package.
 - The package `ut_automata` exposes executables named
   `vesc_driver`, `websocket`, `joystick`, and `gui`.
 """
@@ -30,21 +30,21 @@ def generate_launch_description():
     # package share and paths
     pkg_share = get_package_share_directory('ut_automata')
     config_dir = os.path.join(pkg_share, 'config')
-    hokuyo_launch = os.path.join(pkg_share, 'launch', 'hokuyo_10lx.launch.py')
+    lidar_launch = os.path.join(pkg_share, 'launch', 'lidar.launch.py')
 
     ld = LaunchDescription()
 
     ld.add_action(DeclareLaunchArgument(
         'start_gui', default_value='true', description='Enable to start up the gui'))
 
-    # Include hokuyo launch (assumes a ROS2 python launch exists at the path above)
-    if os.path.exists(hokuyo_launch):
+    # Include the lidar launch (auto-selects RPLIDAR/Hokuyo at the path above)
+    if os.path.exists(lidar_launch):
         ld.add_action(IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(hokuyo_launch)
+            PythonLaunchDescriptionSource(lidar_launch)
         ))
     else:
-        # If the hokuyo launch isn't present, we still continue but users should
-        # convert or add the hokuyo launch file at the expected location.
+        # If the lidar launch isn't present, we still continue but users should
+        # add the lidar launch file at the expected location.
         pass
 
     # vesc_driver node

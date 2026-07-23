@@ -21,10 +21,14 @@ dependencies:
 - libx11
 - i2c
 - mpu6050driver
-# urg_node: Hokuyo lidar driver launched by hokuyo_10lx.launch.py
-# (Node package='urg_node'). Not linked by ut_automata code, but must be
-# installed in the image so the launch can find it. apt: ros-$ROS_DISTRO-urg-node.
+# Lidar drivers. lidar.launch.py auto-selects one at launch time from what's
+# plugged in: USB RPLIDAR (rplidar_ros) wins, else Ethernet Hokuyo (urg_node).
+# Neither is linked by ut_automata code, but both must be in the image so the
+# launch can start whichever it picks.
+#   urg_node    -> Hokuyo UST-10LX (Ethernet).  apt: ros-$ROS_DISTRO-urg-node
+#   rplidar_ros -> Slamtec RPLIDAR C1 (USB).     apt: ros-$ROS_DISTRO-rplidar-ros
 - urg_node
+- rplidar_ros
 # camera_calibration: the cameracalibrator tool run by the camera_calibration
 # plan (ros2 run camera_calibration cameracalibrator ...). Not linked by
 # ut_automata code, but the plan runs it in this container, so it must be
@@ -48,10 +52,15 @@ colcon_args: --cmake-args -DCMAKE_BUILD_MODE=Hardware
 # the real controller. Docker maps every node present at container START;
 # there is no hotplug, so the controller must be on before the plan comes up.
 # /dev/input/js* is root:input -> GID 996.
+# /dev/ttyUSB0 is the Slamtec RPLIDAR C1's USB-serial bridge (root:dialout, so
+# GID 20 above already grants access). airfield skips absent devices, so this
+# maps only when the RPLIDAR is plugged in; with the Hokuyo (Ethernet) there is
+# no ttyUSB node and lidar.launch.py falls back to urg_node.
 devices:
   - /dev/ttyACM0
   - /dev/i2c-7
   - /dev/input
+  - /dev/ttyUSB0
 group_add:
   - "20"
   - "108"
