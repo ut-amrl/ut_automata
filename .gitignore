@@ -11,3 +11,5 @@ config/car.lua
 config/car.lua.*
 .vscode
 .airfield/
+# core dumps (e.g. a crashed node leaves /core in the workdir)
+/core
