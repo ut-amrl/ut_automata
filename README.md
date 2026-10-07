@@ -31,7 +31,7 @@ After adding these lines you will need to either relog into the computer or run:
       sudo apt install python-pygame libgoogle-glog-dev libgflags-dev liblua5.1-0-dev libqt5websockets5-dev libqt5opengl5-dev
       ```
 2. Clone and build [amrl_msgs](https://github.com/ut-amrl/amrl_msgs).
-3. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps).
+3. Clone [amrl_maps](https://github.com/ut-amrl/amrl_maps), if you will run the simulator. The car drivers do not need it.
 
 ### Clone and Build UT AUTOmata infrastructure Code
 1. Clone the repository, including the submodules:

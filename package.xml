@@ -19,7 +19,9 @@
   <depend>tf2_geometry_msgs</depend>
   <depend>tf2_ros</depend>
   <depend>amrl_msgs</depend>
-  <depend>amrl_maps</depend>
+  <!-- amrl_maps is not listed: only the simulator uses it, and only at run
+       time (it looks the maps up with ament_index). Put amrl_maps in the same
+       workspace to run the simulator; the car's drivers don't need it. -->
   <depend>cv_bridge</depend>
   <depend>opencv2</depend>
 
