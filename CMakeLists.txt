@@ -52,7 +52,6 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(amrl_msgs REQUIRED)
-find_package(amrl_maps REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
@@ -119,11 +118,10 @@ IF(${CMAKE_BUILD_MODE} MATCHES "Hardware")
                  src/vesc_driver/vesc_packet.cpp
                  src/vesc_driver/vesc_packet_factory.cpp
                  src/vesc_driver/ekf_fusion.cpp
-                 ${CMAKE_CURRENT_SOURCE_DIR}/../mpu6050driver/src/mpu6050sensor.cpp)
+                 src/vesc_driver/mpu6050sensor.cpp)
   ament_target_dependencies(vesc_driver rclcpp std_msgs geometry_msgs nav_msgs sensor_msgs amrl_msgs rosidl_default_runtime tf2_ros Eigen3)
   target_include_directories(vesc_driver PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>
-    ${CMAKE_CURRENT_SOURCE_DIR}/../mpu6050driver/include)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>)
   target_link_libraries(vesc_driver ${libs} ${UT_AUTOMATA_TYPESUPPORT_LINK} i2c)
 
   # Install hardware executables for ROS 2

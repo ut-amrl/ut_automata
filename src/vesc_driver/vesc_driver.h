@@ -24,7 +24,7 @@
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
 #include "vesc_driver/ekf_fusion.h"
-#include "mpu6050driver/mpu6050sensor.h"
+#include "vesc_driver/mpu6050sensor.h"
 #include "ut_automata/msg/vesc_state_stamped.hpp"
 #include "ut_automata/msg/car_status_msg.hpp"
 
