@@ -40,11 +40,27 @@ using std::vector;
 namespace joystick {
 static const bool kDebug = false;
 
+// The name of the kernel driver behind a joystick device such as
+// /dev/input/js1, read from sysfs ("playstation", "hid-generic", ...).
+// Empty if it can't be found.
+static string KernelDriver(const char* dev) {
+  const string path(dev);
+  const string node = path.substr(path.find_last_of('/') + 1);
+  char target[4096];
+  const string link = "/sys/class/input/" + node + "/device/device/driver";
+  const ssize_t n = readlink(link.c_str(), target, sizeof(target) - 1);
+  if (n <= 0) return "";
+  target[n] = '\0';
+  const string driver(target);
+  return driver.substr(driver.find_last_of('/') + 1);
+}
+
 Joystick::Joystick(string mode) : MaxAxisVal(32767), MaxAxisValInv(1.0 / MaxAxisVal) {
   fd = -1;
   model = NULL;
   model_size = 0;
   mode_ = mode;
+  standard_layout_ = false;
 }
 
 bool Joystick::Open(const char *dev) {
@@ -66,6 +82,19 @@ bool Joystick::Open(const char *dev) {
 
   printf("Opened Joystick '%s' with %d axes, %d buttons\n",
          name_.c_str(), num_axes, num_buttons);
+
+  // Linux's PlayStation driver (hid-playstation) already reports the standard
+  // gamepad layout that everything reading /joystick expects (0 LX, 1 LY,
+  // 2 L2, 3 RX, 4 RY, 5 R2). The Sony_DualShock_4 remap is for the generic
+  // HID layout a DualShock 4 gets without that driver; applied on top of it,
+  // it moves the right stick's vertical axis off axes[4], so the throttle
+  // never reaches vesc_driver.
+  const string driver = KernelDriver(dev);
+  standard_layout_ = (driver == "playstation");
+  if (mode_ == "Sony_DualShock_4" && standard_layout_) {
+    printf("Driver '%s' reports the standard layout; not remapping it\n",
+           driver.c_str());
+  }
   return(true);
 }
 
@@ -179,6 +208,7 @@ size_t Joystick::Remap(size_t num, size_t type){
     // no need to remap
   }
   else if (mode_ == "Sony_DualShock_4"){
+    if (standard_layout_) return num;  // already the standard layout; see Open()
     // comments are in the form of Logitech F710 -> Sony Dualshock 4
     if(type == JS_EVENT_AXIS){
       switch(num){

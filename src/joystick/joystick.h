@@ -68,6 +68,10 @@ class Joystick {
   const Model *model;
   int model_size;
 
+  // The kernel driver already reports the standard gamepad layout, so the
+  // Sony_DualShock_4 remap must not be applied. Set by Open().
+  bool standard_layout_;
+
  public:
   std::string mode_;
   std::string name_;
