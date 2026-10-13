@@ -47,7 +47,8 @@ fuse_imu = false; -- Set to true to fuse IMU data with odometry using EKF
 i2c_bus_number = 7; -- I2C bus number for MPU6050 sensor
 -- Measure the gyro's zero offset on startup, so the car must be still while the
 -- driver starts. An MPU6050 at rest typically reads a degree or two per second,
--- which would otherwise turn the car's heading by that much every second.
+-- which would otherwise turn the car's heading by that much every second. After
+-- that, the driver keeps re-measuring it whenever the car stands still.
 calibrate_imu = true;
 -- Which of the chip's axes points up; the car's turn rate is read from it.
 -- "auto" works it out from gravity on startup, so the car must be standing level.

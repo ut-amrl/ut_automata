@@ -132,6 +132,9 @@ private:
   // Set from vesc.lua's imu_up_axis when the IMU starts.
   int imu_yaw_axis_ = 2;
   float imu_yaw_sign_ = 1;
+  // What the gyro still reads for the car's turn rate while it isn't turning,
+  // re-measured whenever the car stands still (rad/s).
+  float imu_yaw_offset_ = 0;
 
   // Debug logging
   std::ofstream debug_log_;
