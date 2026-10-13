@@ -900,9 +900,29 @@ void VescDriver::updateOdometry(float rpm, float tachometer, float steering_angl
         // MPU6050 returns angular velocity in degrees/sec, convert to rad/s
         static const float deg_to_rad = 0.0174533f;
 
-        // The car's turn rate: the gyro's reading on the chip axis that points up
+        // The car's turn rate: the gyro's reading on the chip axis that points up,
+        // less the gyro's zero offset
         imu_angular_velocity_raw = GyroRate(*mpu6050_, imu_yaw_axis_) * deg_to_rad;
-        car_angular_velocity_z = imu_yaw_sign_ * imu_angular_velocity_raw;
+        car_angular_velocity_z = imu_yaw_sign_ * imu_angular_velocity_raw - imu_yaw_offset_;
+
+        // The zero offset creeps as the chip warms up, so the one calibrate_imu
+        // measures at startup goes stale: parked for 12 minutes, utav02's heading
+        // turned 23 degrees. While the car stands still (no speed asked for, and
+        // the wheels not turning) and the gyro reads only a little, the car isn't
+        // turning: average the reading into the offset, over about 10 s, and
+        // leave the heading alone. A turn by hand reads well over the limit and
+        // still counts. Standing still, the motor runs at the ERPM offset
+        // (speed_to_erpm_offset), which is why the wheel speed is taken from the
+        // ERPM rather than the tachometer, which creeps.
+        static const float kStillSpeed = 0.05;         // m/s
+        static const float kStillTurnRate = 0.035;     // rad/s (2 deg/s)
+        static const float kOffsetTimeConstant = 10;   // s
+        const float wheel_speed = (rpm - speed_offset_trim_) / speed_to_erpm_gain_;
+        if (fabs(last_smooth_speed_) < 0.01 && fabs(wheel_speed) < kStillSpeed &&
+            fabs(car_angular_velocity_z) < kStillTurnRate) {
+          imu_yaw_offset_ += car_angular_velocity_z * del_t / kOffsetTimeConstant;
+          car_angular_velocity_z = 0;
+        }
 
         // Update step with IMU measurement
         ekf_->updateIMU(car_angular_velocity_z, del_t);
