@@ -53,6 +53,7 @@ CONFIG_STRING(serial_port_, "serial_port");
 CONFIG_BOOL(fuse_imu_, "fuse_imu");
 CONFIG_INT(i2c_bus_number_, "i2c_bus_number");
 CONFIG_BOOL(calibrate_imu_, "calibrate_imu");
+CONFIG_STRING(imu_up_axis_, "imu_up_axis");
 CONFIG_INT(imu_gyro_range_, "imu_gyro_range");
 CONFIG_INT(imu_accel_range_, "imu_accel_range");
 CONFIG_INT(imu_dlpf_bandwidth_, "imu_dlpf_bandwidth");
@@ -104,6 +105,71 @@ float Bezier4Prime(float t, float p0, float p1, float p2, float p3, float p4) {
          12.0f * one_minus_t2 * t * (p2 - p1) +
          12.0f * one_minus_t * t2 * (p3 - p2) +
          4.0f * t3 * (p4 - p3);
+}
+
+// The car turns about the vertical, so its turn rate is what the gyro reads on
+// whichever of the IMU chip's axes points up. These helpers name that axis by
+// number (0 = x, 1 = y, 2 = z) and sign (+1 if it points up, -1 if down).
+
+// Parses "+x", "-z" and so on.
+bool ParseImuUpAxis(const std::string& name, int* axis, float* sign) {
+  if (name.size() != 2 || (name[0] != '+' && name[0] != '-') ||
+      name[1] < 'x' || name[1] > 'z') {
+    return false;
+  }
+  *axis = name[1] - 'x';
+  *sign = (name[0] == '+') ? 1 : -1;
+  return true;
+}
+
+std::string ImuAxisName(int axis, float sign) {
+  return std::string(sign > 0 ? "+" : "-") + static_cast<char>('x' + axis);
+}
+
+// Finds the axis that points up from what the accelerometer reads while the
+// car stands still: gravity, which it reads as 1 g along that axis. Gives up
+// unless one axis clearly carries it (within about 25 degrees), because on a
+// car that is tilted or moving it could pick the wrong one.
+bool FindImuUpAxis(const MPU6050Sensor& imu, int* axis, float* sign,
+                   std::string* reading) {
+  static const int kSamples = 50;
+  static const double kGravity = 9.81;
+  // The chip was asleep until moments ago; let it fill its registers.
+  usleep(50000);
+  double mean[3] = {0, 0, 0};
+  for (int i = 0; i < kSamples; ++i) {
+    mean[0] += imu.getAccelerationX() / kSamples;
+    mean[1] += imu.getAccelerationY() / kSamples;
+    mean[2] += imu.getAccelerationZ() / kSamples;
+    usleep(1000);
+  }
+  std::ostringstream text;
+  text << std::fixed << std::setprecision(2) << "x " << mean[0] / kGravity
+       << " g, y " << mean[1] / kGravity << " g, z " << mean[2] / kGravity << " g";
+  *reading = text.str();
+
+  int up = 0;
+  for (int i = 1; i < 3; ++i) {
+    if (fabs(mean[i]) > fabs(mean[up])) up = i;
+  }
+  const double total =
+      sqrt(mean[0] * mean[0] + mean[1] * mean[1] + mean[2] * mean[2]);
+  if (total < 0.8 * kGravity || total > 1.2 * kGravity ||
+      fabs(mean[up]) < 0.9 * total) {
+    return false;
+  }
+  *axis = up;
+  *sign = (mean[up] > 0) ? 1 : -1;
+  return true;
+}
+
+// The gyro's reading on one axis, in degrees per second.
+double GyroRate(const MPU6050Sensor& imu, int axis) {
+  switch (axis) {
+    case 0: return imu.getAngularVelocityX();
+    case 1: return imu.getAngularVelocityY();
+    default: return imu.getAngularVelocityZ();
+  }
 }
 
 }  // namespace
@@ -170,26 +236,7 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
     car_path,
     FLAGS_config_dir + "/joystick.lua",
   });
-  
-  // IMU to car frame transformation
-  // Format: [x_sign, x_axis, y_sign, y_axis, z_sign, z_axis]
-  // Car frame: +x forward, +y left, +z up
-  // Axis indices: 0=x, 1=y, 2=z
-  // 
-  // Common IMU mounting orientations:
-  // 1. Standard (IMU +x forward, +y left): {1, 0, 1, 1, 1, 2}
-  // 2. IMU +x rear, +y right (user's setup): {-1, 0, -1, 1, -1, 0}
-  // 3. IMU +x right, +y forward: {1, 1, -1, 0, 1, 2}
-  // 
-  // TODO: Read from config file when LuaScript supports arrays
-  // For now, set based on your IMU mounting orientation:
-  imu_to_car_transform_ = {-1, 0, -1, 1, -1, 0};  // IMU: +x rear, +y right
-  
-  RCLCPP_INFO(nh_->get_logger(), "IMU to car transform: [%.0f,%d, %.0f,%d, %.0f,%d]",
-              imu_to_car_transform_[0], (int)imu_to_car_transform_[1],
-              imu_to_car_transform_[2], (int)imu_to_car_transform_[3],
-              imu_to_car_transform_[4], (int)imu_to_car_transform_[5]);
-  
+
   // DEBUG: Check value immediately after config reader
   RCLCPP_INFO(nh_->get_logger(), "AFTER ConfigReader: fuse_imu = %s", fuse_imu_ ? "true" : "false");
   
@@ -210,6 +257,7 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
   RCLCPP_INFO(nh_->get_logger(), "  fuse_imu = %s", fuse_imu_ ? "true" : "false");
   RCLCPP_INFO(nh_->get_logger(), "  i2c_bus_number = %d", i2c_bus_number_);
   RCLCPP_INFO(nh_->get_logger(), "  calibrate_imu = %s", calibrate_imu_ ? "true" : "false");
+  RCLCPP_INFO(nh_->get_logger(), "  imu_up_axis = %s", imu_up_axis_.c_str());
   RCLCPP_INFO(nh_->get_logger(), "  imu_gyro_range = %d", imu_gyro_range_);
   RCLCPP_INFO(nh_->get_logger(), "  imu_accel_range = %d", imu_accel_range_);
   RCLCPP_INFO(nh_->get_logger(), "  imu_dlpf_bandwidth = %d", imu_dlpf_bandwidth_);
@@ -305,7 +353,28 @@ VescDriver::VescDriver(rclcpp::Node::SharedPtr nh,
       mpu6050_->setGyroscopeRange(static_cast<MPU6050Sensor::GyroRange>(imu_gyro_range_));
       mpu6050_->setAccelerometerRange(static_cast<MPU6050Sensor::AccelRange>(imu_accel_range_));
       mpu6050_->setDlpfBandwidth(static_cast<MPU6050Sensor::DlpfBandwidth>(imu_dlpf_bandwidth_));
-      
+
+      // Which of the chip's axes points up depends on how it's mounted, and the
+      // car's turn rate is read from that one. Find it before calibrating, which
+      // subtracts gravity away.
+      std::string up_axis_source = "set by imu_up_axis";
+      if (imu_up_axis_ == "auto") {
+        std::string gravity;
+        if (!FindImuUpAxis(*mpu6050_, &imu_yaw_axis_, &imu_yaw_sign_, &gravity)) {
+          throw std::runtime_error(
+              "couldn't tell which of its axes points up (gravity reads " + gravity +
+              "). Start the driver with the car standing level and still, or set "
+              "imu_up_axis in car.lua");
+        }
+        up_axis_source = "gravity reads " + gravity;
+      } else if (!ParseImuUpAxis(imu_up_axis_, &imu_yaw_axis_, &imu_yaw_sign_)) {
+        throw std::runtime_error("imu_up_axis = \"" + imu_up_axis_ +
+                                 "\" isn't one of auto, +x, -x, +y, -y, +z, -z");
+      }
+      RCLCPP_INFO(nh_->get_logger(), "IMU: the chip's %s axis points up (%s)",
+                  ImuAxisName(imu_yaw_axis_, imu_yaw_sign_).c_str(),
+                  up_axis_source.c_str());
+
       // Calibrate if requested
       if (calibrate_imu_) {
         RCLCPP_INFO(nh_->get_logger(), "Calibrating MPU6050...");
@@ -823,33 +892,18 @@ void VescDriver::updateOdometry(float rpm, float tachometer, float steering_angl
       ekf_->updateWheelOdometry(delta_tach, del_t, tach_to_meters, steering_angle);
       
       // Variables for IMU and debug logging (declared here for scope)
-      float imu_angular_velocity_x = 0;
-      float imu_angular_velocity_y = 0;
-      float imu_angular_velocity_z_raw = 0;
+      float imu_angular_velocity_raw = 0;
       float car_angular_velocity_z = 0;
-      
+
       // Read IMU angular velocity directly from sensor
       try {
         // MPU6050 returns angular velocity in degrees/sec, convert to rad/s
         static const float deg_to_rad = 0.0174533f;
-        
-        // Read IMU data
-        imu_angular_velocity_x = mpu6050_->getAngularVelocityX() * deg_to_rad;
-        imu_angular_velocity_y = mpu6050_->getAngularVelocityY() * deg_to_rad;
-        imu_angular_velocity_z_raw = mpu6050_->getAngularVelocityZ() * deg_to_rad;
-        
-        // Apply IMU to car frame transformation
-        car_angular_velocity_z = imu_angular_velocity_z_raw;  // Default: no transform
-        if (imu_to_car_transform_.size() == 6) {
-          // Transform format: [x_sign, x_axis, y_sign, y_axis, z_sign, z_axis]
-          float imu_angular_velocity[3] = {imu_angular_velocity_x, imu_angular_velocity_y, imu_angular_velocity_z_raw};
-          int z_axis = static_cast<int>(imu_to_car_transform_[5]);
-          float z_sign = imu_to_car_transform_[4];
-          if (z_axis >= 0 && z_axis < 3) {
-            car_angular_velocity_z = z_sign * imu_angular_velocity[z_axis];
-          }
-        }
-        
+
+        // The car's turn rate: the gyro's reading on the chip axis that points up
+        imu_angular_velocity_raw = GyroRate(*mpu6050_, imu_yaw_axis_) * deg_to_rad;
+        car_angular_velocity_z = imu_yaw_sign_ * imu_angular_velocity_raw;
+
         // Update step with IMU measurement
         ekf_->updateIMU(car_angular_velocity_z, del_t);
         
@@ -903,7 +957,7 @@ void VescDriver::updateOdometry(float rpm, float tachometer, float steering_angl
                    << tachometer << ","
                    << (tachometer - last_tachometer) << ","
                    << tach_to_meters << ","
-                   << (imu_angular_velocity_z_raw / 0.0174533f) << ","  // Convert back to deg/s
+                   << (imu_angular_velocity_raw / 0.0174533f) << ","  // Convert back to deg/s
                    << (car_angular_velocity_z / 0.0174533f) << ","      // Convert back to deg/s
                    << position_x << ","
                    << position_y << ","

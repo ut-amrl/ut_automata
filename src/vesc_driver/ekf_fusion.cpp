@@ -73,18 +73,15 @@ void EKFFusion::predict(double dt, float commanded_velocity, float steering_angl
   // Use commanded velocity for prediction (drift prevention)
   state_(0) = x + commanded_velocity * dt * cos_theta;  // x
   state_(1) = y + commanded_velocity * dt * sin_theta;  // y
-  state_(2) = theta + angular_velocity * dt;             // theta
+  // theta is left alone: updateIMU() turns it by the gyro's measured rate.
+  // Turning it here by the steering's rate as well counted every turn twice.
   state_(3) = commanded_velocity;                        // v (set to commanded)
   state_(4) = angular_velocity;                          // omega (from steering)
-  
-  // Normalize theta to [-pi, pi]
-  while (state_(2) > M_PI) state_(2) -= 2.0 * M_PI;
-  while (state_(2) < -M_PI) state_(2) += 2.0 * M_PI;
-  
+
   // Compute Jacobian of motion model F
   // x' = x + v*dt*cos(theta)
   // y' = y + v*dt*sin(theta)
-  // theta' = theta + omega*dt
+  // theta' = theta (updateIMU() integrates the gyro)
   // v' = v_cmd (direct assignment)
   // omega' = omega_cmd (direct assignment)
   Eigen::Matrix<float, 5, 5> F = Eigen::Matrix<float, 5, 5>::Identity();
@@ -92,8 +89,7 @@ void EKFFusion::predict(double dt, float commanded_velocity, float steering_angl
   F(0, 3) = dt * cos_theta;                        // dx/dv
   F(1, 2) = commanded_velocity * dt * cos_theta;   // dy/dtheta
   F(1, 3) = dt * sin_theta;                        // dy/dv
-  F(2, 4) = dt;                                    // dtheta/domega
-  
+
   // Predict covariance: P = F * P * F^T + Q
   P_ = F * P_ * F.transpose() + Q_;
 }

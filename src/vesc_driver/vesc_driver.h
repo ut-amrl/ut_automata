@@ -127,7 +127,11 @@ private:
   // fuse_imu setting into a no-op (force-enabled IMU fusion once stalled
   // all VESC telemetry to ~1.6Hz on a car with a dead IMU).
   bool imu_available_;
-  std::vector<float> imu_to_car_transform_;
+  // The gyro axis the car's turn rate is read from: the chip axis that points
+  // up (0 = x, 1 = y, 2 = z), and +1 or -1 for whether it points up or down.
+  // Set from vesc.lua's imu_up_axis when the IMU starts.
+  int imu_yaw_axis_ = 2;
+  float imu_yaw_sign_ = 1;
 
   // Debug logging
   std::ofstream debug_log_;
