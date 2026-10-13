@@ -45,7 +45,14 @@ steering_curve_ym = 0.1;
 -- `devices:`) only on a car that actually has the IMU installed.
 fuse_imu = false; -- Set to true to fuse IMU data with odometry using EKF
 i2c_bus_number = 7; -- I2C bus number for MPU6050 sensor
-calibrate_imu = false; -- Calibrate IMU on startup
+-- Measure the gyro's zero offset on startup, so the car must be still while the
+-- driver starts. An MPU6050 at rest typically reads a degree or two per second,
+-- which would otherwise turn the car's heading by that much every second.
+calibrate_imu = true;
+-- Which of the chip's axes points up; the car's turn rate is read from it.
+-- "auto" works it out from gravity on startup, so the car must be standing level.
+-- Or one of "+x", "-x", "+y", "-y", "+z", "-z" (a chip lying flat, face up, is "+z").
+imu_up_axis = "auto";
 imu_gyro_range = 0; -- 0=250, 1=500, 2=1000, 3=2000 deg/s
 imu_accel_range = 0; -- 0=2g, 1=4g, 2=8g, 3=16g
 imu_dlpf_bandwidth = 0; -- 0=260Hz, 1=184Hz, 2=94Hz, 3=44Hz, 4=21Hz, 5=10Hz, 6=5Hz
