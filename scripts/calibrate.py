@@ -33,11 +33,79 @@ import os
 from pathlib import Path
 from geometry_msgs.msg import Twist
 
-# Config files are in the source tree, not install directory
-# Use ~/roboracer_ws/src/ut_automata/config/ for config files
-CONFIG_DIR = Path(os.path.expanduser("~/roboracer_ws/src/ut_automata/config"))
+# Config files are in the source tree, not the install directory -- but "the
+# source tree" sits at a different path in each supported workspace layout, and
+# vesc_driver loads a third copy of them (the installed one, via --config_dir).
+# So resolve the candidates here instead of hardcoding one path:
+#
+#   ~/workspace/src/ut_automata/config     airfield mounts the package source here
+#   ~/roboracer_ws/src/ut_automata/config  pre-airfield: whole workspace mounted
+#   <this script>/../config                a plain source checkout, and also the
+#                                          installed share/ut_automata that
+#                                          airfield runs this script out of
+#
+# Reads use the first one that exists; writes go to all of them (see
+# _write_config_file). Writing all of them is what makes a calibration take
+# effect: under airfield the source copy is not the one the driver reads, so
+# writing only that would leave the driver on its old values after a restart.
+def _config_dirs():
+    candidates = [
+        Path(os.path.expanduser("~/workspace/src/ut_automata/config")),
+        Path(os.path.expanduser("~/roboracer_ws/src/ut_automata/config")),
+        Path(__file__).resolve().parent.parent / "config",
+    ]
+    dirs = []
+    seen = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved.is_dir() and str(resolved) not in seen:
+            seen.add(str(resolved))
+            dirs.append(resolved)
+    return dirs
+
+
+CONFIG_DIRS = _config_dirs()
+# Nothing found: keep the legacy path so errors name a concrete file rather than
+# blowing up on an empty list.
+CONFIG_DIR = CONFIG_DIRS[0] if CONFIG_DIRS else Path(
+    os.path.expanduser("~/roboracer_ws/src/ut_automata/config"))
 DEFAULT_CAR_CONFIG = str(CONFIG_DIR / "car.lua")
 DEFAULT_VESC_CONFIG = str(CONFIG_DIR / "vesc.lua")
+
+
+def _write_config_file(config_path, content):
+    """Write a config file, mirroring it into every other known config dir.
+
+    Returns the paths actually written. Raises OSError if none could be
+    written, so callers report a failure rather than claiming a silent success.
+    """
+    primary = Path(config_path)
+    targets = [primary] + [d / primary.name for d in CONFIG_DIRS]
+
+    written = []
+    failures = []
+    seen = set()
+    for target in targets:
+        key = str(target.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with open(target, 'w') as f:
+                f.write(content)
+            written.append(str(target))
+        except OSError as exc:
+            failures.append(f"{target} ({exc})")
+
+    if not written:
+        raise OSError(f"could not write {primary.name}: {'; '.join(failures)}")
+    if failures:
+        print(f"⚠️  Wrote {', '.join(written)} but could not write {', '.join(failures)}")
+    return written
 
 class VESCCalibrator(Node):
     def __init__(self):
@@ -373,10 +441,9 @@ class VESCCalibrator(Node):
                 # Append to file if it doesn't exist
                 new_content = content.rstrip() + f'\nsteering_angle_to_servo_offset = {offset:.4f}; -- should be between 0.4-0.6\n'
             
-            with open(config_path, 'w') as f:
-                f.write(new_content)
-                
-            self.get_logger().info(f"Updated steering_offset to {offset:.4f} in {config_path}")
+            written = _write_config_file(config_path, new_content)
+
+            self.get_logger().info(f"Updated steering_offset to {offset:.4f} in {', '.join(written)}")
             return True
         except Exception as e:
             self.get_logger().error(f"Error writing config file: {e}")
@@ -408,10 +475,9 @@ class VESCCalibrator(Node):
                 # Append to file if it doesn't exist
                 new_content = content.rstrip() + f'\nsteering_angle_to_servo_gain = {gain:.4f};\n'
             
-            with open(config_path, 'w') as f:
-                f.write(new_content)
-                
-            self.get_logger().info(f"Updated steering_gain to {gain:.4f} in {config_path}")
+            written = _write_config_file(config_path, new_content)
+
+            self.get_logger().info(f"Updated steering_gain to {gain:.4f} in {', '.join(written)}")
             return True
         except Exception as e:
             self.get_logger().error(f"Error writing config file: {e}")
@@ -443,10 +509,9 @@ class VESCCalibrator(Node):
                 # Append to file if it doesn't exist
                 new_content = content.rstrip() + f'\nspeed_to_erpm_offset = {offset:.1f}; -- should be between 160-200\n'
             
-            with open(config_path, 'w') as f:
-                f.write(new_content)
-                
-            self.get_logger().info(f"Updated speed_to_erpm_offset to {offset:.1f} in {config_path}")
+            written = _write_config_file(config_path, new_content)
+
+            self.get_logger().info(f"Updated speed_to_erpm_offset to {offset:.1f} in {', '.join(written)}")
             return True
         except Exception as e:
             self.get_logger().error(f"Error writing config file: {e}")
@@ -478,10 +543,9 @@ class VESCCalibrator(Node):
                 # Append to file if it doesn't exist
                 new_content = content.rstrip() + f'\nspeed_to_erpm_gain = {gain:.1f};\n'
             
-            with open(config_path, 'w') as f:
-                f.write(new_content)
-                
-            self.get_logger().info(f"Updated speed_to_erpm_gain to {gain:.1f} in {config_path}")
+            written = _write_config_file(config_path, new_content)
+
+            self.get_logger().info(f"Updated speed_to_erpm_gain to {gain:.1f} in {', '.join(written)}")
             return True
         except Exception as e:
             self.get_logger().error(f"Error writing config file: {e}")
@@ -513,10 +577,9 @@ class VESCCalibrator(Node):
                 # Append to file if it doesn't exist
                 new_content = content.rstrip() + f'\nmax_steering_angle = {angle:.4f}; -- radians, calibrated from turn radius\n'
             
-            with open(config_path, 'w') as f:
-                f.write(new_content)
-                
-            self.get_logger().info(f"Updated max_steering_angle to {angle:.4f} rad ({math.degrees(angle):.2f} deg) in {config_path}")
+            written = _write_config_file(config_path, new_content)
+
+            self.get_logger().info(f"Updated max_steering_angle to {angle:.4f} rad ({math.degrees(angle):.2f} deg) in {', '.join(written)}")
             return True
         except Exception as e:
             self.get_logger().error(f"Error writing config file: {e}")
